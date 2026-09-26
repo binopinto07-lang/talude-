@@ -34,7 +34,7 @@
     if (!s) return [2];
 
     const control = byId("engineUseVisibleClasses");
-    if (!control || !control.checked) return [];
+    if (!control || !control.checked) return null;
 
     if (s.state.classFilterMode === "all") return [];
     return Array.from(s.state.selectedClasses || []).sort((a, b) => a - b);
@@ -210,7 +210,7 @@
         slope_high_deg: numberValue("slopeHigh", 0),
         min_face_area_m2: numberValue("minArea", 4),
         min_line_length_m: numberValue("minLength", 2),
-        line_smooth_window: numberValue("lineSmooth", 15)
+        line_smooth_window: numberValue("lineSmooth", 11)
       })
     });
 
