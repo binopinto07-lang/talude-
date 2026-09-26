@@ -15,7 +15,7 @@ from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
 
 
-APP_VERSION = "1.1.2-feature-fix"
+APP_VERSION = "1.1.3-face-gate"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -65,6 +65,8 @@ class AutoExtractRequest(BaseModel):
     slope_high_deg: float = 0.0
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
+    min_face_width_m: float = Field(default=0.0, ge=0)
+    min_face_height_m: float = Field(default=0.0, ge=0)
 
 
 @app.get("/api/health")
@@ -237,6 +239,8 @@ def talude_auto(req: AutoExtractRequest) -> dict[str, str]:
             slope_high_deg=req.slope_high_deg,
             min_face_area_m2=req.min_face_area_m2,
             min_line_length_m=req.min_line_length_m,
+            min_face_width_m=req.min_face_width_m,
+            min_face_height_m=req.min_face_height_m,
         )
         return {"job_id": job_id}
     except Exception as exc:
