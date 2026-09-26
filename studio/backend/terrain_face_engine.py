@@ -95,6 +95,7 @@ def extract_terrain_face_from_points(
     classifications=None,
     selected_classes=None,
     grid_resolution: float = 0.0,
+    line_smooth_window: int = 11,
 ) -> dict:
     """Executa o MESMO detector AUTO da 1.1.2, limitado à face clicada.
 
@@ -150,7 +151,7 @@ def extract_terrain_face_from_points(
         slope_high_deg=0.0,
         min_face_area_m2=4.0,
         min_line_length_m=2.0,
-        line_smooth_window=11,
+        line_smooth_window=max(3, int(line_smooth_window)),
         use_ground_class=False,
         classification_filter=None,
     )
