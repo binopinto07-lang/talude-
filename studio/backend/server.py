@@ -15,7 +15,7 @@ from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
 
 
-APP_VERSION = "1.1.5-base112-smooth"
+APP_VERSION = "1.1.6-face-click-pan"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -48,12 +48,12 @@ class DebugEventRequest(BaseModel):
 class TerrainFaceRequest(BaseModel):
     project_id: str
     cloud_id: str
-    profile: str
+    profile: str = "face"
     seed: list[float]
     points: list[list[float]]
     classifications: list[int] | None = None
     selected_classes: list[int] | None = None
-    grid_resolution: float = 0.20
+    grid_resolution: float = 0.0
 
 
 class AutoExtractRequest(BaseModel):
@@ -155,8 +155,8 @@ def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
     try:
         if len(req.seed) != 3:
             raise ValueError("Seed XYZ inválido.")
-        if req.profile not in {"ridge", "toe"}:
-            raise ValueError("O extrator de face está disponível para Crista e Pé.")
+        if req.profile not in {"face", "ridge", "toe"}:
+            raise ValueError("Modo de face inválido.")
 
         manifest = store.manifest(req.project_id)
         if not any(c.get("id") == req.cloud_id for c in manifest.get("clouds", [])):
@@ -192,12 +192,12 @@ def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
                 "cloud_id": req.cloud_id,
                 "profile": req.profile,
                 "seed": req.seed,
-                "vertices": len(result.get("vertices", [])),
+                "line_count": len(result.get("lines", [])),
+                "crest_vertices": len((result.get("crest") or {}).get("vertices", [])),
+                "toe_vertices": len((result.get("toe") or {}).get("vertices", [])),
                 "confidence": result.get("confidence"),
-                "face_slope_deg": result.get("face_slope_deg"),
-                "face_cells": result.get("face_cells"),
-                "snap_ratio": result.get("snap_ratio"),
-                "refinement_ratio": result.get("refinement_ratio"),
+                "grid_resolution": result.get("grid_resolution"),
+                "seed_to_face_distance_m": result.get("seed_to_face_distance_m"),
             },
             source="feature_engine",
         )
