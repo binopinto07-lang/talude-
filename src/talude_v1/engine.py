@@ -33,11 +33,24 @@ class Grid:
 def _select_points(cloud: PointCloud, cfg: ExtractConfig) -> tuple[np.ndarray, bool]:
     xyz = cloud.xyz
     used_ground = False
-    if cfg.use_ground_class and cloud.classification is not None:
+
+    if cloud.classification is not None and cfg.classification_filter is not None:
+        selected = tuple(int(v) for v in cfg.classification_filter)
+        if selected:
+            mask = np.isin(cloud.classification, np.asarray(selected, dtype=np.uint8))
+            if int(mask.sum()) >= 50:
+                xyz = xyz[mask]
+                used_ground = selected == (cfg.ground_class,)
+            else:
+                raise ValueError(
+                    "As classes selecionadas contêm poucos pontos para extrair taludes."
+                )
+    elif cfg.use_ground_class and cloud.classification is not None:
         mask = cloud.classification == cfg.ground_class
         if int(mask.sum()) >= max(100, int(0.01 * len(mask))):
             xyz = xyz[mask]
             used_ground = True
+
     if len(xyz) < 50:
         raise ValueError("A nuvem selecionada tem poucos pontos para extrair taludes.")
     return xyz, used_ground
