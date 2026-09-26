@@ -130,3 +130,47 @@ refinamento local XYZ
 A resolução da grelha AUTO pode ser aumentada automaticamente quando a extensão da cloud produzir demasiadas células; o valor efetivamente usado fica registado em `talude_report.json`.
 
 Em grelhas grandes, os debug layers são guardados em `debug/terrain_debug.npz` para evitar centenas de MB de ASCII.
+
+
+## V1.1.6 — face clicada + PAN
+
+A deteção global mantém a base **1.1.2-feature-fix**. Melhorias posteriores que filtravam faces por largura/altura foram retiradas por reduzirem demasiado a deteção.
+
+### Navegação CAD
+
+- botão esquerdo + arrastar: ORBIT;
+- botão direito + arrastar: PAN;
+- botão do meio + arrastar: PAN;
+- botão `PAN`: transforma temporariamente o botão esquerdo em PAN;
+- roda: zoom;
+- vistas rápidas: TOPO / FRENTE / TRÁS / ESQ / DIR / ISO.
+
+Quando `Picar face automática` está armado, um clique curto seleciona a face; arrastar continua a rodar normalmente.
+
+### Picar face automática
+
+O clique deixou de usar um detector diferente. A zona clicada passa pelo mesmo pipeline do AUTO:
+
+```text
+pontos locais
+  ↓
+spacing / cell size
+  ↓
+slope multiescala
+  ↓
+persistence + hysteresis
+  ↓
+FACE_DETECTOR 1.1.2
+  ↓
+componente mais próximo do clique
+  ↓
+CRISTA + PÉ
+  ↓
+refinamento XYZ
+```
+
+Manual / Assistido / Múltiplo controlam apenas o tamanho da janela local analisada.
+
+### Suavização
+
+A suavização é pós-deteção e não altera quais as faces encontradas. O valor recomendado passou para `15`, podendo ser ajustado em **Parâmetros avançados → Suavização linha**.
