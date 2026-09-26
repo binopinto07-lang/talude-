@@ -34,7 +34,7 @@
       {
         "id": "compile",
         "name": "Compilar motor + Studio",
-        "command": "& '%PYTHON%' -m compileall -q src studio tests talude_gui.py talude_studio.py",
+        "command": "& '%PYTHON%' -m compileall -q src studio core tests talude_gui.py talude_studio.py",
         "timeout_minutes": 10,
         "category": "test",
         "venv": "test"
@@ -134,7 +134,7 @@
       {
         "id": "compile",
         "name": "Compilar motor + Studio",
-        "command": "& '%PYTHON%' -m compileall -q src studio tests talude_gui.py talude_studio.py",
+        "command": "& '%PYTHON%' -m compileall -q src studio core tests talude_gui.py talude_studio.py",
         "timeout_minutes": 10,
         "category": "test",
         "venv": "test"
@@ -222,5 +222,5 @@
     ]
   },
   "release": {},
-  "config_revision": 3
+  "config_revision": 4
 }
