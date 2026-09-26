@@ -45,3 +45,14 @@ Por defeito, em LAS/LAZ usa `Classification == 2 (Ground)` quando essa classe ex
 Este primeiro motor é deliberadamente **FACE_FIRST**. Não tenta adivinhar a polyline diretamente na nuvem. Deteta a superfície inclinada persistente, separa o limite superior/inferior e só depois volta à cloud original para refinar Z.
 
 A arquitetura já deixa espaço para os motores seguintes: TIN, PROFILE, PLANAR_3D, STRUCTURAL_EDGE, fusion, uncertainty e processamento COPC/tiled.
+
+
+## Interface gráfica
+
+No Windows pode arrancar diretamente com:
+
+```bat
+scripts\START_TALUDE_V1_GUI.bat
+```
+
+Selecione a nuvem, a pasta de saída e deixe Cell size / Slope LOW / Slope HIGH em `0` para seleção automática. O botão **EXTRAIR CRISTA + PÉ** executa o mesmo motor usado pela CLI.
