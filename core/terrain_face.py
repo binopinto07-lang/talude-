@@ -906,12 +906,44 @@ def extract_terrain_face_edge(
     if key not in {"ridge", "toe"}:
         raise ValueError("O extrator de face suporta Crista ou Pé.")
 
-    resolution = float(np.clip(grid_resolution, 0.12, 0.35))
-    dem, valid, x0, y0 = _rasterize_dem(points, resolution)
+    requested_resolution = float(np.clip(grid_resolution, 0.12, 0.35))
 
+    # A janela enviada pelo Potree usa LOD: ao afastar a câmara podem chegar
+    # poucas centenas de pontos para uma área grande. Uma grelha demasiado fina
+    # ficaria artificialmente vazia e fazia o motor falhar antes de analisar a
+    # geometria. Escolhemos portanto uma resolução local adaptada à densidade,
+    # mantendo a grelha fina quando a amostra é densa.
+    span_x = max(float(np.ptp(points[:, 0])), requested_resolution)
+    span_y = max(float(np.ptp(points[:, 1])), requested_resolution)
+    window_area = max(span_x * span_y, requested_resolution * requested_resolution)
+    density_resolution = math.sqrt(
+        max(0.0, 0.18 * window_area / max(len(points), 1))
+    )
+    resolution = float(
+        np.clip(
+            max(requested_resolution, density_resolution),
+            0.12,
+            0.75,
+        )
+    )
+
+    dem, valid, x0, y0 = _rasterize_dem(points, resolution)
     coverage = float(np.count_nonzero(valid)) / float(valid.size)
-    if coverage < 0.06:
-        raise ValueError("Cobertura DTM insuficiente na janela do talude.")
+
+    # Segunda tentativa automática para LOD especialmente esparso.
+    if coverage < 0.06 and resolution < 0.95:
+        factor = math.sqrt(0.085 / max(coverage, 1e-6))
+        retry_resolution = float(np.clip(resolution * factor, resolution, 0.95))
+        if retry_resolution > resolution * 1.05:
+            resolution = retry_resolution
+            dem, valid, x0, y0 = _rasterize_dem(points, resolution)
+            coverage = float(np.count_nonzero(valid)) / float(valid.size)
+
+    if coverage < 0.035:
+        raise ValueError(
+            "Poucos pontos locais para formar a superfície do talude. "
+            "Aproxime a vista da face e clique novamente."
+        )
 
     filled, filled_mask = _fill_sparse(dem, valid, iterations=8)
     smooth = _smooth5(filled, filled_mask, passes=2)
