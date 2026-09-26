@@ -33,6 +33,17 @@ class ImportCloudRequest(BaseModel):
     source_path: str
 
 
+class SaveStateRequest(BaseModel):
+    state: dict[str, Any]
+
+
+class DebugEventRequest(BaseModel):
+    event: str
+    level: str = "INFO"
+    source: str = "viewer"
+    details: dict[str, Any] = {}
+
+
 class AutoExtractRequest(BaseModel):
     project_id: str
     cloud_id: str
@@ -91,6 +102,30 @@ def get_state(project_id: str) -> dict[str, Any]:
         return store.state(project_id)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.put("/api/projects/{project_id}/state")
+def save_state(project_id: str, req: SaveStateRequest) -> dict[str, bool]:
+    try:
+        store.save_state(project_id, req.state)
+        return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/debug-log")
+def project_debug_log(project_id: str, req: DebugEventRequest) -> dict[str, Any]:
+    try:
+        record = store.debug_event(
+            project_id,
+            req.event,
+            req.details,
+            source=req.source,
+            level=req.level,
+        )
+        return {"ok": True, "record": record}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/clouds/import")
