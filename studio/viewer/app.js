@@ -1968,6 +1968,13 @@
           ? 42.0
           : 26.0;
 
+    const tileOptions =
+      state.featureMode === "single"
+        ? { compact: false, half: half, maxPoints: 22000, earlyMinPoints: 6500 }
+        : state.featureMode === "multiple"
+          ? { compact: false, half: half, maxPoints: 65000, earlyMinPoints: 30000, softTimeoutMs: 3200, hardTimeoutMs: 5200 }
+          : { compact: false, half: half, maxPoints: 42000, earlyMinPoints: 18000, softTimeoutMs: 2400, hardTimeoutMs: 4000 };
+
     debugLog("terrain_face.started", {
       cloud_id: cloudId,
       profile: "face",
@@ -1986,7 +1993,7 @@
       pointcloud,
       seed,
       selectedClasses,
-      { compact: false, half: half }
+      tileOptions
     );
 
     selectedClasses = tile.selected_classes;
