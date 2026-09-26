@@ -44,3 +44,23 @@ def test_auto_face_gate_is_wired_end_to_end():
     assert 'numberValue("minFaceHeight", 0)' in auto
     assert 'id="minFaceWidth"' in html
     assert 'id="minFaceHeight"' in html
+
+
+def test_orbit_navigation_and_shift_bypass_are_wired():
+    viewer = Path("studio/viewer/app.js").read_text(encoding="utf-8")
+    html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
+    css = Path("studio/viewer/styles.css").read_text(encoding="utf-8")
+
+    assert "viewer.setControls(viewer.orbitControls)" in viewer
+    assert "if (event.shiftKey) return;" in viewer
+    assert "Rodar: arrastar esquerdo" in html
+    assert "SHIFT: navegar ao picar" in html
+    assert ".nav-help" in css
+
+
+def test_local_terrain_face_uses_adaptive_lod_grid():
+    core = Path("core/terrain_face.py").read_text(encoding="utf-8")
+
+    assert "density_resolution" in core
+    assert "retry_resolution" in core
+    assert "Poucos pontos locais para formar a superfície do talude" in core
