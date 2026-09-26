@@ -52,6 +52,7 @@
     waypointVertices: [],
     waypointSegmentCount: 0,
     waypointBusy: false,
+    navPointerDown: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -394,9 +395,10 @@
       state.featureOverlayRenderHandler
     );
 
-    viewer.renderer.domElement.addEventListener("mousedown", onViewerMouseDown, true);
+    viewer.renderer.domElement.addEventListener("mousedown", onViewerNavMouseDown, true);
+    viewer.renderer.domElement.addEventListener("mouseup", onViewerNavMouseUp, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.4 · terrain-face slope edges");
+    setStatus("Potree pronto · Talude V1.1.5 · terrain-face slope edges");
   }
 
   function configurePointcloud(pointcloud) {
@@ -778,8 +780,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.4 · motor MDT + Declive pronto."
-              : "Talude V1.1.4 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V1.1.5 · motor MDT + Declive pronto."
+              : "Talude V1.1.5 · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -804,8 +806,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.4 · a ler MDT + Declive…"
-        : "Talude V1.1.4 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V1.1.5 · a ler MDT + Declive…"
+        : "Talude V1.1.5 · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -862,7 +864,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.4 · raster-terrain · " +
+      "Talude V1.1.5 · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1585,7 +1587,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.4 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V1.1.5 used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -1952,7 +1954,7 @@
       geometric_model: "flat-face-flat-progressive"
     });
 
-    setStatus("Talude V1.1.4 · a detetar a face do talude…");
+    setStatus("Talude V1.1.5 · a detetar a face do talude…");
     byId("traceHint").textContent =
       "Talude = patamar → face inclinada → patamar. " +
       "A detetar a face e as suas arestas…";
@@ -2000,7 +2002,7 @@
     drawCandidate(result);
 
     if (state.featureMode !== "single") {
-      setStatus("Talude V1.1.4 · a seguir a mesma face até ao fim…");
+      setStatus("Talude V1.1.5 · a seguir a mesma face até ao fim…");
       result = await progressivelyExtendTerrainFace(
         pointcloud,
         cloudId,
@@ -2049,7 +2051,7 @@
       "Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.4 · terrain-face · " +
+      "Talude V1.1.5 · terrain-face · " +
       result.vertices.length + " vértices · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
@@ -3165,15 +3167,9 @@
     );
   }
 
-  function onViewerMouseDown(event) {
-    // SHIFT + botão esquerdo fica sempre reservado para navegação.
-    // Assim é possível rodar a nuvem mesmo quando "Picar aresta automática"
-    // está armado, sem criar uma seed por engano.
+  function onViewerPickClick(event) {
     if (event.shiftKey) return;
     if (!state.traceArmed || event.button !== 0 || !state.viewer) return;
-
-    event.preventDefault();
-    event.stopPropagation();
 
     const hit = Potree.Utils.getMousePointCloudIntersection(
       state.viewer.inputHandler.mouse,
@@ -3269,6 +3265,88 @@
     });
   }
 
+  function onViewerNavMouseDown(event) {
+    if (event.button !== 0) return;
+    state.navPointerDown = {
+      x: event.clientX,
+      y: event.clientY,
+      time: performance.now()
+    };
+  }
+
+  function onViewerNavMouseUp(event) {
+    if (event.button !== 0) return;
+
+    const start = state.navPointerDown;
+    state.navPointerDown = null;
+
+    if (!state.traceArmed || !start || event.shiftKey) return;
+
+    const moved = Math.hypot(
+      event.clientX - start.x,
+      event.clientY - start.y
+    );
+
+    // Clique curto = selecionar aresta. Arrastar = OrbitControls.
+    if (moved <= 5) {
+      onViewerPickClick(event);
+    }
+  }
+
+  function setStandardView(name) {
+    if (!state.viewer) return;
+
+    const viewer = state.viewer;
+    const methods = {
+      top: "setTopView",
+      front: "setFrontView",
+      back: "setBackView",
+      left: "setLeftView",
+      right: "setRightView"
+    };
+
+    const method = methods[name];
+    if (method && typeof viewer[method] === "function") {
+      viewer[method]();
+    } else {
+      const view = viewer.scene && viewer.scene.view;
+      if (!view) return;
+
+      const fallback = {
+        top: { yaw: 0.0, pitch: -Math.PI / 2 + 0.001 },
+        front: { yaw: 0.0, pitch: 0.0 },
+        back: { yaw: Math.PI, pitch: 0.0 },
+        left: { yaw: -Math.PI / 2, pitch: 0.0 },
+        right: { yaw: Math.PI / 2, pitch: 0.0 }
+      };
+
+      const target = fallback[name];
+      if (target) {
+        view.yaw = target.yaw;
+        view.pitch = target.pitch;
+      }
+    }
+
+    try { viewer.fitToScreen(0.82); } catch (_) {}
+    window.setTimeout(() => {
+      try { viewer.fitToScreen(0.82); } catch (_) {}
+    }, 60);
+
+    debugLog("viewer.standard_view", { view: name });
+  }
+
+  function setIsoView() {
+    if (!state.viewer || !state.viewer.scene || !state.viewer.scene.view) return;
+    const view = state.viewer.scene.view;
+    view.yaw = -Math.PI / 4;
+    view.pitch = -Math.PI / 4;
+    try { state.viewer.fitToScreen(0.82); } catch (_) {}
+    window.setTimeout(() => {
+      try { state.viewer.fitToScreen(0.82); } catch (_) {}
+    }, 60);
+    debugLog("viewer.standard_view", { view: "iso" });
+  }
+
   function drawSeedMarker(position) {
     if (!state.viewer) return;
 
@@ -3355,6 +3433,14 @@
   }
 
   function bindUi() {
+    document.querySelectorAll("[data-standard-view]").forEach((button) => {
+      button.onclick = () => {
+        const view = button.dataset.standardView;
+        if (view === "iso") setIsoView();
+        else setStandardView(view);
+      };
+    });
+
     byId("newProject").onclick = () => {
       createProject().catch((e) => toast(e.message, 8000));
     };
