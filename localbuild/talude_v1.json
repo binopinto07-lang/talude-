@@ -221,5 +221,6 @@
       }
     ]
   },
-  "release": {}
+  "release": {},
+  "config_revision": 2
 }
