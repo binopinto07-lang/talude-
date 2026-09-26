@@ -31,12 +31,13 @@
         </div>
         <div id="projectName" class="project-name">Nenhum projeto aberto</div>
         <button id="addCloud" class="wide" disabled>+ Adicionar LAS / LAZ / COPC</button>
-
+        <div class="row">
+          <button id="addMdt" disabled>+ MDT</button>
+          <button id="addSlope" disabled>+ Declive</button>
+        </div>
+        <div id="terrainStatus" class="hint">Raster terreno: não carregado.</div>
         <div id="jobBox" class="job hidden">
-          <div class="job-head">
-            <span id="jobText">A preparar…</span>
-            <span id="jobPct">0%</span>
-          </div>
+          <div id="jobText">A preparar…</div>
           <div class="progress-track"><div id="jobProgress"></div></div>
         </div>
       </section>
@@ -44,8 +45,8 @@
       <section class="card">
         <div class="section-title">CLASSIFICAÇÕES</div>
         <div class="class-actions">
-          <button id="classAll">Todas</button>
-          <button id="classGround" class="active">Só Solo</button>
+          <button id="classAll" class="active">Todas</button>
+          <button id="classGround">Só Solo</button>
           <button id="classNone">Nenhuma</button>
         </div>
         <div id="classificationList" class="classification-list"></div>
@@ -55,58 +56,92 @@
         </label>
       </section>
 
-      <section class="card auto-card">
+      <section class="card">
+        <div class="section-title">FEATURE LINES</div>
+        <div class="segmented" id="featureMode">
+          <button data-mode="guided" class="active">Assistido</button>
+          <button data-mode="single">Manual</button>
+          <button data-mode="multiple">Múltiplo</button>
+        </div>
+
+        <label>Feição</label>
+        <select id="profile">
+          <option value="ridge">Crista de talude</option>
+          <option value="toe">Pé de talude</option>
+          <option value="curb">Lancil / guia</option>
+          <option value="wall">Muro</option>
+          <option value="free">Linha livre</option>
+        </select>
+
+        <button id="traceButton" class="primary wide" disabled>Picar aresta automática</button>
+
+        <div id="traceActions" class="trace-actions hidden">
+          <button id="acceptTrace" class="accept">Aceitar linha</button>
+          <button id="rejectTrace">Rejeitar</button>
+        </div>
+
+        <div id="traceHint" class="hint">
+          Crista/Pé: clique em qualquer ponto da face do talude. O MDT ativa o motor raster; o Declive GeoTIFF é opcional. Manual = local, Assistido = médio, Múltiplo = talude completo.
+        </div>
+
+        <div class="legend">
+          <span><i class="swatch candidate"></i>Candidato</span>
+          <span><i class="swatch accepted"></i>Aceite</span>
+          <span><i class="dot midpoint"></i>Inserir vértice</span>
+        </div>
+      </section>
+
+
+      <section class="card auto-talude-card">
         <div class="section-title">AUTO TALUDE</div>
-        <div class="feature-title">
-          <span class="feature-icon">⌁</span>
+        <div class="talude-feature-head">
+          <div class="talude-symbol">⌁</div>
           <div>
             <strong>CRISTA + PÉ</strong>
-            <span>Deteção automática da face do talude</span>
+            <div class="hint">Deteção automática da face e dos dois limites.</div>
           </div>
         </div>
 
-        <button id="detectTalude" class="primary wide detect" disabled>
-          DETETAR CRISTA + PÉ
-        </button>
+        <button id="detectTalude" class="primary wide" disabled>DETETAR CRISTA + PÉ</button>
 
-        <div class="legend two">
-          <span><i class="swatch crest"></i>CRISTA</span>
-          <span><i class="swatch toe"></i>PÉ DE TALUDE</span>
+        <div class="talude-legend">
+          <span><i class="swatch talude-crest"></i>CRISTA</span>
+          <span><i class="swatch talude-toe"></i>PÉ DE TALUDE</span>
         </div>
 
-        <details class="advanced">
+        <details class="talude-advanced">
           <summary>Parâmetros avançados</summary>
-          <div class="param-grid">
-            <label>Cell size (m)<input id="cellSize" type="number" step="0.01" min="0" value="0" /></label>
-            <label>Slope LOW (°)<input id="slopeLow" type="number" step="1" min="0" value="0" /></label>
-            <label>Slope HIGH (°)<input id="slopeHigh" type="number" step="1" min="0" value="0" /></label>
-            <label>Área mín. (m²)<input id="minArea" type="number" step="0.5" min="0.1" value="4" /></label>
-            <label>Comp. mín. (m)<input id="minLength" type="number" step="0.5" min="0.1" value="2" /></label>
+          <div class="talude-param-grid">
+            <label>Cell size (m)<input id="cellSize" type="number" min="0" step="0.01" value="0"></label>
+            <label>Slope LOW (°)<input id="slopeLow" type="number" min="0" step="1" value="0"></label>
+            <label>Slope HIGH (°)<input id="slopeHigh" type="number" min="0" step="1" value="0"></label>
+            <label>Área mín. (m²)<input id="minArea" type="number" min="0.1" step="0.5" value="4"></label>
+            <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
           </div>
-          <div class="hint">0 = AUTO. O motor usa slope multiescala + persistence + hysteresis + FACE_DETECTOR.</div>
+          <div class="hint">0 = AUTO · multiescala + persistence + hysteresis + FACE_DETECTOR.</div>
         </details>
       </section>
 
-      <section class="card results-card">
-        <div class="section-title">RESULTADOS</div>
-        <div class="stats-grid">
-          <div class="stat"><span id="facesCount">0</span><small>Faces</small></div>
-          <div class="stat crest-stat"><span id="crestCount">0</span><small>Cristas</small></div>
-          <div class="stat toe-stat"><span id="toeCount">0</span><small>Pés</small></div>
+      <section class="card talude-results-card">
+        <div class="section-title">RESULTADOS AUTOMÁTICOS</div>
+        <div class="talude-stats">
+          <div><strong id="facesCount">0</strong><span>Faces</span></div>
+          <div class="crest-stat"><strong id="crestCount">0</strong><span>Cristas</span></div>
+          <div class="toe-stat"><strong id="toeCount">0</strong><span>Pés</span></div>
         </div>
         <div class="row">
-          <button id="clearLines" disabled>Limpar linhas</button>
-          <button id="openResults" disabled>Abrir resultados</button>
+          <button id="clearTaludeLines" disabled>Limpar</button>
+          <button id="openTaludeResults" disabled>Abrir resultados</button>
         </div>
-        <div id="featureList" class="layer-list compact"></div>
+        <div id="taludeFeatureList" class="layer-list talude-feature-list"></div>
       </section>
-
-      <section class="card grow">
-        <div class="section-title">NUVENS</div>
+\n      <section class="card grow">
+        <div class="section-title">CAMADAS</div>
         <div id="cloudList" class="layer-list"></div>
+        <div id="featureList" class="layer-list"></div>
       </section>
 
-      <footer id="status">Talude Studio pronto.</footer>
+      <footer id="status">V2 pronta.</footer>
     </aside>
 
     <main class="viewport-shell">
@@ -127,7 +162,7 @@
       <div id="emptyState" class="empty-state">
         <div class="empty-icon">⌁</div>
         <h1>Taludes diretamente sobre a nuvem 3D</h1>
-        <p>Crie/abra um projeto e adicione uma nuvem LAS, LAZ ou COPC.</p>
+        <p>Crie/abra um projeto, carregue a nuvem e execute CRISTA + PÉ automático.</p>
       </div>
 
       <div id="toast" class="toast hidden"></div>
@@ -149,6 +184,6 @@
   <script src="/potree/libs/three.js/extra/lines.js"></script>
   <script src="/potree/libs/plasio/js/laslaz.js"></script>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-  <script src="./app.js"></script>
+  <script src="./app.js"></script>\n  <script src="./talude_auto.js"></script>
 </body>
 </html>
