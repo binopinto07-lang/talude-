@@ -209,7 +209,8 @@
         slope_low_deg: numberValue("slopeLow", 0),
         slope_high_deg: numberValue("slopeHigh", 0),
         min_face_area_m2: numberValue("minArea", 4),
-        min_line_length_m: numberValue("minLength", 2)
+        min_line_length_m: numberValue("minLength", 2),
+        line_smooth_window: numberValue("lineSmooth", 11)
       })
     });
 
