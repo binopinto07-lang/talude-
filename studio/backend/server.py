@@ -54,6 +54,7 @@ class TerrainFaceRequest(BaseModel):
     classifications: list[int] | None = None
     selected_classes: list[int] | None = None
     grid_resolution: float = 0.0
+    line_smooth_window: int = Field(default=11, ge=3, le=51)
 
 
 class AutoExtractRequest(BaseModel):
@@ -65,6 +66,7 @@ class AutoExtractRequest(BaseModel):
     slope_high_deg: float = 0.0
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
+    line_smooth_window: int = Field(default=11, ge=3, le=51)
 
 
 @app.get("/api/health")
@@ -183,6 +185,7 @@ def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
             classifications=req.classifications,
             selected_classes=req.selected_classes,
             grid_resolution=req.grid_resolution,
+            line_smooth_window=req.line_smooth_window,
         )
 
         store.debug_event(
@@ -237,6 +240,7 @@ def talude_auto(req: AutoExtractRequest) -> dict[str, str]:
             slope_high_deg=req.slope_high_deg,
             min_face_area_m2=req.min_face_area_m2,
             min_line_length_m=req.min_line_length_m,
+            line_smooth_window=req.line_smooth_window,
         )
         return {"job_id": job_id}
     except Exception as exc:
