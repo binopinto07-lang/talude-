@@ -2021,7 +2021,7 @@
         min_face_area_m2: Number(byId("minArea") ? byId("minArea").value : 4),
         min_line_length_m: Number(byId("minLength") ? byId("minLength").value : 2),
         line_smooth_window: Number(
-          byId("lineSmooth") ? byId("lineSmooth").value : 11
+          byId("lineSmooth") ? byId("lineSmooth").value : 15
         )
       })
     });
