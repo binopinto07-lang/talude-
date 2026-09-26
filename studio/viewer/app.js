@@ -402,7 +402,7 @@
     viewer.renderer.domElement.addEventListener("mouseup", onViewerNavMouseUp, true);
     viewer.renderer.domElement.addEventListener("mouseleave", onViewerNavMouseUp, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.6 · AUTO 1.1.2 + face clicada");
+    setStatus("Potree pronto · Talude V1.1.7 · AUTO 1.1.2 + face clicada");
   }
 
   function configurePointcloud(pointcloud) {
@@ -784,8 +784,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.6 · motor MDT + Declive pronto."
-              : "Talude V1.1.6 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V1.1.7 · motor MDT + Declive pronto."
+              : "Talude V1.1.7 · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -810,8 +810,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.6 · a ler MDT + Declive…"
-        : "Talude V1.1.6 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V1.1.7 · a ler MDT + Declive…"
+        : "Talude V1.1.7 · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -868,7 +868,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.6 · raster-terrain · " +
+      "Talude V1.1.7 · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1070,7 +1070,16 @@
       }
 
       window.setTimeout(() => {
-        if (!settled) cancelAndFinish("soft_timeout", request);
+        if (settled) return;
+
+        const minimumForSoftFinish =
+          earlyMinPoints > 0 ? earlyMinPoints : 1;
+
+        if (points.length >= minimumForSoftFinish) {
+          cancelAndFinish("soft_timeout", request);
+        }
+        // Se a amostra ainda está pobre, não cortar aqui:
+        // deixa o Potree carregar níveis mais densos até hardTimeoutMs.
       }, softTimeoutMs);
 
       window.setTimeout(() => {
@@ -1607,7 +1616,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.6 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V1.1.7 used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -1970,10 +1979,31 @@
 
     const tileOptions =
       state.featureMode === "single"
-        ? { compact: false, half: half, maxPoints: 22000, earlyMinPoints: 6500 }
+        ? {
+            compact: false,
+            half: half,
+            maxPoints: 32000,
+            earlyMinPoints: 9000,
+            softTimeoutMs: 2600,
+            hardTimeoutMs: 5200
+          }
         : state.featureMode === "multiple"
-          ? { compact: false, half: half, maxPoints: 65000, earlyMinPoints: 30000, softTimeoutMs: 3200, hardTimeoutMs: 5200 }
-          : { compact: false, half: half, maxPoints: 42000, earlyMinPoints: 18000, softTimeoutMs: 2400, hardTimeoutMs: 4000 };
+          ? {
+              compact: false,
+              half: half,
+              maxPoints: 90000,
+              earlyMinPoints: 30000,
+              softTimeoutMs: 4000,
+              hardTimeoutMs: 9000
+            }
+          : {
+              compact: false,
+              half: half,
+              maxPoints: 56000,
+              earlyMinPoints: 18000,
+              softTimeoutMs: 3200,
+              hardTimeoutMs: 6800
+            };
 
     debugLog("terrain_face.started", {
       cloud_id: cloudId,
@@ -1984,7 +2014,7 @@
       half_m: half
     });
 
-    setStatus("Talude V1.1.6 · AUTO 1.1.2 apenas na face clicada…");
+    setStatus("Talude V1.1.7 · AUTO 1.1.2 apenas na face clicada…");
     byId("traceHint").textContent =
       "A recolher a zona da face e executar o mesmo processo do AUTO: " +
       "slope multiescala → persistence/hysteresis → FACE_DETECTOR → CRISTA + PÉ…";
@@ -2021,7 +2051,7 @@
         min_face_area_m2: Number(byId("minArea") ? byId("minArea").value : 4),
         min_line_length_m: Number(byId("minLength") ? byId("minLength").value : 2),
         line_smooth_window: Number(
-          byId("lineSmooth") ? byId("lineSmooth").value : 15
+          byId("lineSmooth") ? byId("lineSmooth").value : 11
         )
       })
     });
@@ -2052,7 +2082,7 @@
       result.trace_elapsed_ms.toFixed(0) + " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.6 · face clicada · CRISTA + PÉ · " +
+      "Talude V1.1.7 · face clicada · CRISTA + PÉ · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
 
@@ -2064,6 +2094,9 @@
       tile_finish_reason: tile.finish_reason,
       detector: result.detector,
       grid_resolution: result.grid_resolution,
+      estimated_spacing_m: result.estimated_spacing_m,
+      auto_cell_capped: result.auto_cell_capped,
+      sample_density_pts_m2: result.sample_density_pts_m2,
       slope_low_deg: result.slope_low_deg,
       slope_high_deg: result.slope_high_deg,
       seed_to_face_distance_m: result.seed_to_face_distance_m,
