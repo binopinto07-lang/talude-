@@ -1,4 +1,4 @@
-from talude_v1.gui import main
+from studio.desktop.main import main
 
 if __name__ == "__main__":
     raise SystemExit(main())
