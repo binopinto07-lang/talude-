@@ -657,6 +657,7 @@ def _component_lines(
     grid: Grid,
     det: dict,
     cfg: ExtractConfig,
+    seed_xy: tuple[float, float] | None = None,
 ) -> list[dict]:
     labels, n = ndimage.label(
         det["mask"],
@@ -665,7 +666,40 @@ def _component_lines(
     lines: list[dict] = []
     face_id = 0
 
-    for label_id in range(1, n + 1):
+    label_ids = list(range(1, n + 1))
+    if seed_xy is not None:
+        if n == 0:
+            raise ValueError("O detector AUTO não encontrou uma face junto ao clique.")
+
+        sx, sy = float(seed_xy[0]), float(seed_xy[1])
+        col = int(np.clip(math.floor((sx - grid.x0) / grid.cell), 0, labels.shape[1] - 1))
+        row = int(np.clip(math.floor((sy - grid.y0) / grid.cell), 0, labels.shape[0] - 1))
+        selected_label = int(labels[row, col])
+        seed_distance = 0.0
+
+        if selected_label == 0:
+            rr, cc = np.nonzero(labels > 0)
+            if len(rr) == 0:
+                raise ValueError("O detector AUTO não encontrou uma face junto ao clique.")
+
+            xx, yy = grid.xy(rr, cc)
+            d2 = (xx - sx) ** 2 + (yy - sy) ** 2
+            best = int(np.argmin(d2))
+            seed_distance = float(math.sqrt(float(d2[best])))
+            selected_label = int(labels[rr[best], cc[best]])
+
+            max_seed_distance = max(6.0, grid.cell * 20.0)
+            if seed_distance > max_seed_distance:
+                raise ValueError(
+                    "O clique ficou demasiado longe de uma face detetada. "
+                    "Clique aproximadamente no centro da face do talude."
+                )
+
+        label_ids = [selected_label]
+        det["selected_face_label"] = selected_label
+        det["selected_face_seed_distance_m"] = seed_distance
+
+    for label_id in label_ids:
         rows, cols = np.nonzero(labels == label_id)
         if len(rows) < 4:
             continue
