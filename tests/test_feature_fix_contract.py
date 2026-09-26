@@ -86,7 +86,7 @@ def test_output_lines_are_smoothed_without_changing_detection_stage():
     config = Path("src/talude_v1/config.py").read_text(encoding="utf-8")
     engine = Path("src/talude_v1/engine.py").read_text(encoding="utf-8")
 
-    assert "line_smooth_window: int = 11" in config
+    assert "line_smooth_window: int = 15" in config
     assert "Reamostragem uniforme" in engine
     assert "savgol_filter" in engine
     assert "smoothed[0] = pts[0]" in engine
