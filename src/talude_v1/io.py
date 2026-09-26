@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 import numpy as np
 
@@ -13,6 +14,81 @@ class PointCloud:
     classification: np.ndarray | None = None
     crs_wkt: str | None = None
     source: str = ""
+
+
+@dataclass(slots=True)
+class PointCloudInfo:
+    path: Path
+    point_count: int
+    mins: tuple[float, float, float]
+    maxs: tuple[float, float, float]
+    has_classification: bool
+    crs_wkt: str | None = None
+
+    @property
+    def width(self) -> float:
+        return max(0.0, self.maxs[0] - self.mins[0])
+
+    @property
+    def height(self) -> float:
+        return max(0.0, self.maxs[1] - self.mins[1])
+
+
+def inspect_point_cloud(path: str | Path) -> PointCloudInfo:
+    path = Path(path)
+    ext = path.suffix.lower()
+    if ext not in {".las", ".laz"}:
+        raise ValueError("A inspeção streaming V1 aplica-se a LAS/LAZ.")
+
+    import laspy
+
+    with laspy.open(path) as reader:
+        header = reader.header
+        dims = {str(name).lower() for name in header.point_format.dimension_names}
+        crs = header.parse_crs()
+        mins = tuple(float(v) for v in header.mins)
+        maxs = tuple(float(v) for v in header.maxs)
+        return PointCloudInfo(
+            path=path,
+            point_count=int(header.point_count),
+            mins=(mins[0], mins[1], mins[2]),
+            maxs=(maxs[0], maxs[1], maxs[2]),
+            has_classification="classification" in dims,
+            crs_wkt=crs.to_wkt() if crs else None,
+        )
+
+
+def iter_point_chunks(
+    path: str | Path,
+    *,
+    chunk_size: int = 1_000_000,
+) -> Iterator[tuple[np.ndarray, np.ndarray | None]]:
+    """Lê LAS/LAZ por blocos sem materializar a nuvem inteira em RAM."""
+    path = Path(path)
+    ext = path.suffix.lower()
+    if ext not in {".las", ".laz"}:
+        raise ValueError("iter_point_chunks suporta LAS/LAZ.")
+
+    import laspy
+
+    with laspy.open(path) as reader:
+        has_cls = "classification" in {
+            str(name).lower() for name in reader.header.point_format.dimension_names
+        }
+        for points in reader.chunk_iterator(int(chunk_size)):
+            n = len(points)
+            if n == 0:
+                continue
+            xyz = np.empty((n, 3), dtype=np.float64)
+            xyz[:, 0] = np.asarray(points.x, dtype=np.float64)
+            xyz[:, 1] = np.asarray(points.y, dtype=np.float64)
+            xyz[:, 2] = np.asarray(points.z, dtype=np.float64)
+            cls = (
+                np.asarray(points.classification, dtype=np.uint8)
+                if has_cls
+                else None
+            )
+            yield xyz, cls
 
 
 def load_point_cloud(path: str | Path) -> PointCloud:
