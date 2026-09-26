@@ -112,7 +112,16 @@ def _worker(
         jobs.update(job_id, status="running", progress=8, message="A preparar nuvem e classes…")
 
         jobs.update(job_id, progress=18, message="A calcular grelha, declive e persistência multiescala…")
-        report = extract(source, output, cfg)
+
+        def _progress(value: float, message: str) -> None:
+            jobs.update(
+                job_id,
+                status="running",
+                progress=max(1, min(95, int(round(value)))),
+                message=message,
+            )
+
+        report = extract(source, output, cfg, progress=_progress)
 
         jobs.update(job_id, progress=88, message="A carregar CRISTA + PÉ para o viewer…")
         geojson_path = output / "talude_breaklines.geojson"
