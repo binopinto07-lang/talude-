@@ -249,3 +249,16 @@ footer { color: #8092a8; font-size: 10px; padding: 3px; }
 .talude-dot { width:8px; height:8px; border-radius:50%; }
 .talude-dot.crest { background:#ffd54a; }
 .talude-dot.toe { background:#38d5ff; }
+
+.pan-button.active {
+  background: #1f6fa8 !important;
+  border-color: #42a5e8 !important;
+  color: #fff !important;
+}
+#potree_render_area.pan-mode {
+  cursor: grab;
+}
+#potree_render_area.panning,
+#potree_render_area.pan-mode.panning {
+  cursor: grabbing !important;
+}
