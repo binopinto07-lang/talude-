@@ -174,3 +174,13 @@ Manual / Assistido / Múltiplo controlam apenas o tamanho da janela local analis
 ### Suavização
 
 A suavização é pós-deteção e não altera quais as faces encontradas. O valor recomendado passou para `15`, podendo ser ajustado em **Parâmetros avançados → Suavização linha**.
+
+
+## V1.1.7 — refinamento sem trocar o detector
+
+Esta versão corrige duas regressões observadas nos testes reais da cloud de 241 M pontos:
+
+- **AUTO global:** quando `Usar classes visíveis no motor` estava desligado, a UI enviava `[]`, o que acabava por processar todas as classes. O comportamento volta a ser **Solo / classe 2 por defeito**, como no resultado de 563–564 faces da base 1.1.2/1.1.5.
+- **Face clicada:** o ProfileRequest estava a terminar por `soft_timeout` ainda com apenas alguns milhares de pontos e o espaçamento dessa amostra LOD fazia a grelha subir até **1.0 m**. Agora uma amostra pobre continua a carregar até ao limite duro e a grelha AUTO local é limitada a **0.35 m** quando o utilizador deixa Cell size = 0.
+
+A suavização predefinida regressa a **11**, que preserva melhor curvas e extremos. A deteção de faces continua a ser a base 1.1.2; a suavização permanece exclusivamente pós-deteção.
