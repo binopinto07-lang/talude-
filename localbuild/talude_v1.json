@@ -1,0 +1,78 @@
+{
+  "id": "talude_v1",
+  "name": "Talude V1",
+  "repo_url": "https://github.com/binopinto07-lang/talude-.git",
+  "branch": "main",
+  "python_version": "3.12",
+  "checks": [
+    {
+      "id": "python",
+      "name": "Python 3.12",
+      "command": "$v = python --version 2>&1; Write-Output $v; if ($v -notmatch 'Python 3\\.12\\.') { exit 1 }",
+      "required": true,
+      "hint": "Instalar Python 3.12 e adicionar ao PATH."
+    },
+    {
+      "id": "git",
+      "name": "Git",
+      "command": "git --version",
+      "required": true,
+      "hint": "Instalar Git for Windows."
+    }
+  ],
+  "pipelines": {
+    "test": [
+      {
+        "id": "deps",
+        "name": "Instalar Talude V1 + testes",
+        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -e '.[dev]'",
+        "timeout_minutes": 20,
+        "category": "test",
+        "venv": "test"
+      },
+      {
+        "id": "compile",
+        "name": "Compilar fontes",
+        "command": "& '%PYTHON%' -m compileall -q src tests",
+        "timeout_minutes": 5,
+        "category": "test",
+        "venv": "test"
+      },
+      {
+        "id": "pytest",
+        "name": "Teste sintético CRISTA/PÉ",
+        "command": "$env:PYTHONPATH='src'; & '%PYTHON%' -m pytest -q",
+        "timeout_minutes": 20,
+        "category": "test",
+        "venv": "test"
+      }
+    ],
+    "build": [
+      {
+        "id": "deps-build",
+        "name": "Instalar dependências",
+        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -e '.[dev]'",
+        "timeout_minutes": 20,
+        "category": "build",
+        "venv": "v1"
+      },
+      {
+        "id": "pytest-build",
+        "name": "Validar motor antes do pacote",
+        "command": "$env:PYTHONPATH='src'; & '%PYTHON%' -m pytest -q",
+        "timeout_minutes": 20,
+        "category": "build",
+        "venv": "v1"
+      },
+      {
+        "id": "package",
+        "name": "Criar pacote local",
+        "command": "$out='builds/latest'; New-Item -ItemType Directory -Force -Path $out | Out-Null; if (Test-Path ($out + '/Talude_V1_Source.zip')) { Remove-Item ($out + '/Talude_V1_Source.zip') -Force }; Compress-Archive -Path src,config,scripts,README.md,pyproject.toml -DestinationPath ($out + '/Talude_V1_Source.zip') -Force; Write-Output ('ZIP: ' + (Resolve-Path ($out + '/Talude_V1_Source.zip')))",
+        "timeout_minutes": 10,
+        "category": "build",
+        "venv": "v1"
+      }
+    ]
+  },
+  "release": {}
+}
