@@ -379,7 +379,7 @@
 
     viewer.renderer.domElement.addEventListener("mousedown", onViewerMouseDown, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.2 · terrain-face slope edges");
+    setStatus("Potree pronto · Talude V1.1.3 · terrain-face slope edges");
   }
 
   function configurePointcloud(pointcloud) {
@@ -761,8 +761,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.2 · motor MDT + Declive pronto."
-              : "Talude V1.1.2 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V1.1.3 · motor MDT + Declive pronto."
+              : "Talude V1.1.3 · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -787,8 +787,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.2 · a ler MDT + Declive…"
-        : "Talude V1.1.2 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V1.1.3 · a ler MDT + Declive…"
+        : "Talude V1.1.3 · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -845,7 +845,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.2 · raster-terrain · " +
+      "Talude V1.1.3 · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1568,7 +1568,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.2 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V1.1.3 used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -1935,7 +1935,7 @@
       geometric_model: "flat-face-flat-progressive"
     });
 
-    setStatus("Talude V1.1.2 · a detetar a face do talude…");
+    setStatus("Talude V1.1.3 · a detetar a face do talude…");
     byId("traceHint").textContent =
       "Talude = patamar → face inclinada → patamar. " +
       "A detetar a face e as suas arestas…";
@@ -1983,7 +1983,7 @@
     drawCandidate(result);
 
     if (state.featureMode !== "single") {
-      setStatus("Talude V1.1.2 · a seguir a mesma face até ao fim…");
+      setStatus("Talude V1.1.3 · a seguir a mesma face até ao fim…");
       result = await progressivelyExtendTerrainFace(
         pointcloud,
         cloudId,
@@ -2032,7 +2032,7 @@
       "Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.2 · terrain-face · " +
+      "Talude V1.1.3 · terrain-face · " +
       result.vertices.length + " vértices · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
@@ -3190,14 +3190,13 @@
       state.traceArmed = false;
       byId("traceButton").classList.remove("active");
 
-      const rasterMode = terrainRasterReady();
-      const promise = rasterMode
-        ? traceRasterTerrain(hit)
-        : traceTerrainFace(hit);
-
-      promise.catch((error) => {
+      // Talude Studio V1 trabalha diretamente sobre a point cloud.
+      // Projetos antigos do Cloud_to_lines podem conter MDT/Declive registados;
+      // isso não deve desviar o clique para endpoints raster que não pertencem
+      // ao Talude Studio.
+      traceTerrainFace(hit).catch((error) => {
         debugLog(
-          rasterMode ? "raster_terrain.failed" : "terrain_face.failed",
+          "terrain_face.failed",
           {
             seed: state.currentSeed,
             error: String(error && error.stack ? error.stack : error)
@@ -3314,17 +3313,11 @@
       byId("traceHint").textContent = terrainFace
         ? "Clique UMA VEZ junto da " +
           byId("profile").selectedOptions[0].text +
-          (terrainRasterReady()
-            ? ". Motor MDT + Declive ativo (" +
-              (state.featureMode === "single"
-                ? "troço local"
-                : state.featureMode === "multiple"
-                  ? "talude completo"
-                  : "seguimento médio") +
-              ")."
-            : state.featureMode === "single"
-              ? ". Manual cria apenas o troço local com edge-lock."
-              : ". Sem raster: usa temporariamente o motor da nuvem.")
+          (state.featureMode === "single"
+            ? ". Motor da nuvem: troço local com edge-lock."
+            : state.featureMode === "multiple"
+              ? ". Motor da nuvem: segue a face do talude."
+              : ". Motor da nuvem: seguimento médio.")
         : waypointAssist
           ? "Clique no INÍCIO do lancil e depois no FIM do troço."
           : "Modo " +
