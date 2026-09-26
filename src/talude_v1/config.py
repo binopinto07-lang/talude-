@@ -21,6 +21,8 @@ class ExtractConfig:
     min_gradient_coherence: float = 0.50
     cross_section_bin_factor: float = 1.0
     line_smooth_window: int = 11
+    vertex_spacing_m: float = 1.0
+    tin_snap_search_m: float = 1.25
     refine_radius_factor: float = 2.5
     refine_min_points: int = 8
     use_ground_class: bool = True
