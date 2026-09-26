@@ -148,6 +148,22 @@
         "venv": "test"
       },
       {
+        "id": "deps-build",
+        "name": "Instalar dependências de build",
+        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt",
+        "timeout_minutes": 40,
+        "category": "build",
+        "venv": "v1"
+      },
+      {
+        "id": "pytest-build",
+        "name": "Validar motor e Studio antes do EXE",
+        "command": "$env:PYTHONPATH='.;src'; & '%PYTHON%' -m pytest -q",
+        "timeout_minutes": 25,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
         "id": "vendor",
         "name": "Preparar Potree + PotreeConverter",
         "command": "powershell -NoProfile -ExecutionPolicy Bypass -File 'studio/scripts/bootstrap_vendor.ps1'",
