@@ -160,6 +160,19 @@ def self_test() -> int:
     except Exception as exc:
         checks.append(("BREAKLINE_ENGINE_V1", False, repr(exc)))
 
+    try:
+        import pyproj  # noqa: F401
+        checks.append(("pyproj", True, pyproj.__version__))
+    except Exception as exc:
+        checks.append(("pyproj", False, repr(exc)))
+
+    try:
+        from core.terrain_face import extract_terrain_face_edge  # noqa: F401
+        from studio.backend.terrain_face_engine import extract_terrain_face_from_points  # noqa: F401
+        checks.append(("Terrain Face API engine", True, "ok"))
+    except Exception as exc:
+        checks.append(("Terrain Face API engine", False, repr(exc)))
+
     assets = [
         ("Potree", potree_root() / "build" / "potree" / "potree.js"),
         ("PotreeConverter", converter_executable()),
