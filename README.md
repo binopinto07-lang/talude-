@@ -56,3 +56,28 @@ scripts\START_TALUDE_V1_GUI.bat
 ```
 
 Selecione a nuvem, a pasta de saída e deixe Cell size / Slope LOW / Slope HIGH em `0` para seleção automática. O botão **EXTRAIR CRISTA + PÉ** executa o mesmo motor usado pela CLI.
+
+
+## Local Build Manager — configuração correta
+
+O projeto usa o mesmo padrão de build local que já funcionava no Cloud_to_lines:
+
+`requirements.txt → requirements-dev.txt → compileall → pytest → PyInstaller → self-test → ZIP portátil`.
+
+No Local Build Manager selecione **Talude V1 — Crista + Pé**. Se o gestor corrigido V0.1.3 for usado, ao selecionar uma pasta Git ele compara o `origin` com `repo_url` e muda automaticamente para o perfil correto.
+
+Se o cabeçalho do log disser `LOCAL BUILD MANAGER | Cloud_to_lines` enquanto a pasta selecionada é `talude-`, o perfil errado está ativo e o pipeline deve ser interrompido.
+
+O build validado é criado em:
+
+```text
+builds/latest/Talude_V1_Windows_x64.zip
+```
+
+O executável fica temporariamente em:
+
+```text
+builds/local_work/dist/Talude_V1/Talude_V1.exe
+```
+
+GitHub Actions não são necessários para este projeto.
