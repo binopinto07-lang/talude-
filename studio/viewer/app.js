@@ -53,6 +53,8 @@
     waypointSegmentCount: 0,
     waypointBusy: false,
     navPointerDown: null,
+    panMode: false,
+    panPointer: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -396,9 +398,11 @@
     );
 
     viewer.renderer.domElement.addEventListener("mousedown", onViewerNavMouseDown, true);
+    viewer.renderer.domElement.addEventListener("mousemove", onViewerNavMouseMove, true);
     viewer.renderer.domElement.addEventListener("mouseup", onViewerNavMouseUp, true);
+    viewer.renderer.domElement.addEventListener("mouseleave", onViewerNavMouseUp, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.5 · terrain-face slope edges");
+    setStatus("Potree pronto · Talude V1.1.6 · AUTO 1.1.2 + face clicada");
   }
 
   function configurePointcloud(pointcloud) {
@@ -780,8 +784,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.5 · motor MDT + Declive pronto."
-              : "Talude V1.1.5 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V1.1.6 · motor MDT + Declive pronto."
+              : "Talude V1.1.6 · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -806,8 +810,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.5 · a ler MDT + Declive…"
-        : "Talude V1.1.5 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V1.1.6 · a ler MDT + Declive…"
+        : "Talude V1.1.6 · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -864,7 +868,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.5 · raster-terrain · " +
+      "Talude V1.1.6 · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1587,7 +1591,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.5 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V1.1.6 used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -1935,35 +1939,38 @@
       throw new Error("Octree Potree da nuvem ativa não encontrada.");
     }
 
-    const profile = byId("profile").value;
-    if (!["ridge", "toe"].includes(profile)) {
-      throw new Error("Extrator de face disponível apenas para Crista e Pé.");
-    }
-
     let selectedClasses = terrainClassesForEngine();
 
     resetWaypointSession();
     removeCandidate();
     drawSeedMarker(seed);
 
+    const half =
+      state.featureMode === "single"
+        ? 14.0
+        : state.featureMode === "multiple"
+          ? 42.0
+          : 26.0;
+
     debugLog("terrain_face.started", {
       cloud_id: cloudId,
-      profile: profile,
+      profile: "face",
       seed: [seed.x, seed.y, seed.z],
       selected_classes: selectedClasses,
-      geometric_model: "flat-face-flat-progressive"
+      detector: "same-auto-1.1.2-clicked-face",
+      half_m: half
     });
 
-    setStatus("Talude V1.1.5 · a detetar a face do talude…");
+    setStatus("Talude V1.1.6 · AUTO 1.1.2 apenas na face clicada…");
     byId("traceHint").textContent =
-      "Talude = patamar → face inclinada → patamar. " +
-      "A detetar a face e as suas arestas…";
+      "A recolher a zona da face e executar o mesmo processo do AUTO: " +
+      "slope multiescala → persistence/hysteresis → FACE_DETECTOR → CRISTA + PÉ…";
 
     const tile = await collectTerrainTile(
       pointcloud,
       seed,
       selectedClasses,
-      { compact: false }
+      { compact: false, half: half }
     );
 
     selectedClasses = tile.selected_classes;
@@ -1971,22 +1978,21 @@
     if (runId !== state.traceRunId) return;
     if (tile.points.length < 500) {
       throw new Error(
-        "Poucos pontos de terreno nesta zona. " +
-        "Confirme a classe Solo ou aproxime a vista."
+        "Poucos pontos nesta zona. Aproxime a vista da face ou confirme a classe Solo."
       );
     }
 
-    let result = await api("/api/feature-lines/terrain-face", {
+    const result = await api("/api/feature-lines/terrain-face", {
       method: "POST",
       body: JSON.stringify({
         project_id: state.project.id,
         cloud_id: cloudId,
-        profile: profile,
+        profile: "face",
         seed: [seed.x, seed.y, seed.z],
         points: tile.points,
         classifications: tile.classifications,
         selected_classes: selectedClasses,
-        grid_resolution: 0.20
+        grid_resolution: 0
       })
     });
 
@@ -1998,89 +2004,48 @@
     result.feature_mode = state.featureMode;
     result.profile_query_points = tile.points.length;
     result.tile_finish_reason = tile.finish_reason;
-
-    drawCandidate(result);
-
-    if (state.featureMode !== "single") {
-      setStatus("Talude V1.1.5 · a seguir a mesma face até ao fim…");
-      result = await progressivelyExtendTerrainFace(
-        pointcloud,
-        cloudId,
-        result,
-        profile,
-        selectedClasses,
-        runId
-      );
-      if (runId !== state.traceRunId) return;
-      drawCandidate(result);
-    }
-
     result.trace_elapsed_ms =
       Math.round((performance.now() - started) * 10) / 10;
 
-    const confidence = result.confidence == null
-      ? "—"
-      : Math.round(result.confidence * 100) + "%";
+    drawFacePairCandidate(result);
 
-    const faceSlope = result.face_slope_deg == null
-      ? "—"
-      : Number(result.face_slope_deg).toFixed(1) + "°";
-
-    const progressiveText =
-      state.featureMode !== "single" &&
-      Number(result.terrain_progressive_rounds || 0) > 0
-        ? " · " +
-          Number(result.terrain_progressive_length_m || 0).toFixed(1) +
-          " m · " +
-          result.terrain_progressive_rounds +
-          " ronda(s)"
-        : "";
+    const crest = result.crest || {};
+    const toe = result.toe || {};
+    const confidence = Math.round(Number(result.confidence || 0) * 100);
 
     byId("traceHint").textContent =
-      (profile === "ridge" ? "Crista" : "Pé") +
-      " · face " + faceSlope +
-      " · " + result.raw_vertices + " pixels → " +
-      result.vertices.length + " vértices" +
-      progressiveText +
-      " · edge-lock " +
-      Math.round(Number(result.snap_ratio || 0) * 100) + "%" +
-      " · planos " +
-      Math.round(Number(result.refinement_ratio || 0) * 100) + "%" +
-      " · confiança " + confidence +
-      " · " + result.trace_elapsed_ms.toFixed(0) + " ms. " +
-      "Aceite ou rejeite.";
+      "Face clicada · CRISTA " +
+      Number(crest.length_m || 0).toFixed(1) + " m · PÉ " +
+      Number(toe.length_m || 0).toFixed(1) + " m · " +
+      "cell " + Number(result.grid_resolution || 0).toFixed(3) + " m · " +
+      "confiança " + confidence + "% · " +
+      result.trace_elapsed_ms.toFixed(0) + " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.5 · terrain-face · " +
-      result.vertices.length + " vértices · " +
+      "Talude V1.1.6 · face clicada · CRISTA + PÉ · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
 
     debugLog("terrain_face.completed", {
       cloud_id: cloudId,
-      profile: profile,
       seed: result.seed,
       selected_classes: selectedClasses,
       profile_query_points: tile.points.length,
       tile_finish_reason: tile.finish_reason,
-      tile_query_elapsed_ms: tile.elapsed_ms,
-      face_slope_deg: result.face_slope_deg,
-      low_slope_threshold_deg: result.low_slope_threshold_deg,
-      high_slope_threshold_deg: result.high_slope_threshold_deg,
-      raw_vertices: result.raw_vertices,
-      rough_vertices: result.rough_vertices,
-      refined_vertices: result.refined_vertices,
-      refinement_ratio: result.refinement_ratio,
-      snapped_vertices: result.snapped_vertices,
-      snap_ratio: result.snap_ratio,
-      median_snap_offset_m: result.median_snap_offset_m,
-      simplified_vertices: result.vertices.length,
-      terrain_progressive_rounds: result.terrain_progressive_rounds || 0,
-      terrain_progressive_length_m: result.terrain_progressive_length_m || null,
+      detector: result.detector,
+      grid_resolution: result.grid_resolution,
+      slope_low_deg: result.slope_low_deg,
+      slope_high_deg: result.slope_high_deg,
+      seed_to_face_distance_m: result.seed_to_face_distance_m,
+      crest_vertices: crest.vertices ? crest.vertices.length : 0,
+      toe_vertices: toe.vertices ? toe.vertices.length : 0,
+      crest_length_m: crest.length_m,
+      toe_length_m: toe.length_m,
       confidence: result.confidence,
       elapsed_ms: result.trace_elapsed_ms
     });
   }
+
 
   function polylineLength3D(vertices) {
     let total = 0;
@@ -2510,18 +2475,26 @@
 
   function removeCandidate() {
     if (state.candidateObject && state.viewer) {
-      if (state.featureOverlayScene) {
-        state.featureOverlayScene.remove(state.candidateObject);
-      } else {
-        state.viewer.scene.scene.remove(state.candidateObject);
+      const objects = Array.isArray(state.candidateObject)
+        ? state.candidateObject
+        : [state.candidateObject];
+
+      for (const object of objects) {
+        if (!object) continue;
+        if (state.featureOverlayScene) {
+          state.featureOverlayScene.remove(object);
+        } else {
+          state.viewer.scene.scene.remove(object);
+        }
+        disposeLineObject(object);
       }
-      disposeLineObject(state.candidateObject);
     }
 
     state.candidateObject = null;
     state.candidateData = null;
     byId("traceActions").classList.add("hidden");
   }
+
 
   function createLineObject(vertices, style) {
     style = style || {};
@@ -2641,6 +2614,46 @@
     });
   }
 
+  function drawFacePairCandidate(result) {
+    removeCandidate();
+
+    const lines = Array.isArray(result.lines) ? result.lines : [];
+    if (lines.length < 2) {
+      throw new Error("A face clicada não devolveu CRISTA + PÉ.");
+    }
+
+    const objects = [];
+    for (const data of lines) {
+      const isCrest = data.type === "CREST";
+      const line = createLineObject(data.vertices, {
+        color: isCrest ? 0xffd54a : 0x38d5ff,
+        widthPx: isCrest ? 3.4 : 3.1,
+        dashed: true,
+        dashSize: 0.95,
+        gapSize: 0.45
+      });
+      addFeatureOverlayObject(line);
+      objects.push(line);
+    }
+
+    state.candidateObject = objects;
+    state.candidateData = result;
+    byId("traceActions").classList.remove("hidden");
+
+    debugLog("feature.face_pair_candidate_drawn", {
+      detector: result.detector,
+      line_count: lines.length,
+      crest_vertices: result.crest && result.crest.vertices
+        ? result.crest.vertices.length
+        : 0,
+      toe_vertices: result.toe && result.toe.vertices
+        ? result.toe.vertices.length
+        : 0,
+      confidence: result.confidence,
+      seed_to_face_distance_m: result.seed_to_face_distance_m
+    });
+  }
+
   function renderFeatureList() {
     const box = byId("featureList");
     box.innerHTML = "";
@@ -2722,6 +2735,44 @@
     state.progressiveActive = false;
     state.waypointBusy = false;
     const data = state.candidateData;
+
+    if (Array.isArray(data.lines) && data.lines.length) {
+      for (const lineData of data.lines) {
+        const isCrest = lineData.type === "CREST";
+        const persisted = Object.assign({}, lineData, {
+          profile: isCrest ? "ridge" : "toe",
+          detector: data.detector,
+          seed: data.seed || null,
+          cloud_id: data.cloud_id || null,
+          selected_classes: data.selected_classes || null,
+          feature_mode: data.feature_mode || state.featureMode,
+          query_source: data.query_source || "potree-local-auto-face"
+        });
+
+        const accepted = createLineObject(lineData.vertices, {
+          color: isCrest ? 0xffd54a : 0x38d5ff,
+          widthPx: isCrest ? 3.2 : 3.0,
+          dashed: false
+        });
+        addFeatureOverlayObject(accepted);
+        state.acceptedObjects.push({ object: accepted, data: persisted });
+        await persistAcceptedFeature(persisted);
+      }
+
+      debugLog("feature.face_pair_accepted", {
+        detector: data.detector,
+        line_count: data.lines.length,
+        confidence: data.confidence
+      });
+
+      removeCandidate();
+      resetWaypointSession();
+      renderFeatureList();
+      setStatus("Face aceite · CRISTA + PÉ guardados.");
+      toast("CRISTA + PÉ da face guardados no projeto.");
+      return;
+    }
+
     const accepted = createLineObject(data.vertices, {
       color: 0xff2aa8,
       widthPx: 2.5,
@@ -2736,14 +2787,10 @@
       detector: data.detector,
       vertices: data.vertices.length,
       confidence: data.confidence,
-      stop_reason_forward: data.stop_reason_forward,
-      stop_reason_backward: data.stop_reason_backward,
       renderer: accepted.userData.ctlRenderer,
       width_px: accepted.userData.ctlWidthPx,
       dashed: accepted.userData.ctlDashed,
-      render_layer: accepted.userData.ctlRenderLayer,
-      edl_safe_overlay:
-        accepted.userData.ctlRenderLayer === "render.pass.perspective_overlay"
+      render_layer: accepted.userData.ctlRenderLayer
     });
     removeCandidate();
     resetWaypointSession();
@@ -2752,24 +2799,28 @@
     toast("Linha aceite e guardada no projeto.");
   }
 
+
   function rejectCandidate() {
     state.traceRunId += 1;
     state.progressiveActive = false;
     state.waypointBusy = false;
+
     if (state.candidateData) {
       debugLog("feature.rejected", {
-        profile: state.candidateData.profile,
         detector: state.candidateData.detector,
-        vertices: state.candidateData.vertices
-          ? state.candidateData.vertices.length
-          : 0,
+        pair: Array.isArray(state.candidateData.lines),
+        line_count: Array.isArray(state.candidateData.lines)
+          ? state.candidateData.lines.length
+          : 1,
         confidence: state.candidateData.confidence
       });
     }
+
     removeCandidate();
     resetWaypointSession();
     setStatus("Candidato rejeitado.");
   }
+
 
   function resetWaypointSession() {
     state.waypointStart = null;
@@ -3190,7 +3241,7 @@
     };
 
     const profile = byId("profile").value;
-    const useTerrainFace = ["ridge", "toe"].includes(profile);
+    const useTerrainFace = ["face", "ridge", "toe"].includes(profile);
     const useWaypointAssist =
       state.featureMode !== "single" &&
       profile === "curb";
@@ -3265,7 +3316,39 @@
     });
   }
 
+  function setPanMode(enabled) {
+    state.panMode = Boolean(enabled);
+    const button = byId("panModeButton");
+    if (button) button.classList.toggle("active", state.panMode);
+
+    const area = byId("potree_render_area");
+    if (area) area.classList.toggle("pan-mode", state.panMode);
+
+    debugLog("viewer.pan_mode", { enabled: state.panMode });
+  }
+
   function onViewerNavMouseDown(event) {
+    if (!state.viewer) return;
+
+    const explicitPan =
+      event.button === 1 ||
+      (event.button === 0 && state.panMode);
+
+    if (explicitPan) {
+      state.panPointer = {
+        button: event.button,
+        x: event.clientX,
+        y: event.clientY
+      };
+
+      const area = byId("potree_render_area");
+      if (area) area.classList.add("panning");
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     if (event.button !== 0) return;
     state.navPointerDown = {
       x: event.clientX,
@@ -3274,24 +3357,60 @@
     };
   }
 
+  function onViewerNavMouseMove(event) {
+    if (!state.viewer || !state.panPointer) return;
+
+    const controls = state.viewer.orbitControls;
+    const element = state.viewer.renderer.domElement;
+    if (!controls || !controls.panDelta || !element) return;
+
+    const dx = event.clientX - state.panPointer.x;
+    const dy = event.clientY - state.panPointer.y;
+    state.panPointer.x = event.clientX;
+    state.panPointer.y = event.clientY;
+
+    controls.panDelta.x += dx / Math.max(1, element.clientWidth);
+    controls.panDelta.y += dy / Math.max(1, element.clientHeight);
+    if (typeof controls.stopTweens === "function") controls.stopTweens();
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
   function onViewerNavMouseUp(event) {
+    if (state.panPointer) {
+      const sameButton =
+        event.type === "mouseleave" ||
+        event.button === state.panPointer.button;
+
+      if (sameButton) {
+        state.panPointer = null;
+        const area = byId("potree_render_area");
+        if (area) area.classList.remove("panning");
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+    }
+
     if (event.button !== 0) return;
 
     const start = state.navPointerDown;
     state.navPointerDown = null;
 
-    if (!state.traceArmed || !start || event.shiftKey) return;
+    if (!state.traceArmed || !start || event.shiftKey || state.panMode) return;
 
     const moved = Math.hypot(
       event.clientX - start.x,
       event.clientY - start.y
     );
 
-    // Clique curto = selecionar aresta. Arrastar = OrbitControls.
+    // Clique curto = selecionar a face. Arrastar = OrbitControls.
     if (moved <= 5) {
       onViewerPickClick(event);
     }
   }
+
 
   function setStandardView(name) {
     if (!state.viewer) return;
@@ -3383,54 +3502,45 @@
   function armTrace() {
     if (!state.viewer || !state.pointclouds.size) return;
     if (state.waypointBusy) {
-      toast("Aguarde pelo cálculo do troço atual.");
+      toast("Aguarde pelo cálculo atual.");
       return;
     }
 
     state.traceArmed = !state.traceArmed;
     byId("traceButton").classList.toggle("active", state.traceArmed);
 
-    const profile = byId("profile").value;
-    const terrainFace = ["ridge", "toe"].includes(profile);
-    const waypointAssist =
-      state.featureMode !== "single" &&
-      profile === "curb";
-
-    if (state.traceArmed && (terrainFace || waypointAssist)) {
+    if (state.traceArmed) {
+      setPanMode(false);
       resetWaypointSession();
     }
 
     debugLog("trace.arm_changed", {
       armed: state.traceArmed,
       feature_mode: state.featureMode,
-      profile: profile,
-      terrain_face: terrainFace,
-      waypoint_assist: waypointAssist
+      profile: "face",
+      detector: "same-auto-1.1.2-clicked-face"
     });
 
     if (state.traceArmed) {
-      byId("traceHint").textContent = terrainFace
-        ? "Clique UMA VEZ junto da " +
-          byId("profile").selectedOptions[0].text +
-          (state.featureMode === "single"
-            ? ". Motor da nuvem: troço local com edge-lock."
-            : state.featureMode === "multiple"
-              ? ". Motor da nuvem: segue a face do talude."
-              : ". Motor da nuvem: seguimento médio.")
-        : waypointAssist
-          ? "Clique no INÍCIO do lancil e depois no FIM do troço."
-          : "Modo " +
-            state.featureMode +
-            ": clique uma vez na " +
-            byId("profile").selectedOptions[0].text +
-            ".";
+      const extent =
+        state.featureMode === "single"
+          ? "zona local"
+          : state.featureMode === "multiple"
+            ? "janela grande da face"
+            : "janela média da face";
+
+      byId("traceHint").textContent =
+        "Clique curto aproximadamente no CENTRO da face inclinada. " +
+        "O mesmo detector AUTO da 1.1.2 processará apenas essa " +
+        extent + " e devolverá CRISTA + PÉ. Arraste para rodar.";
     } else {
       byId("traceHint").textContent =
         state.candidateData
-          ? "Candidato pronto. Aceite ou rejeite."
-          : "Seguimento cancelado.";
+          ? "CRISTA + PÉ candidatos prontos. Aceite ou rejeite."
+          : "Seleção de face cancelada.";
     }
   }
+
 
   function bindUi() {
     document.querySelectorAll("[data-standard-view]").forEach((button) => {
@@ -3440,6 +3550,10 @@
         else setStandardView(view);
       };
     });
+
+    if (byId("panModeButton")) {
+      byId("panModeButton").onclick = () => setPanMode(!state.panMode);
+    }
 
     byId("newProject").onclick = () => {
       createProject().catch((e) => toast(e.message, 8000));
