@@ -454,6 +454,7 @@ def refine_lines_stream(
                 "slope_mean_deg": line["slope_mean_deg"],
                 "gradient_coherence": line["gradient_coherence"],
                 "scale_persistence": line["scale_persistence"],
+                "geometry_source": line.get("geometry_source"),
                 "vertex_spacing_m": line.get("vertex_spacing_m"),
                 "raw_vertex_count": line.get("raw_vertex_count"),
                 "final_vertex_count": line.get("final_vertex_count"),
@@ -730,6 +731,138 @@ def _smooth_xy(xy: np.ndarray, window: int) -> np.ndarray:
     smoothed[-1] = pts[-1]
     return smoothed
 
+def _longest_pixel_chain(mask: np.ndarray) -> np.ndarray:
+    """Ordena o maior troço 8-conectado de uma máscara fina de boundary."""
+    labels, n = ndimage.label(
+        mask,
+        structure=np.ones((3, 3), dtype=np.uint8),
+    )
+    if n == 0:
+        return np.empty((0, 2), dtype=np.int64)
+
+    sizes = np.bincount(labels.ravel())
+    sizes[0] = 0
+    label_id = int(np.argmax(sizes))
+    coords = np.column_stack(np.nonzero(labels == label_id)).astype(np.int64)
+    if len(coords) <= 2:
+        return coords
+
+    index = {(int(r), int(c)): i for i, (r, c) in enumerate(coords)}
+    neighbors: list[list[int]] = [[] for _ in range(len(coords))]
+    for i, (r, c) in enumerate(coords):
+        rr = int(r)
+        cc = int(c)
+        for dr in (-1, 0, 1):
+            for dc in (-1, 0, 1):
+                if dr == 0 and dc == 0:
+                    continue
+                j = index.get((rr + dr, cc + dc))
+                if j is not None:
+                    neighbors[i].append(j)
+
+    def bfs(start: int) -> tuple[int, np.ndarray]:
+        distance = np.full(len(coords), -1, dtype=np.int32)
+        parent = np.full(len(coords), -1, dtype=np.int64)
+        queue = [start]
+        distance[start] = 0
+        head = 0
+        while head < len(queue):
+            node = queue[head]
+            head += 1
+            for nxt in neighbors[node]:
+                if distance[nxt] >= 0:
+                    continue
+                distance[nxt] = distance[node] + 1
+                parent[nxt] = node
+                queue.append(nxt)
+        farthest = int(np.argmax(distance))
+        return farthest, parent
+
+    endpoints = [i for i, adj in enumerate(neighbors) if len(adj) <= 1]
+    start = endpoints[0] if endpoints else 0
+    a, _ = bfs(start)
+    b, parent = bfs(a)
+
+    path = []
+    node = b
+    seen = set()
+    while node >= 0 and node not in seen:
+        path.append(node)
+        if node == a:
+            break
+        seen.add(node)
+        node = int(parent[node])
+
+    path.reverse()
+    return coords[np.asarray(path, dtype=np.int64)]
+
+
+def _face_boundary_pair(
+    grid: Grid,
+    det: dict,
+    component: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Extrai CRISTA/PÉ a partir do boundary real da face, usando gradiente local.
+
+    Ao contrário da projeção por um único eixo global, este método acompanha
+    faces curvas. Um pixel de boundary é CRISTA quando a máscara da face fica
+    no lado downhill; é PÉ quando a máscara fica no lado uphill.
+    """
+    boundary = component & ~ndimage.binary_erosion(
+        component,
+        structure=np.ones((3, 3), dtype=bool),
+        border_value=0,
+    )
+    rows, cols = np.nonzero(boundary)
+    if len(rows) < 6:
+        return None
+
+    gx = det["gx"][rows, cols]
+    gy = det["gy"][rows, cols]
+    mag = np.hypot(gx, gy)
+    ok = mag > 1e-9
+    if int(ok.sum()) < 6:
+        return None
+
+    rows = rows[ok]
+    cols = cols[ok]
+    dx = -gx[ok] / mag[ok]
+    dy = -gy[ok] / mag[ok]
+
+    probe = 1.5
+    rd = np.clip(np.rint(rows + dy * probe).astype(np.int64), 0, component.shape[0] - 1)
+    cd = np.clip(np.rint(cols + dx * probe).astype(np.int64), 0, component.shape[1] - 1)
+    ru = np.clip(np.rint(rows - dy * probe).astype(np.int64), 0, component.shape[0] - 1)
+    cu = np.clip(np.rint(cols - dx * probe).astype(np.int64), 0, component.shape[1] - 1)
+
+    inside_down = component[rd, cd]
+    inside_up = component[ru, cu]
+
+    crest_mask = np.zeros_like(component, dtype=bool)
+    toe_mask = np.zeros_like(component, dtype=bool)
+    crest_ids = inside_down & ~inside_up
+    toe_ids = inside_up & ~inside_down
+    crest_mask[rows[crest_ids], cols[crest_ids]] = True
+    toe_mask[rows[toe_ids], cols[toe_ids]] = True
+
+    # Fecha apenas falhas de um pixel, sempre restringido ao boundary original.
+    structure = np.ones((3, 3), dtype=bool)
+    crest_mask = ndimage.binary_closing(crest_mask, structure=structure) & boundary
+    toe_mask = ndimage.binary_closing(toe_mask, structure=structure) & boundary
+
+    crest_rc = _longest_pixel_chain(crest_mask)
+    toe_rc = _longest_pixel_chain(toe_mask)
+    if len(crest_rc) < 2 or len(toe_rc) < 2:
+        return None
+
+    crest_x, crest_y = grid.xy(crest_rc[:, 0], crest_rc[:, 1])
+    toe_x, toe_y = grid.xy(toe_rc[:, 0], toe_rc[:, 1])
+    return (
+        np.column_stack((crest_x, crest_y)),
+        np.column_stack((toe_x, toe_y)),
+    )
+
+
 def _resample_xy_spacing(xy: np.ndarray, spacing_m: float) -> np.ndarray:
     """Reamostra uma linha por distância, com vértices aproximadamente equidistantes.
 
@@ -798,14 +931,16 @@ def _snap_line_to_tin_break(
     if len(pts) < 2 or search_m <= 0:
         return pts, {"mean_snap_m": 0.0, "max_snap_m": 0.0}
 
-    direction = np.asarray(downhill, dtype=np.float64)
-    norm = float(np.linalg.norm(direction))
-    if norm <= 1e-12:
+    fallback_direction = np.asarray(downhill, dtype=np.float64)
+    fallback_norm = float(np.linalg.norm(fallback_direction))
+    if fallback_norm <= 1e-12:
         return pts, {"mean_snap_m": 0.0, "max_snap_m": 0.0}
-    direction /= norm
+    fallback_direction /= fallback_norm
 
     tin_score = np.asarray(det.get("tin_break_score"), dtype=np.float32)
     slope = np.asarray(det.get("slope"), dtype=np.float32)
+    gx_field = np.asarray(det.get("gx"), dtype=np.float32)
+    gy_field = np.asarray(det.get("gy"), dtype=np.float32)
     if tin_score.ndim != 2 or slope.ndim != 2:
         return pts, {"mean_snap_m": 0.0, "max_snap_m": 0.0}
 
@@ -816,6 +951,15 @@ def _snap_line_to_tin_break(
     snaps = []
 
     for i, p in enumerate(pts):
+        local_gx = _sample_node_field(gx_field, grid, float(p[0]), float(p[1]))
+        local_gy = _sample_node_field(gy_field, grid, float(p[0]), float(p[1]))
+        direction = np.array([-local_gx, -local_gy], dtype=np.float64)
+        local_norm = float(np.linalg.norm(direction))
+        if local_norm > 1e-9:
+            direction /= local_norm
+        else:
+            direction = fallback_direction
+
         best_score = -float("inf")
         best_offset = 0.0
 
@@ -937,47 +1081,60 @@ def _component_lines(
             [-downhill[1], downhill[0]]
         )
 
-        x, y = grid.xy(rows, cols)
-        xy = np.column_stack((x, y))
-        along = xy @ tangent
-        down = xy @ downhill
-        bin_size = max(
-            grid.cell * cfg.cross_section_bin_factor,
-            grid.cell,
-        )
-        bins = np.floor(
-            (along - along.min()) / bin_size
-        ).astype(np.int64)
+        component = labels == label_id
+        boundary_pair = _face_boundary_pair(grid, det, component)
 
-        crest_xy = []
-        toe_xy = []
-        persist_vals = []
+        persist_vals = [
+            float(np.mean(det["persistence"][rows, cols]))
+        ]
 
-        for bin_id in np.unique(bins):
-            ids = np.flatnonzero(bins == bin_id)
-            if len(ids) == 0:
-                continue
+        if boundary_pair is not None:
+            crest_raw, toe_raw = boundary_pair
+        else:
+            # Fallback da base 1.1.2 para componentes demasiado curtos ou
+            # ambíguos. Mantém cobertura sem voltar a usar este método como
+            # geometria principal nas faces curvas.
+            x, y = grid.xy(rows, cols)
+            xy = np.column_stack((x, y))
+            along = xy @ tangent
+            down = xy @ downhill
+            bin_size = max(
+                grid.cell * cfg.cross_section_bin_factor,
+                grid.cell,
+            )
+            bins = np.floor(
+                (along - along.min()) / bin_size
+            ).astype(np.int64)
 
-            crest_idx = ids[np.argmin(down[ids])]
-            toe_idx = ids[np.argmax(down[ids])]
-            crest_xy.append(xy[crest_idx])
-            toe_xy.append(xy[toe_idx])
-            persist_vals.append(
-                float(
-                    np.mean(
-                        det["persistence"][
-                            rows[ids],
-                            cols[ids],
-                        ]
+            crest_xy = []
+            toe_xy = []
+            persist_vals = []
+
+            for bin_id in np.unique(bins):
+                ids = np.flatnonzero(bins == bin_id)
+                if len(ids) == 0:
+                    continue
+
+                crest_idx = ids[np.argmin(down[ids])]
+                toe_idx = ids[np.argmax(down[ids])]
+                crest_xy.append(xy[crest_idx])
+                toe_xy.append(xy[toe_idx])
+                persist_vals.append(
+                    float(
+                        np.mean(
+                            det["persistence"][
+                                rows[ids],
+                                cols[ids],
+                            ]
+                        )
                     )
                 )
-            )
 
-        if len(crest_xy) < 2 or len(toe_xy) < 2:
-            continue
+            if len(crest_xy) < 2 or len(toe_xy) < 2:
+                continue
 
-        crest_raw = np.asarray(crest_xy, dtype=float)
-        toe_raw = np.asarray(toe_xy, dtype=float)
+            crest_raw = np.asarray(crest_xy, dtype=float)
+            toe_raw = np.asarray(toe_xy, dtype=float)
 
         crest_xy, crest_snap = _snap_line_to_tin_break(
             crest_raw,
@@ -1050,6 +1207,11 @@ def _component_lines(
                     "slope_mean_deg": slope_mean,
                     "gradient_coherence": coherence,
                     "scale_persistence": persistence_score,
+                    "geometry_source": (
+                        "face-boundary-local-gradient"
+                        if boundary_pair is not None
+                        else "legacy-global-projection"
+                    ),
                     "vertex_spacing_m": float(cfg.vertex_spacing_m),
                     "raw_vertex_count": int(
                         len(crest_raw) if feature_type == "CREST" else len(toe_raw)
@@ -1239,6 +1401,7 @@ def refine_lines(
                 "scale_persistence": line[
                     "scale_persistence"
                 ],
+                "geometry_source": line.get("geometry_source"),
                 "vertex_spacing_m": line.get("vertex_spacing_m"),
                 "raw_vertex_count": line.get("raw_vertex_count"),
                 "final_vertex_count": line.get("final_vertex_count"),
