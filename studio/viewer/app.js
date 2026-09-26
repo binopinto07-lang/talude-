@@ -379,7 +379,7 @@
 
     viewer.renderer.domElement.addEventListener("mousedown", onViewerMouseDown, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Alpha 10.5.4 · terrain-face slope edges");
+    setStatus("Potree pronto · Talude V1.1 · terrain-face slope edges");
   }
 
   function configurePointcloud(pointcloud) {
@@ -761,8 +761,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Alpha 10.5.4 · motor MDT + Declive pronto."
-              : "Alpha 10.5.4 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V1.1 · motor MDT + Declive pronto."
+              : "Talude V1.1 · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -787,8 +787,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Alpha 10.5.4 · a ler MDT + Declive…"
-        : "Alpha 10.5.4 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V1.1 · a ler MDT + Declive…"
+        : "Talude V1.1 · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -845,7 +845,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Alpha 10.5.4 · raster-terrain · " +
+      "Talude V1.1 · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1568,7 +1568,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Alpha 10.5.4 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V1.1 used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -1935,7 +1935,7 @@
       geometric_model: "flat-face-flat-progressive"
     });
 
-    setStatus("Alpha 10.5.4 · a detetar a face do talude…");
+    setStatus("Talude V1.1 · a detetar a face do talude…");
     byId("traceHint").textContent =
       "Talude = patamar → face inclinada → patamar. " +
       "A detetar a face e as suas arestas…";
@@ -1983,7 +1983,7 @@
     drawCandidate(result);
 
     if (state.featureMode !== "single") {
-      setStatus("Alpha 10.5.4 · a seguir a mesma face até ao fim…");
+      setStatus("Talude V1.1 · a seguir a mesma face até ao fim…");
       result = await progressivelyExtendTerrainFace(
         pointcloud,
         cloudId,
@@ -2032,7 +2032,7 @@
       "Aceite ou rejeite.";
 
     setStatus(
-      "Alpha 10.5.4 · terrain-face · " +
+      "Talude V1.1 · terrain-face · " +
       result.vertices.length + " vértices · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
@@ -3443,7 +3443,7 @@
 
       if (!health.potree_ready) {
         toast(
-          "Potree ainda não foi instalado na V2. Execute bootstrap_vendor.ps1.",
+          "Potree ainda não foi instalado no Talude Studio. Execute bootstrap_vendor.ps1.",
           10000
         );
       }
