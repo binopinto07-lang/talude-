@@ -7,3 +7,4 @@ dist/
 builds/
 talude_output/
 *.log
+studio/vendor/
