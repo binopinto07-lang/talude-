@@ -114,10 +114,8 @@
             <label>Slope HIGH (°)<input id="slopeHigh" type="number" min="0" step="1" value="0"></label>
             <label>Área mín. (m²)<input id="minArea" type="number" min="0.1" step="0.5" value="4"></label>
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
-            <label>Largura face mín. (m)<input id="minFaceWidth" type="number" min="0" step="0.25" value="0"></label>
-            <label>Altura face mín. (m)<input id="minFaceHeight" type="number" min="0" step="0.25" value="0"></label>
           </div>
-          <div class="hint">0 = AUTO · multiescala + persistence + hysteresis + filtro geométrico da face.</div>
+          <div class="hint">0 = AUTO · detector da 1.1.2 + linhas suavizadas após a deteção.</div>
         </details>
       </section>
 
@@ -152,13 +150,21 @@
           <button id="elevationMode">Elevação</button>
           <button id="classificationMode">Classificação</button>
         </div>
+        <div class="standard-views" title="Vistas CAD">
+          <button data-standard-view="top">TOPO</button>
+          <button data-standard-view="front">FRENTE</button>
+          <button data-standard-view="back">TRÁS</button>
+          <button data-standard-view="left">ESQ</button>
+          <button data-standard-view="right">DIR</button>
+          <button data-standard-view="iso">ISO</button>
+        </div>
         <div class="nav-help" title="Navegação 3D">
           <span>Rodar: arrastar esquerdo</span>
           <span>Mover: direito</span>
           <span>Zoom: roda</span>
-          <span>SHIFT: navegar ao picar</span>
+          <span>Picar: clique curto</span>
         </div>
-        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.4</div>
+        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.5</div>
       </div>
 
       <div id="potree_render_area"></div>
