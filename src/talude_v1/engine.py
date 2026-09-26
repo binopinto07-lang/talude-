@@ -454,6 +454,11 @@ def refine_lines_stream(
                 "slope_mean_deg": line["slope_mean_deg"],
                 "gradient_coherence": line["gradient_coherence"],
                 "scale_persistence": line["scale_persistence"],
+                "vertex_spacing_m": line.get("vertex_spacing_m"),
+                "raw_vertex_count": line.get("raw_vertex_count"),
+                "final_vertex_count": line.get("final_vertex_count"),
+                "tin_mean_snap_m": line.get("tin_mean_snap_m", 0.0),
+                "tin_max_snap_m": line.get("tin_max_snap_m", 0.0),
                 "confidence": confidence,
                 "median_rmse": rmse_med,
                 "mean_support_points": float(np.mean(supports)) if len(supports) else 0.0,
@@ -517,6 +522,76 @@ def _remove_small(mask: np.ndarray, min_cells: int) -> np.ndarray:
     return keep[labels]
 
 
+def _tin_break_score(grid: Grid) -> np.ndarray:
+    """Pontuação de quebra geométrica num TIN implícito da grelha do terreno.
+
+    A grelha é tratada como uma superfície triangulada 2.5D (dois triângulos
+    por célula). O score é o maior ângulo entre as normais de células
+    adjacentes. Cristas e pés de talude tendem a produzir máximos deste valor.
+
+    Isto evita criar uma Delaunay global com milhões de pontos, mas preserva a
+    propriedade útil de uma TIN: localizar mudanças bruscas da normal da
+    superfície.
+    """
+    z = np.asarray(grid.z, dtype=np.float64)
+    if z.shape[0] < 3 or z.shape[1] < 3:
+        return np.zeros((max(1, z.shape[0] - 1), max(1, z.shape[1] - 1)), dtype=np.float32)
+
+    # Um alisamento muito ligeiro reduz ruído de amostragem sem deslocar
+    # sensivelmente as quebras topográficas.
+    zs = ndimage.gaussian_filter(z, sigma=0.55, mode="nearest")
+    z00 = zs[:-1, :-1]
+    z10 = zs[:-1, 1:]
+    z01 = zs[1:, :-1]
+    z11 = zs[1:, 1:]
+    c = float(grid.cell)
+
+    # Triângulo A: p00, p10, p11
+    az = z10 - z00
+    bz = z11 - z00
+    n_ax = -c * az
+    n_ay = c * (az - bz)
+    n_az = np.full_like(z00, c * c)
+
+    # Triângulo B: p00, p11, p01
+    az2 = z11 - z00
+    bz2 = z01 - z00
+    n_bx = c * (bz2 - az2)
+    n_by = -c * bz2
+    n_bz = np.full_like(z00, c * c)
+
+    normal = np.stack(
+        (n_ax + n_bx, n_ay + n_by, n_az + n_bz),
+        axis=-1,
+    )
+    norm = np.linalg.norm(normal, axis=-1, keepdims=True)
+    normal /= np.maximum(norm, 1e-12)
+
+    cell_valid = (
+        grid.valid[:-1, :-1]
+        & grid.valid[:-1, 1:]
+        & grid.valid[1:, :-1]
+        & grid.valid[1:, 1:]
+    )
+    score = np.zeros(normal.shape[:2], dtype=np.float32)
+
+    if normal.shape[1] > 1:
+        dot = np.sum(normal[:, 1:] * normal[:, :-1], axis=-1)
+        angle = np.degrees(np.arccos(np.clip(dot, -1.0, 1.0))).astype(np.float32)
+        angle = np.where(cell_valid[:, 1:] & cell_valid[:, :-1], angle, 0.0)
+        score[:, 1:] = np.maximum(score[:, 1:], angle)
+        score[:, :-1] = np.maximum(score[:, :-1], angle)
+
+    if normal.shape[0] > 1:
+        dot = np.sum(normal[1:] * normal[:-1], axis=-1)
+        angle = np.degrees(np.arccos(np.clip(dot, -1.0, 1.0))).astype(np.float32)
+        angle = np.where(cell_valid[1:] & cell_valid[:-1], angle, 0.0)
+        score[1:] = np.maximum(score[1:], angle)
+        score[:-1] = np.maximum(score[:-1], angle)
+
+    return score
+
+
 def detect_faces(grid: Grid, cfg: ExtractConfig) -> dict:
     slope_stack = []
     gx_stack = []
@@ -578,11 +653,13 @@ def detect_faces(grid: Grid, cfg: ExtractConfig) -> dict:
     gx = np.mean(np.stack(gx_stack), axis=0)
     gy = np.mean(np.stack(gy_stack), axis=0)
     slope = np.mean(slopes, axis=0)
+    tin_break_score = _tin_break_score(grid)
 
     return {
         "mask": face,
         "persistence": persistence,
         "slope": slope,
+        "tin_break_score": tin_break_score,
         "gx": gx,
         "gy": gy,
         "slope_low": low,
@@ -652,6 +729,139 @@ def _smooth_xy(xy: np.ndarray, window: int) -> np.ndarray:
     smoothed[0] = pts[0]
     smoothed[-1] = pts[-1]
     return smoothed
+
+def _resample_xy_spacing(xy: np.ndarray, spacing_m: float) -> np.ndarray:
+    """Reamostra uma linha por distância, com vértices aproximadamente equidistantes.
+
+    O objetivo é CAD/topografia: menos vértices e segmentos previsíveis, por
+    defeito ~1 m, preservando sempre os dois extremos.
+    """
+    pts = np.asarray(xy, dtype=np.float64)
+    if len(pts) < 2 or spacing_m <= 0:
+        return pts
+
+    step = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    keep = np.r_[True, step > 1e-9]
+    pts = pts[keep]
+    if len(pts) < 2:
+        return pts
+
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    dist = np.r_[0.0, np.cumsum(seg)]
+    total = float(dist[-1])
+    if total <= spacing_m:
+        return np.vstack((pts[0], pts[-1]))
+
+    samples = np.arange(0.0, total, float(spacing_m), dtype=np.float64)
+    if len(samples) == 0 or abs(samples[-1] - total) > 1e-9:
+        samples = np.r_[samples, total]
+
+    return np.column_stack(
+        (
+            np.interp(samples, dist, pts[:, 0]),
+            np.interp(samples, dist, pts[:, 1]),
+        )
+    )
+
+
+def _sample_node_field(field: np.ndarray, grid: Grid, x: float, y: float) -> float:
+    col = int(np.clip(round((x - grid.x0) / grid.cell - 0.5), 0, field.shape[1] - 1))
+    row = int(np.clip(round((y - grid.y0) / grid.cell - 0.5), 0, field.shape[0] - 1))
+    return float(field[row, col])
+
+
+def _sample_tin_score(field: np.ndarray, grid: Grid, x: float, y: float) -> float:
+    # O score TIN vive nas células entre quatro centros da grelha.
+    col = int(np.clip(round((x - grid.x0) / grid.cell - 1.0), 0, field.shape[1] - 1))
+    row = int(np.clip(round((y - grid.y0) / grid.cell - 1.0), 0, field.shape[0] - 1))
+    return float(field[row, col])
+
+
+def _snap_line_to_tin_break(
+    xy: np.ndarray,
+    *,
+    feature_type: str,
+    downhill: np.ndarray,
+    grid: Grid,
+    det: dict,
+    search_m: float,
+) -> tuple[np.ndarray, dict]:
+    """Move a linha para a quebra de superfície mais forte junto da posição bruta.
+
+    O movimento é feito apenas na direção transversal ao talude (downhill), para
+    não destruir a continuidade longitudinal. O score combina a descontinuidade
+    das normais do TIN com o sinal da mudança de declive:
+      CREST: declive aumenta no sentido downhill;
+      TOE:   declive diminui no sentido downhill.
+    """
+    pts = np.asarray(xy, dtype=np.float64)
+    if len(pts) < 2 or search_m <= 0:
+        return pts, {"mean_snap_m": 0.0, "max_snap_m": 0.0}
+
+    direction = np.asarray(downhill, dtype=np.float64)
+    norm = float(np.linalg.norm(direction))
+    if norm <= 1e-12:
+        return pts, {"mean_snap_m": 0.0, "max_snap_m": 0.0}
+    direction /= norm
+
+    tin_score = np.asarray(det.get("tin_break_score"), dtype=np.float32)
+    slope = np.asarray(det.get("slope"), dtype=np.float32)
+    if tin_score.ndim != 2 or slope.ndim != 2:
+        return pts, {"mean_snap_m": 0.0, "max_snap_m": 0.0}
+
+    step = max(grid.cell * 0.5, 0.10)
+    offsets = np.arange(-search_m, search_m + 0.5 * step, step, dtype=np.float64)
+    half_probe = max(grid.cell * 1.25, 0.30)
+    out = pts.copy()
+    snaps = []
+
+    for i, p in enumerate(pts):
+        best_score = -float("inf")
+        best_offset = 0.0
+
+        for offset in offsets:
+            qx = float(p[0] + direction[0] * offset)
+            qy = float(p[1] + direction[1] * offset)
+
+            edge_score = _sample_tin_score(tin_score, grid, qx, qy)
+            before = _sample_node_field(
+                slope,
+                grid,
+                qx - direction[0] * half_probe,
+                qy - direction[1] * half_probe,
+            )
+            after = _sample_node_field(
+                slope,
+                grid,
+                qx + direction[0] * half_probe,
+                qy + direction[1] * half_probe,
+            )
+
+            signed_change = (
+                after - before
+                if feature_type == "CREST"
+                else before - after
+            )
+
+            # O ângulo entre normais domina; o sinal de declive ajuda a não
+            # trocar crista e pé quando as duas quebras estão próximas.
+            score = edge_score + 0.65 * max(signed_change, 0.0)
+            # Penalização pequena para impedir saltos desnecessários.
+            score -= 1.5 * abs(offset) / max(search_m, 1e-6)
+
+            if score > best_score:
+                best_score = score
+                best_offset = float(offset)
+
+        out[i, 0] = p[0] + direction[0] * best_offset
+        out[i, 1] = p[1] + direction[1] * best_offset
+        snaps.append(abs(best_offset))
+
+    return out, {
+        "mean_snap_m": float(np.mean(snaps)) if snaps else 0.0,
+        "max_snap_m": float(np.max(snaps)) if snaps else 0.0,
+    }
+
 
 def _component_lines(
     grid: Grid,
@@ -766,13 +976,42 @@ def _component_lines(
         if len(crest_xy) < 2 or len(toe_xy) < 2:
             continue
 
+        crest_raw = np.asarray(crest_xy, dtype=float)
+        toe_raw = np.asarray(toe_xy, dtype=float)
+
+        crest_xy, crest_snap = _snap_line_to_tin_break(
+            crest_raw,
+            feature_type="CREST",
+            downhill=downhill,
+            grid=grid,
+            det=det,
+            search_m=max(float(cfg.tin_snap_search_m), grid.cell * 2.5),
+        )
+        toe_xy, toe_snap = _snap_line_to_tin_break(
+            toe_raw,
+            feature_type="TOE",
+            downhill=downhill,
+            grid=grid,
+            det=det,
+            search_m=max(float(cfg.tin_snap_search_m), grid.cell * 2.5),
+        )
+
         crest_xy = _smooth_xy(
-            np.asarray(crest_xy, dtype=float),
+            crest_xy,
             cfg.line_smooth_window,
         )
         toe_xy = _smooth_xy(
-            np.asarray(toe_xy, dtype=float),
+            toe_xy,
             cfg.line_smooth_window,
+        )
+
+        crest_xy = _resample_xy_spacing(
+            crest_xy,
+            cfg.vertex_spacing_m,
+        )
+        toe_xy = _resample_xy_spacing(
+            toe_xy,
+            cfg.vertex_spacing_m,
         )
 
         if (
@@ -811,6 +1050,21 @@ def _component_lines(
                     "slope_mean_deg": slope_mean,
                     "gradient_coherence": coherence,
                     "scale_persistence": persistence_score,
+                    "vertex_spacing_m": float(cfg.vertex_spacing_m),
+                    "raw_vertex_count": int(
+                        len(crest_raw) if feature_type == "CREST" else len(toe_raw)
+                    ),
+                    "final_vertex_count": int(len(arr)),
+                    "tin_mean_snap_m": float(
+                        crest_snap["mean_snap_m"]
+                        if feature_type == "CREST"
+                        else toe_snap["mean_snap_m"]
+                    ),
+                    "tin_max_snap_m": float(
+                        crest_snap["max_snap_m"]
+                        if feature_type == "CREST"
+                        else toe_snap["max_snap_m"]
+                    ),
                 }
             )
 
@@ -985,6 +1239,11 @@ def refine_lines(
                 "scale_persistence": line[
                     "scale_persistence"
                 ],
+                "vertex_spacing_m": line.get("vertex_spacing_m"),
+                "raw_vertex_count": line.get("raw_vertex_count"),
+                "final_vertex_count": line.get("final_vertex_count"),
+                "tin_mean_snap_m": line.get("tin_mean_snap_m", 0.0),
+                "tin_max_snap_m": line.get("tin_max_snap_m", 0.0),
                 "confidence": confidence,
                 "median_rmse": rmse_med,
                 "mean_support_points": float(
@@ -1078,6 +1337,15 @@ def _save_outputs_and_report(
         _write_ascii_grid(debug / "01_slope.asc", det["slope"], grid)
         _write_ascii_grid(debug / "02_persistence.asc", det["persistence"], grid)
         _write_ascii_grid(debug / "03_face_mask.asc", det["mask"].astype(float), grid)
+        # O score TIN tem uma linha/coluna a menos que a grelha original.
+        tin_grid = Grid(
+            z=det["tin_break_score"],
+            valid=np.ones_like(det["tin_break_score"], dtype=bool),
+            x0=grid.x0 + 0.5 * grid.cell,
+            y0=grid.y0 + 0.5 * grid.cell,
+            cell=grid.cell,
+        )
+        _write_ascii_grid(debug / "04_tin_break_score.asc", det["tin_break_score"], tin_grid)
         debug_format = "ASC"
     else:
         np.savez_compressed(
@@ -1085,6 +1353,7 @@ def _save_outputs_and_report(
             slope=np.asarray(det["slope"], dtype=np.float32),
             persistence=np.asarray(det["persistence"], dtype=np.uint8),
             face_mask=np.asarray(det["mask"], dtype=np.uint8),
+            tin_break_score=np.asarray(det["tin_break_score"], dtype=np.float32),
             x0=np.float64(grid.x0),
             y0=np.float64(grid.y0),
             cell=np.float64(grid.cell),
