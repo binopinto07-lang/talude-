@@ -99,7 +99,7 @@ def extract_terrain_face_from_points(
     slope_high_deg: float = 0.0,
     min_face_area_m2: float = 4.0,
     min_line_length_m: float = 2.0,
-    line_smooth_window: int = 15,
+    line_smooth_window: int = 11,
 ) -> dict:
     """Executa o MESMO detector AUTO da 1.1.2, limitado à face clicada.
 
@@ -162,6 +162,13 @@ def extract_terrain_face_from_points(
 
     spacing = estimate_spacing(points, cfg)
     cell = choose_cell_size(spacing, cfg.cell_size)
+    auto_cell_capped = False
+    if cfg.cell_size <= 0.0 and cell > 0.35:
+        # ProfileRequest local é uma amostra LOD, não a densidade real do LAS.
+        # Sem este limite a estimativa local subia para 1 m e cortava/fragmentava
+        # taludes que o AUTO global resolve com grelha muito mais fina.
+        cell = 0.35
+        auto_cell_capped = True
 
     grid = rasterize_mean(points, cell)
     det = detect_faces(grid, cfg)
@@ -200,6 +207,13 @@ def extract_terrain_face_from_points(
         "confidence": confidence,
         "grid_resolution": float(grid.cell),
         "estimated_spacing_m": float(spacing),
+        "auto_cell_capped": bool(auto_cell_capped),
+        "sample_density_pts_m2": float(
+            len(points) / max(
+                (float(np.ptp(points[:, 0])) * float(np.ptp(points[:, 1]))),
+                1e-6,
+            )
+        ),
         "slope_low_deg": float(det["slope_low"]),
         "slope_high_deg": float(det["slope_high"]),
         "selected_face_label": int(det.get("selected_face_label", 0)),
