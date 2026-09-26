@@ -599,7 +599,7 @@
     });
   }
 
-  function bridgeCall(method) {
+  function bridgeCall(method, ...args) {
     return new Promise((resolve, reject) => {
       if (!desktopBridge || typeof desktopBridge[method] !== "function") {
         reject(new Error("Bridge desktop indisponível."));
@@ -607,7 +607,7 @@
       }
 
       try {
-        desktopBridge[method]((result) => resolve(result || ""));
+        desktopBridge[method](...args, (result) => resolve(result || ""));
       } catch (error) {
         reject(error);
       }
@@ -3482,6 +3482,7 @@
     setStatus,
     toast,
     selectedClassesForEngine,
+    setClassificationPreset,
     updateWideLineResolution
   };
 })();
