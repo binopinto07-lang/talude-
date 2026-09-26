@@ -103,3 +103,30 @@ Cada execução automática cria uma pasta em `exports/talude_auto_...` com:
 ## Estado atual
 
 A V1.1 implementa o primeiro **TERRAIN / FACE_FIRST engine**. O objetivo é obter CRISTA + PÉ automaticamente de forma funcional antes de acrescentar os motores TIN, PROFILE, PLANAR_3D e STRUCTURAL_EDGE.
+
+
+## Clouds massivas / streaming
+
+LAS e LAZ são processados **out-of-core**. O motor não usa `laspy.read()` no caminho de extração:
+
+```text
+LAS/LAZ
+  ↓
+header + sample de spacing
+  ↓
+leitura por chunks
+  ↓
+grelha coarse com orçamento de memória
+  ↓
+slope multiescala / FACE_DETECTOR
+  ↓
+CRISTA/PÉ aproximados
+  ↓
+segunda passagem por chunks
+  ↓
+refinamento local XYZ
+```
+
+A resolução da grelha AUTO pode ser aumentada automaticamente quando a extensão da cloud produzir demasiadas células; o valor efetivamente usado fica registado em `talude_report.json`.
+
+Em grelhas grandes, os debug layers são guardados em `debug/terrain_debug.npz` para evitar centenas de MB de ASCII.
