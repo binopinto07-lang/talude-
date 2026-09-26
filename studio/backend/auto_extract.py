@@ -149,6 +149,8 @@ def _worker(
                     "confidence": props.get("confidence"),
                     "length_m": props.get("length_m"),
                     "slope_mean_deg": props.get("slope_mean_deg"),
+                    "face_width_m": props.get("face_width_m"),
+                    "face_height_m": props.get("face_height_m"),
                     "median_rmse": props.get("median_rmse"),
                     "vertices": coords,
                 }
@@ -189,6 +191,7 @@ def _worker(
                 "faces_detected": report.get("faces_detected"),
                 "crest_lines": report.get("crest_lines"),
                 "toe_lines": report.get("toe_lines"),
+                "face_filter": report.get("face_filter"),
                 "elapsed_s": report.get("elapsed_s"),
             },
             source="talude-engine",
