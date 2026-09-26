@@ -1212,6 +1212,22 @@
     const tuning = terrainTileOptions(selectedClasses, compact);
     const half = Number(options.half || tuning.half);
     const width = half * 2.0;
+    const maxPoints = Number(
+      options.maxPoints ||
+      (half >= 40 ? 60000 : half >= 25 ? 36000 : tuning.maxPoints)
+    );
+    const earlyMinPoints = Number(
+      options.earlyMinPoints ||
+      Math.min(Math.max(tuning.earlyMinPoints, Math.round(maxPoints * 0.18)), 9000)
+    );
+    const softTimeoutMs = Number(
+      options.softTimeoutMs ||
+      (half >= 40 ? 2600 : half >= 25 ? 1900 : tuning.softTimeoutMs)
+    );
+    const hardTimeoutMs = Number(
+      options.hardTimeoutMs ||
+      (half >= 40 ? 4200 : half >= 25 ? 3200 : tuning.hardTimeoutMs)
+    );
     const started = performance.now();
 
     debugLog("terrain_face.tile_started", {
@@ -1219,7 +1235,7 @@
       selected_classes: selectedClasses,
       half_m: half,
       width_m: width,
-      max_points: tuning.maxPoints,
+      max_points: maxPoints,
       compact: compact
     });
 
@@ -1229,12 +1245,12 @@
       new THREE.Vector3(seed.x + half, seed.y, seed.z),
       width,
       selectedClasses,
-      tuning.maxPoints,
+      maxPoints,
       {
-        earlyMinPoints: tuning.earlyMinPoints,
+        earlyMinPoints: earlyMinPoints,
         earlyAfterMs: tuning.earlyAfterMs,
-        softTimeoutMs: tuning.softTimeoutMs,
-        hardTimeoutMs: tuning.hardTimeoutMs
+        softTimeoutMs: softTimeoutMs,
+        hardTimeoutMs: hardTimeoutMs
       }
     );
 
