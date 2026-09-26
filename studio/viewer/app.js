@@ -345,7 +345,24 @@
     viewer.setFOV(60);
     viewer.setPointBudget(7500000);
     viewer.setBackground("black");
-    viewer.setControls(viewer.earthControls);
+
+    // Navegação CAD simples:
+    // - arrastar com botão esquerdo = rodar/orbitar
+    // - botão direito = deslocar
+    // - roda = zoom
+    // EarthControls é ótimo para navegação geográfica, mas para inspecionar
+    // taludes em 3D o OrbitControls é muito mais previsível.
+    if (viewer.orbitControls) {
+      viewer.setControls(viewer.orbitControls);
+      if ("rotationSpeed" in viewer.orbitControls) {
+        viewer.orbitControls.rotationSpeed = 6.0;
+      }
+      if ("fadeFactor" in viewer.orbitControls) {
+        viewer.orbitControls.fadeFactor = 18.0;
+      }
+    } else {
+      viewer.setControls(viewer.earthControls);
+    }
     viewer.setMinNodeSize(30);
 
     state.viewer = viewer;
@@ -379,7 +396,7 @@
 
     viewer.renderer.domElement.addEventListener("mousedown", onViewerMouseDown, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.3 · terrain-face slope edges");
+    setStatus("Potree pronto · Talude V1.1.4 · terrain-face slope edges");
   }
 
   function configurePointcloud(pointcloud) {
@@ -761,8 +778,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.3 · motor MDT + Declive pronto."
-              : "Talude V1.1.3 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V1.1.4 · motor MDT + Declive pronto."
+              : "Talude V1.1.4 · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -787,8 +804,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.3 · a ler MDT + Declive…"
-        : "Talude V1.1.3 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V1.1.4 · a ler MDT + Declive…"
+        : "Talude V1.1.4 · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -845,7 +862,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.3 · raster-terrain · " +
+      "Talude V1.1.4 · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1568,7 +1585,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.3 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V1.1.4 used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -1935,7 +1952,7 @@
       geometric_model: "flat-face-flat-progressive"
     });
 
-    setStatus("Talude V1.1.3 · a detetar a face do talude…");
+    setStatus("Talude V1.1.4 · a detetar a face do talude…");
     byId("traceHint").textContent =
       "Talude = patamar → face inclinada → patamar. " +
       "A detetar a face e as suas arestas…";
@@ -1983,7 +2000,7 @@
     drawCandidate(result);
 
     if (state.featureMode !== "single") {
-      setStatus("Talude V1.1.3 · a seguir a mesma face até ao fim…");
+      setStatus("Talude V1.1.4 · a seguir a mesma face até ao fim…");
       result = await progressivelyExtendTerrainFace(
         pointcloud,
         cloudId,
@@ -2032,7 +2049,7 @@
       "Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.3 · terrain-face · " +
+      "Talude V1.1.4 · terrain-face · " +
       result.vertices.length + " vértices · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
@@ -3149,6 +3166,10 @@
   }
 
   function onViewerMouseDown(event) {
+    // SHIFT + botão esquerdo fica sempre reservado para navegação.
+    // Assim é possível rodar a nuvem mesmo quando "Picar aresta automática"
+    // está armado, sem criar uma seed por engano.
+    if (event.shiftKey) return;
     if (!state.traceArmed || event.button !== 0 || !state.viewer) return;
 
     event.preventDefault();
