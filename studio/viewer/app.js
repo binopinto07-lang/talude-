@@ -2015,7 +2015,10 @@
         points: tile.points,
         classifications: tile.classifications,
         selected_classes: selectedClasses,
-        grid_resolution: 0
+        grid_resolution: 0,
+        line_smooth_window: Number(
+          byId("lineSmooth") ? byId("lineSmooth").value : 11
+        )
       })
     });
 
