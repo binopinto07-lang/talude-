@@ -105,7 +105,25 @@ footer { color: #8092a8; font-size: 10px; padding: 3px; }
 }
 .view-pills { display: flex; gap: 7px; }
 .topbar button { min-height: 32px; font-size: 11px; }
-#pointStats { color: #8fa0b5; font-size: 11px; }
+.nav-help {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 14px;
+  color: #b8c6d8;
+  font-size: 10px;
+  white-space: nowrap;
+  user-select: none;
+}
+.nav-help span + span {
+  padding-left: 12px;
+  border-left: 1px solid #2b394b;
+}
+#pointStats { color: #8fa0b5; font-size: 11px; white-space: nowrap; }
+@media (max-width: 1280px) {
+  .nav-help span:nth-child(2),
+  .nav-help span:nth-child(3) { display: none; }
+}
 #potree_render_area { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; }
 #potree_sidebar_container { display: none !important; }
 .empty-state {
