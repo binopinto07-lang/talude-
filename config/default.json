@@ -1,0 +1,12 @@
+{
+  "cell_size": "AUTO",
+  "slope_low_deg": "AUTO",
+  "slope_high_deg": "AUTO",
+  "min_face_area_m2": 4.0,
+  "min_line_length_m": 2.0,
+  "smooth_sigmas_cells": [0.8, 1.5, 3.0],
+  "min_scale_persistence": 2,
+  "min_gradient_coherence": 0.5,
+  "ground_class": 2,
+  "notes": "V1: FACE_FIRST + multiscale persistence + hysteresis + local plane Z refinement"
+}
