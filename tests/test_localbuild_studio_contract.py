@@ -12,9 +12,11 @@ def test_localbuild_packages_studio_not_legacy_tkinter():
 
     assert "studio/scripts/bootstrap_vendor.ps1" in commands
     assert "PySide6.QtWebEngineWidgets" in commands
-    assert "--add-data 'studio/viewer;studio/viewer'" in commands
-    assert "--add-data 'studio/vendor;studio/vendor'" in commands
+    assert "--add-data '%REPO%/studio/viewer;studio/viewer'" in commands
+    assert "--add-data '%REPO%/studio/vendor;studio/vendor'" in commands
     assert "talude_studio.py" in commands
+    assert "--hidden-import ezdxf" in commands
+    assert "--collect-all ezdxf" not in commands
 
     compile_command = cfg["pipelines"]["test"][1]["command"]
     assert "studio" in compile_command
