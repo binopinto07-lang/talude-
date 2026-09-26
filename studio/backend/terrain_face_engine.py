@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
-from core.terrain_face import extract_terrain_face_edge
+from talude_v1.config import ExtractConfig
+from talude_v1.engine import (
+    _component_lines,
+    choose_cell_size,
+    detect_faces,
+    estimate_spacing,
+    rasterize_mean,
+    refine_lines,
+)
 
 
 def _filter_by_classification(
@@ -27,7 +37,7 @@ def _filter_by_classification(
 
     selected = {int(v) for v in selected_classes}
     if not selected:
-        raise ValueError("Nenhuma classificação está ativa para o motor.")
+        return points, classes
 
     mask = np.isin(classes, list(selected))
     filtered = points[mask]
@@ -43,9 +53,14 @@ def _filter_by_classification(
     return filtered, filtered_classes
 
 
-def _bounded_density(points: np.ndarray, classes: np.ndarray | None, limit: int = 180_000):
+def _bounded_density(
+    points: np.ndarray,
+    classes: np.ndarray | None,
+    limit: int = 180_000,
+) -> tuple[np.ndarray, np.ndarray | None]:
     if len(points) <= limit:
         return points, classes
+
     stride = int(np.ceil(len(points) / limit))
     idx = np.arange(0, len(points), stride, dtype=np.int64)
     bounded_points = points[idx]
@@ -53,29 +68,54 @@ def _bounded_density(points: np.ndarray, classes: np.ndarray | None, limit: int 
     return bounded_points, bounded_classes
 
 
+def _line_payload(line: dict) -> dict:
+    vertices = np.asarray(line["xyz"], dtype=np.float64)
+    return {
+        "type": str(line["type"]),
+        "profile": "ridge" if line["type"] == "CREST" else "toe",
+        "vertices": vertices.tolist(),
+        "length_m": float(line.get("length_m", 0.0)),
+        "confidence": float(line.get("confidence", 0.0)),
+        "slope_mean_deg": float(line.get("slope_mean_deg", 0.0)),
+        "gradient_coherence": float(line.get("gradient_coherence", 0.0)),
+        "scale_persistence": float(line.get("scale_persistence", 0.0)),
+        "median_rmse": (
+            float(line["median_rmse"])
+            if np.isfinite(line.get("median_rmse", np.nan))
+            else None
+        ),
+    }
+
+
 def extract_terrain_face_from_points(
     points_xyz,
     seed_xyz,
     *,
-    profile: str,
+    profile: str = "face",
     classifications=None,
     selected_classes=None,
-    grid_resolution: float = 0.20,
+    grid_resolution: float = 0.0,
 ) -> dict:
+    """Executa o MESMO detector AUTO da 1.1.2, limitado à face clicada.
+
+    O clique não segue uma aresta especial nem usa um segundo algoritmo.
+    Os pontos locais entram em:
+        spacing -> grelha -> slope multiescala -> persistence/hysteresis
+        -> FACE_DETECTOR -> componente mais próximo da seed
+        -> CRISTA + PÉ -> refinamento XYZ.
+    """
+
     points = np.asarray(points_xyz, dtype=np.float64)
     seed = np.asarray(seed_xyz, dtype=np.float64)
-    key = str(profile).strip().lower()
 
     if points.ndim != 2 or points.shape[1] != 3:
         raise ValueError("Pontos locais inválidos; esperado N x 3.")
     if seed.shape != (3,):
         raise ValueError("Seed XYZ inválido.")
-    if key not in {"ridge", "toe"}:
-        raise ValueError("Extrator automático disponível para Crista e Pé.")
+    if len(points) < 120:
+        raise ValueError("Poucos pontos locais para detetar a face clicada.")
 
     classes = None
-    auto_ground_used = False
-
     if classifications is not None:
         classes = np.asarray(classifications, dtype=np.int16).reshape(-1)
         if len(classes) != len(points):
@@ -83,59 +123,84 @@ def extract_terrain_face_from_points(
         if len(classes) and np.all(classes < 0):
             classes = None
 
-    # Terrain breaklines must be solved from terrain. If LAS class 2 exists,
-    # prefer it automatically. An explicit engine filter can still constrain
-    # the source first, but class 2 remains the preferred subset for ridge/toe.
-    if selected_classes is not None:
-        points, classes = _filter_by_classification(
-            points,
-            classes,
-            selected_classes,
-            minimum_points=200,
-        )
+    points, classes = _filter_by_classification(
+        points,
+        classes,
+        selected_classes,
+        minimum_points=120,
+    )
 
+    # Se a classe Solo existir na amostra, mantém a mesma filosofia do AUTO:
+    # terreno primeiro. Isto evita vegetação/objetos na face clicada.
+    auto_ground_used = False
     if classes is not None:
         ground = classes == 2
         ground_count = int(np.count_nonzero(ground))
-        if ground_count >= max(500, int(len(points) * 0.05)):
+        if ground_count >= max(250, int(len(points) * 0.05)):
             points = points[ground]
             classes = classes[ground]
             auto_ground_used = True
 
     source_points_before_bound = int(len(points))
-    points, classes = _bounded_density(points, classes, limit=70_000)
+    points, classes = _bounded_density(points, classes, limit=120_000)
 
-    result = extract_terrain_face_edge(
-        points,
-        seed,
-        profile=key,
-        grid_resolution=float(grid_resolution),
+    cfg = ExtractConfig(
+        cell_size=0.0,
+        slope_low_deg=0.0,
+        slope_high_deg=0.0,
+        min_face_area_m2=4.0,
+        min_line_length_m=2.0,
+        line_smooth_window=11,
+        use_ground_class=False,
+        classification_filter=None,
     )
 
-    vertices = np.asarray(result.vertices, dtype=np.float64)
-    if len(vertices) < 2:
-        raise ValueError("A face do talude não produziu uma aresta utilizável.")
+    spacing = estimate_spacing(points, cfg)
+    requested = float(grid_resolution) if float(grid_resolution) > 0 else 0.0
+    cell = choose_cell_size(spacing, requested)
+
+    grid = rasterize_mean(points, cell)
+    det = detect_faces(grid, cfg)
+    approx = _component_lines(
+        grid,
+        det,
+        cfg,
+        seed_xy=(float(seed[0]), float(seed[1])),
+    )
+    lines = refine_lines(approx, points, grid.cell, cfg)
+
+    by_type = {str(line["type"]): line for line in lines}
+    if "CREST" not in by_type or "TOE" not in by_type:
+        raise ValueError(
+            "A face clicada não produziu o par CRISTA + PÉ. "
+            "Clique mais no centro da face inclinada."
+        )
+
+    crest = _line_payload(by_type["CREST"])
+    toe = _line_payload(by_type["TOE"])
+    confidence = float(
+        np.clip(
+            0.5 * crest["confidence"] + 0.5 * toe["confidence"],
+            0.0,
+            1.0,
+        )
+    )
 
     return {
-        "vertices": vertices.tolist(),
-        "profile": key,
-        "detector": f"terrain-face-{key}",
-        "confidence": float(result.confidence),
-        "mean_break_angle_deg": float(result.face_slope_deg),
-        "face_slope_deg": float(result.face_slope_deg),
-        "low_slope_threshold_deg": float(result.low_slope_threshold_deg),
-        "high_slope_threshold_deg": float(result.high_slope_threshold_deg),
-        "grid_resolution": float(result.grid_resolution),
-        "face_cells": int(result.face_cells),
-        "raw_vertices": int(result.raw_vertices),
-        "rough_vertices": int(result.rough_vertices),
-        "refined_vertices": int(result.refined_vertices),
-        "refinement_ratio": float(result.refinement_ratio),
-        "snapped_vertices": int(result.snapped_vertices),
-        "snap_ratio": float(result.snap_ratio),
-        "median_snap_offset_m": float(result.median_snap_offset_m),
-        "simplified_vertices": int(len(vertices)),
-        "source_points": int(result.source_points),
+        "detector": "AUTO_FACE_V1_1_2_LOCAL",
+        "profile": "face",
+        "seed": [float(v) for v in seed],
+        "lines": [crest, toe],
+        "crest": crest,
+        "toe": toe,
+        "confidence": confidence,
+        "grid_resolution": float(grid.cell),
+        "estimated_spacing_m": float(spacing),
+        "slope_low_deg": float(det["slope_low"]),
+        "slope_high_deg": float(det["slope_high"]),
+        "selected_face_label": int(det.get("selected_face_label", 0)),
+        "seed_to_face_distance_m": float(det.get("selected_face_seed_distance_m", 0.0)),
+        "source_points": int(len(points)),
         "source_points_before_bound": source_points_before_bound,
         "selected_classes": (
             sorted({int(v) for v in selected_classes})
@@ -143,17 +208,14 @@ def extract_terrain_face_from_points(
             else None
         ),
         "auto_ground_used": auto_ground_used,
-        "query_source": "potree-terrain-tile",
+        "query_source": "potree-local-auto-face",
         "signature": {
-            "profile": key,
-            "method": "slope-face-boundary-plane-intersection",
-            "grid_resolution": float(result.grid_resolution),
-            "face_slope_deg": float(result.face_slope_deg),
-            "low_slope_threshold_deg": float(result.low_slope_threshold_deg),
-            "high_slope_threshold_deg": float(result.high_slope_threshold_deg),
-            "snap_ratio": float(result.snap_ratio),
-            "median_snap_offset_m": float(result.median_snap_offset_m),
-            "auto_ground_used": auto_ground_used,
+            "method": "same-auto-1.1.2-clicked-face",
+            "cell_size_m": float(grid.cell),
+            "slope_low_deg": float(det["slope_low"]),
+            "slope_high_deg": float(det["slope_high"]),
+            "seed_to_face_distance_m": float(
+                det.get("selected_face_seed_distance_m", 0.0)
+            ),
         },
     }
-
