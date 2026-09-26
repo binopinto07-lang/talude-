@@ -64,13 +64,12 @@
           <button data-mode="multiple">Múltiplo</button>
         </div>
 
-        <label>Feição</label>
+        <label>Deteção</label>
         <select id="profile">
-          <option value="ridge">Crista de talude</option>
-          <option value="toe">Pé de talude</option>
-                  </select>
+          <option value="face">Face de talude — CRISTA + PÉ</option>
+        </select>
 
-        <button id="traceButton" class="primary wide" disabled>Picar aresta automática</button>
+        <button id="traceButton" class="primary wide" disabled>Picar face automática</button>
 
         <div id="traceActions" class="trace-actions hidden">
           <button id="acceptTrace" class="accept">Aceitar linha</button>
@@ -78,7 +77,7 @@
         </div>
 
         <div id="traceHint" class="hint">
-          Crista/Pé: clique em qualquer ponto da face do talude. O Talude Studio usa diretamente a nuvem classificada. Manual = local, Assistido = médio, Múltiplo = talude completo.
+          Clique aproximadamente no centro da face inclinada. É executado o mesmo detector AUTO da 1.1.2, mas apenas nessa face, devolvendo CRISTA + PÉ.
         </div>
 
         <div class="legend">
@@ -157,14 +156,15 @@
           <button data-standard-view="left">ESQ</button>
           <button data-standard-view="right">DIR</button>
           <button data-standard-view="iso">ISO</button>
+          <button id="panModeButton" class="pan-button">PAN</button>
         </div>
         <div class="nav-help" title="Navegação 3D">
           <span>Rodar: arrastar esquerdo</span>
-          <span>Mover: direito</span>
+          <span>PAN: direito / meio / botão PAN</span>
           <span>Zoom: roda</span>
-          <span>Picar: clique curto</span>
+          <span>Picar face: clique curto</span>
         </div>
-        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.5</div>
+        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.6</div>
       </div>
 
       <div id="potree_render_area"></div>
