@@ -12,8 +12,6 @@ def test_individual_crest_toe_backend_is_wired():
     assert "extract_terrain_face_edge" in bridge
     assert "def extract_terrain_face_edge" in core
     assert 'api("/api/feature-lines/terrain-face"' in viewer
-    assert "traceTerrainFace(hit).catch" in viewer
-    assert "? traceRasterTerrain(hit)" not in viewer
 
 
 def test_auto_engine_has_crs_dependency_and_safe_fallback():
@@ -26,36 +24,55 @@ def test_auto_engine_has_crs_dependency_and_safe_fallback():
     assert "--hidden-import pyproj" in build
 
 
-def test_auto_face_gate_is_wired_end_to_end():
+def test_auto_detector_is_restored_to_112_without_face_gate():
     config = Path("src/talude_v1/config.py").read_text(encoding="utf-8")
     engine = Path("src/talude_v1/engine.py").read_text(encoding="utf-8")
     server = Path("studio/backend/server.py").read_text(encoding="utf-8")
     auto = Path("studio/viewer/talude_auto.js").read_text(encoding="utf-8")
     html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
 
-    assert "min_face_width_m" in config
-    assert "min_face_height_m" in config
-    assert "rejected_narrow_face" in engine
-    assert "rejected_low_relief" in engine
-    assert "face_filter" in engine
-    assert "min_face_width_m" in server
-    assert "min_face_height_m" in server
-    assert 'numberValue("minFaceWidth", 0)' in auto
-    assert 'numberValue("minFaceHeight", 0)' in auto
-    assert 'id="minFaceWidth"' in html
-    assert 'id="minFaceHeight"' in html
+    assert "min_face_width_m" not in config
+    assert "min_face_height_m" not in config
+    assert "rejected_narrow_face" not in engine
+    assert "rejected_low_relief" not in engine
+    assert '"face_filter"' not in engine
+    assert "min_face_width_m" not in server
+    assert "min_face_height_m" not in server
+    assert 'numberValue("minFaceWidth"' not in auto
+    assert 'numberValue("minFaceHeight"' not in auto
+    assert 'id="minFaceWidth"' not in html
+    assert 'id="minFaceHeight"' not in html
 
 
-def test_orbit_navigation_and_shift_bypass_are_wired():
+def test_output_lines_are_smoothed_without_changing_detection_stage():
+    config = Path("src/talude_v1/config.py").read_text(encoding="utf-8")
+    engine = Path("src/talude_v1/engine.py").read_text(encoding="utf-8")
+
+    assert "line_smooth_window: int = 11" in config
+    assert "Reamostragem uniforme" in engine
+    assert "savgol_filter" in engine
+    assert "smoothed[0] = pts[0]" in engine
+    assert "smoothed[-1] = pts[-1]" in engine
+
+
+def test_orbit_navigation_click_vs_drag_and_cad_views_are_wired():
     viewer = Path("studio/viewer/app.js").read_text(encoding="utf-8")
     html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
     css = Path("studio/viewer/styles.css").read_text(encoding="utf-8")
 
     assert "viewer.setControls(viewer.orbitControls)" in viewer
-    assert "if (event.shiftKey) return;" in viewer
+    assert "onViewerNavMouseDown" in viewer
+    assert "onViewerNavMouseUp" in viewer
+    assert "if (moved <= 5)" in viewer
+    assert "setStandardView" in viewer
+    assert "setIsoView" in viewer
+
+    for view in ("top", "front", "back", "left", "right", "iso"):
+        assert f'data-standard-view="{view}"' in html
+
     assert "Rodar: arrastar esquerdo" in html
-    assert "SHIFT: navegar ao picar" in html
-    assert ".nav-help" in css
+    assert "Picar: clique curto" in html
+    assert ".standard-views" in css
 
 
 def test_local_terrain_face_uses_adaptive_lod_grid():
