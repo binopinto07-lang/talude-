@@ -15,7 +15,7 @@ from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
 
 
-APP_VERSION = "1.1.7-refine"
+APP_VERSION = "1.1.8-tin-edge"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -59,6 +59,7 @@ class TerrainFaceRequest(BaseModel):
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
     line_smooth_window: int = Field(default=11, ge=3, le=51)
+    vertex_spacing_m: float = Field(default=1.0, ge=0.20, le=5.0)
 
 
 class AutoExtractRequest(BaseModel):
@@ -71,6 +72,7 @@ class AutoExtractRequest(BaseModel):
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
     line_smooth_window: int = Field(default=11, ge=3, le=51)
+    vertex_spacing_m: float = Field(default=1.0, ge=0.20, le=5.0)
 
 
 @app.get("/api/health")
@@ -194,6 +196,7 @@ def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
             min_face_area_m2=req.min_face_area_m2,
             min_line_length_m=req.min_line_length_m,
             line_smooth_window=req.line_smooth_window,
+            vertex_spacing_m=req.vertex_spacing_m,
         )
 
         store.debug_event(
@@ -252,6 +255,7 @@ def talude_auto(req: AutoExtractRequest) -> dict[str, str]:
             min_face_area_m2=req.min_face_area_m2,
             min_line_length_m=req.min_line_length_m,
             line_smooth_window=req.line_smooth_window,
+            vertex_spacing_m=req.vertex_spacing_m,
         )
         return {"job_id": job_id}
     except Exception as exc:
