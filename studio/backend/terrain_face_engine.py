@@ -99,7 +99,7 @@ def extract_terrain_face_from_points(
     slope_high_deg: float = 0.0,
     min_face_area_m2: float = 4.0,
     min_line_length_m: float = 2.0,
-    line_smooth_window: int = 11,
+    line_smooth_window: int = 15,
 ) -> dict:
     """Executa o MESMO detector AUTO da 1.1.2, limitado à face clicada.
 
