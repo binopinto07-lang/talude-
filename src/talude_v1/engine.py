@@ -533,7 +533,7 @@ def _tin_break_score(grid: Grid) -> np.ndarray:
     propriedade útil de uma TIN: localizar mudanças bruscas da normal da
     superfície.
     """
-    z = np.asarray(grid.z, dtype=np.float64)
+    z = np.asarray(grid.z, dtype=np.float32)
     if z.shape[0] < 3 or z.shape[1] < 3:
         return np.zeros((max(1, z.shape[0] - 1), max(1, z.shape[1] - 1)), dtype=np.float32)
 
