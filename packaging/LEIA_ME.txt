@@ -1,0 +1,20 @@
+TALUDE V1 - Windows Portable
+
+Objetivo:
+  Extrair automaticamente linhas 3D de CRISTA e PE DE TALUDE.
+
+Arranque:
+  Execute START_TALUDE_V1.bat
+
+Formatos de entrada V1:
+  LAS / LAZ / XYZ / TXT / CSV
+
+Resultados:
+  DXF 3D
+  GeoJSON 3D
+  CSV de vertices
+  relatorio JSON
+  debug slope/persistence/face mask
+
+GitHub Actions nao sao necessarios.
+O build e os testes sao executados localmente pelo Local Build Manager.
