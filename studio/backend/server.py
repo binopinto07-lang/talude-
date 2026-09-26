@@ -14,7 +14,7 @@ from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
 
 
-APP_VERSION = "1.1.0-studio"
+APP_VERSION = "1.1.1-streaming"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
