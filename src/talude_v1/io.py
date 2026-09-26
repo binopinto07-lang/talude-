@@ -45,7 +45,11 @@ def inspect_point_cloud(path: str | Path) -> PointCloudInfo:
     with laspy.open(path) as reader:
         header = reader.header
         dims = {str(name).lower() for name in header.point_format.dimension_names}
-        crs = header.parse_crs()
+        try:
+            crs = header.parse_crs()
+            crs_wkt = crs.to_wkt() if crs else None
+        except Exception:
+            crs_wkt = None
         mins = tuple(float(v) for v in header.mins)
         maxs = tuple(float(v) for v in header.maxs)
         return PointCloudInfo(
@@ -54,7 +58,7 @@ def inspect_point_cloud(path: str | Path) -> PointCloudInfo:
             mins=(mins[0], mins[1], mins[2]),
             maxs=(maxs[0], maxs[1], maxs[2]),
             has_classification="classification" in dims,
-            crs_wkt=crs.to_wkt() if crs else None,
+            crs_wkt=crs_wkt,
         )
 
 
@@ -100,11 +104,15 @@ def load_point_cloud(path: str | Path) -> PointCloud:
         las = laspy.read(path)
         xyz = np.column_stack((las.x, las.y, las.z)).astype(np.float64, copy=False)
         cls = np.asarray(las.classification, dtype=np.uint8) if hasattr(las, "classification") else None
-        crs = las.header.parse_crs()
+        try:
+            crs = las.header.parse_crs()
+            crs_wkt = crs.to_wkt() if crs else None
+        except Exception:
+            crs_wkt = None
         return PointCloud(
             xyz=xyz,
             classification=cls,
-            crs_wkt=crs.to_wkt() if crs else None,
+            crs_wkt=crs_wkt,
             source=str(path),
         )
 
