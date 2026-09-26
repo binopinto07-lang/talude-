@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -156,6 +157,22 @@ class TaludeApp(tk.Tk):
 
 
 def main() -> int:
+    if "--self-test" in sys.argv:
+        import ezdxf
+        import laspy
+        import numpy
+        import scipy
+
+        report = (
+            "TALUDE_V1_SELF_TEST=OK\n"
+            f"numpy={numpy.__version__}\n"
+            f"scipy={scipy.__version__}\n"
+            f"laspy={laspy.__version__}\n"
+            f"ezdxf={ezdxf.__version__}\n"
+        )
+        Path("TALUDE_V1_SELF_TEST.txt").write_text(report, encoding="utf-8")
+        return 0
+
     TaludeApp().mainloop()
     return 0
 
