@@ -66,8 +66,9 @@ def health() -> dict[str, Any]:
 
 
 @app.get("/api/projects")
-def list_projects() -> list[dict[str, Any]]:
-    return store.list_projects()
+def list_projects() -> dict[str, list[dict[str, Any]]]:
+    # Mantém o contrato do viewer Cloud_to_lines reaproveitado.
+    return {"projects": store.list_projects()}
 
 
 @app.post("/api/projects")
