@@ -25,10 +25,13 @@ class ExtractConfig:
     refine_min_points: int = 8
     use_ground_class: bool = True
     ground_class: int = 2
+    classification_filter: tuple[int, ...] | None = None
     max_points_for_spacing: int = 80_000
     random_seed: int = 1337
 
     def to_dict(self) -> dict:
         d = asdict(self)
         d["smooth_sigmas_cells"] = list(self.smooth_sigmas_cells)
+        if self.classification_filter is not None:
+            d["classification_filter"] = list(self.classification_filter)
         return d
