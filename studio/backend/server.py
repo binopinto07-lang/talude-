@@ -12,9 +12,10 @@ from .auto_extract import start_auto_extract
 from .converter import jobs, start_import
 from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
+from .terrain_face_engine import extract_terrain_face_from_points
 
 
-APP_VERSION = "1.1.1-streaming"
+APP_VERSION = "1.1.2-feature-fix"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -42,6 +43,17 @@ class DebugEventRequest(BaseModel):
     level: str = "INFO"
     source: str = "viewer"
     details: dict[str, Any] = {}
+
+
+class TerrainFaceRequest(BaseModel):
+    project_id: str
+    cloud_id: str
+    profile: str
+    seed: list[float]
+    points: list[list[float]]
+    classifications: list[int] | None = None
+    selected_classes: list[int] | None = None
+    grid_resolution: float = 0.20
 
 
 class AutoExtractRequest(BaseModel):
@@ -134,6 +146,81 @@ def import_cloud(req: ImportCloudRequest) -> dict[str, str]:
     try:
         return {"job_id": start_import(store, req.project_id, req.source_path)}
     except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+
+@app.post("/api/feature-lines/terrain-face")
+def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
+    try:
+        if len(req.seed) != 3:
+            raise ValueError("Seed XYZ inválido.")
+        if req.profile not in {"ridge", "toe"}:
+            raise ValueError("O extrator de face está disponível para Crista e Pé.")
+
+        manifest = store.manifest(req.project_id)
+        if not any(c.get("id") == req.cloud_id for c in manifest.get("clouds", [])):
+            raise ValueError("Nuvem não pertence ao projeto ativo.")
+
+        store.debug_event(
+            req.project_id,
+            "terrain_face.backend_started",
+            {
+                "cloud_id": req.cloud_id,
+                "profile": req.profile,
+                "seed": req.seed,
+                "input_points": len(req.points),
+                "selected_classes": req.selected_classes,
+                "grid_resolution": req.grid_resolution,
+            },
+            source="feature_engine",
+        )
+
+        result = extract_terrain_face_from_points(
+            req.points,
+            req.seed,
+            profile=req.profile,
+            classifications=req.classifications,
+            selected_classes=req.selected_classes,
+            grid_resolution=req.grid_resolution,
+        )
+
+        store.debug_event(
+            req.project_id,
+            "terrain_face.backend_completed",
+            {
+                "cloud_id": req.cloud_id,
+                "profile": req.profile,
+                "seed": req.seed,
+                "vertices": len(result.get("vertices", [])),
+                "confidence": result.get("confidence"),
+                "face_slope_deg": result.get("face_slope_deg"),
+                "face_cells": result.get("face_cells"),
+                "snap_ratio": result.get("snap_ratio"),
+                "refinement_ratio": result.get("refinement_ratio"),
+            },
+            source="feature_engine",
+        )
+        return result
+    except Exception as exc:
+        try:
+            store.debug_event(
+                req.project_id,
+                "terrain_face.backend_failed",
+                {
+                    "cloud_id": req.cloud_id,
+                    "profile": req.profile,
+                    "seed": req.seed,
+                    "input_points": len(req.points),
+                    "selected_classes": req.selected_classes,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+                source="feature_engine",
+                level="ERROR",
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
