@@ -184,3 +184,25 @@ Esta versão corrige duas regressões observadas nos testes reais da cloud de 24
 - **Face clicada:** o ProfileRequest estava a terminar por `soft_timeout` ainda com apenas alguns milhares de pontos e o espaçamento dessa amostra LOD fazia a grelha subir até **1.0 m**. Agora uma amostra pobre continua a carregar até ao limite duro e a grelha AUTO local é limitada a **0.35 m** quando o utilizador deixa Cell size = 0.
 
 A suavização predefinida regressa a **11**, que preserva melhor curvas e extremos. A deteção de faces continua a ser a base 1.1.2; a suavização permanece exclusivamente pós-deteção.
+
+
+## V1.1.8 — TIN EDGE + geometria topográfica
+
+A deteção das faces continua congelada na base 1.1.2. Esta versão altera apenas a construção geométrica de CRISTA/PÉ.
+
+### Porque a TIN ajuda
+
+Uma crista ou pé de talude é uma **quebra de declive**. Numa superfície triangulada essa quebra aparece como uma mudança brusca da normal entre triângulos vizinhos. A V1.1.8 cria uma TIN 2.5D implícita sobre a grelha do terreno e calcula um `tin_break_score` a partir do ângulo entre normais adjacentes.
+
+Não é criada uma Delaunay global com os 241 milhões de pontos: isso seria pesado e desnecessário. O LAS Solo continua a ser agregado na grelha de terreno e essa superfície é triangulada matematicamente em dois triângulos por célula.
+
+### Nova geometria
+
+1. FACE_DETECTOR 1.1.2 identifica a mesma máscara de talude.
+2. A crista e o pé são retirados do **boundary da própria face**, classificados com o gradiente local. Isto permite acompanhar faces curvas sem depender de uma única direção média.
+3. Cada linha é deslocada transversalmente até à quebra TIN mais forte próxima, respeitando o sinal de mudança de declive para não trocar CRISTA e PÉ.
+4. A linha é suavizada apenas depois do snap.
+5. Os vértices são reamostrados por distância. O valor predefinido é **1,00 m**, ou aproximadamente um vértice por metro.
+6. O relatório guarda `geometry_source`, `raw_vertex_count`, `final_vertex_count`, `tin_mean_snap_m` e `tin_max_snap_m`.
+
+O objetivo não é aumentar o número de taludes, mas colocar as linhas sobre a aresta topográfica e produzir polylines CAD mais limpas e com muito menos vértices.
