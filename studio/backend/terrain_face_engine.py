@@ -95,6 +95,10 @@ def extract_terrain_face_from_points(
     classifications=None,
     selected_classes=None,
     grid_resolution: float = 0.0,
+    slope_low_deg: float = 0.0,
+    slope_high_deg: float = 0.0,
+    min_face_area_m2: float = 4.0,
+    min_line_length_m: float = 2.0,
     line_smooth_window: int = 11,
 ) -> dict:
     """Executa o MESMO detector AUTO da 1.1.2, limitado à face clicada.
@@ -146,19 +150,18 @@ def extract_terrain_face_from_points(
     points, classes = _bounded_density(points, classes, limit=120_000)
 
     cfg = ExtractConfig(
-        cell_size=0.0,
-        slope_low_deg=0.0,
-        slope_high_deg=0.0,
-        min_face_area_m2=4.0,
-        min_line_length_m=2.0,
+        cell_size=float(grid_resolution) if float(grid_resolution) > 0 else 0.0,
+        slope_low_deg=float(slope_low_deg),
+        slope_high_deg=float(slope_high_deg),
+        min_face_area_m2=float(min_face_area_m2),
+        min_line_length_m=float(min_line_length_m),
         line_smooth_window=max(3, int(line_smooth_window)),
         use_ground_class=False,
         classification_filter=None,
     )
 
     spacing = estimate_spacing(points, cfg)
-    requested = float(grid_resolution) if float(grid_resolution) > 0 else 0.0
-    cell = choose_cell_size(spacing, requested)
+    cell = choose_cell_size(spacing, cfg.cell_size)
 
     grid = rasterize_mean(points, cell)
     det = detect_faces(grid, cfg)
