@@ -2015,7 +2015,11 @@
         points: tile.points,
         classifications: tile.classifications,
         selected_classes: selectedClasses,
-        grid_resolution: 0,
+        grid_resolution: Number(byId("cellSize") ? byId("cellSize").value : 0),
+        slope_low_deg: Number(byId("slopeLow") ? byId("slopeLow").value : 0),
+        slope_high_deg: Number(byId("slopeHigh") ? byId("slopeHigh").value : 0),
+        min_face_area_m2: Number(byId("minArea") ? byId("minArea").value : 4),
+        min_line_length_m: Number(byId("minLength") ? byId("minLength").value : 2),
         line_smooth_window: Number(
           byId("lineSmooth") ? byId("lineSmooth").value : 11
         )
