@@ -454,8 +454,6 @@ def refine_lines_stream(
                 "slope_mean_deg": line["slope_mean_deg"],
                 "gradient_coherence": line["gradient_coherence"],
                 "scale_persistence": line["scale_persistence"],
-                "face_width_m": float(line.get("face_width_m", 0.0)),
-                "face_height_m": float(line.get("face_height_m", 0.0)),
                 "confidence": confidence,
                 "median_rmse": rmse_med,
                 "mean_support_points": float(np.mean(supports)) if len(supports) else 0.0,
@@ -642,36 +640,9 @@ def _component_lines(
     lines: list[dict] = []
     face_id = 0
 
-    # Slope/persistence encontra qualquer banda inclinada coerente. Em vinha,
-    # isso inclui micro-relevos compridos e estreitos. Um talude útil precisa
-    # também de largura física e desnível vertical mínimos.
-    min_face_width = (
-        float(cfg.min_face_width_m)
-        if cfg.min_face_width_m > 0
-        else max(2.0, grid.cell * 7.0)
-    )
-    min_face_height = (
-        float(cfg.min_face_height_m)
-        if cfg.min_face_height_m > 0
-        else max(1.25, grid.cell * 5.0)
-    )
-
-    stats = {
-        "components_total": int(n),
-        "accepted_faces": 0,
-        "rejected_small_component": 0,
-        "rejected_low_coherence": 0,
-        "rejected_short_boundary": 0,
-        "rejected_narrow_face": 0,
-        "rejected_low_relief": 0,
-        "min_face_width_m": float(min_face_width),
-        "min_face_height_m": float(min_face_height),
-    }
-
     for label_id in range(1, n + 1):
         rows, cols = np.nonzero(labels == label_id)
         if len(rows) < 4:
-            stats["rejected_small_component"] += 1
             continue
 
         gx = det["gx"][rows, cols]
@@ -679,7 +650,6 @@ def _component_lines(
         mag = np.hypot(gx, gy)
         ok = mag > 1e-9
         if int(ok.sum()) < 4:
-            stats["rejected_low_coherence"] += 1
             continue
 
         unit = np.column_stack(
@@ -691,7 +661,6 @@ def _component_lines(
         downhill = unit.mean(axis=0)
         coherence = float(np.linalg.norm(downhill))
         if coherence < cfg.min_gradient_coherence:
-            stats["rejected_low_coherence"] += 1
             continue
 
         downhill /= np.linalg.norm(downhill)
@@ -714,8 +683,6 @@ def _component_lines(
         crest_xy = []
         toe_xy = []
         persist_vals = []
-        face_widths = []
-        face_heights = []
 
         for bin_id in np.unique(bins):
             ids = np.flatnonzero(bins == bin_id)
@@ -724,20 +691,8 @@ def _component_lines(
 
             crest_idx = ids[np.argmin(down[ids])]
             toe_idx = ids[np.argmax(down[ids])]
-
             crest_xy.append(xy[crest_idx])
             toe_xy.append(xy[toe_idx])
-
-            width = float(down[toe_idx] - down[crest_idx])
-            z_crest = float(grid.z[rows[crest_idx], cols[crest_idx]])
-            z_toe = float(grid.z[rows[toe_idx], cols[toe_idx]])
-            height = z_crest - z_toe
-
-            if np.isfinite(width) and width >= 0:
-                face_widths.append(width)
-            if np.isfinite(height):
-                face_heights.append(height)
-
             persist_vals.append(
                 float(
                     np.mean(
@@ -750,26 +705,6 @@ def _component_lines(
             )
 
         if len(crest_xy) < 2 or len(toe_xy) < 2:
-            stats["rejected_short_boundary"] += 1
-            continue
-
-        median_width = (
-            float(np.median(face_widths))
-            if face_widths
-            else 0.0
-        )
-        # Signed relief is intentional: crest must be above toe.
-        median_height = (
-            float(np.median(face_heights))
-            if face_heights
-            else 0.0
-        )
-
-        if median_width < min_face_width:
-            stats["rejected_narrow_face"] += 1
-            continue
-        if median_height < min_face_height:
-            stats["rejected_low_relief"] += 1
             continue
 
         crest_xy = _smooth_xy(
@@ -785,17 +720,14 @@ def _component_lines(
             np.linalg.norm(crest_xy[-1] - crest_xy[0])
             < cfg.min_line_length_m
         ):
-            stats["rejected_short_boundary"] += 1
             continue
         if (
             np.linalg.norm(toe_xy[-1] - toe_xy[0])
             < cfg.min_line_length_m
         ):
-            stats["rejected_short_boundary"] += 1
             continue
 
         face_id += 1
-        stats["accepted_faces"] += 1
         persistence_score = float(
             np.clip(
                 np.mean(persist_vals)
@@ -820,13 +752,11 @@ def _component_lines(
                     "slope_mean_deg": slope_mean,
                     "gradient_coherence": coherence,
                     "scale_persistence": persistence_score,
-                    "face_width_m": median_width,
-                    "face_height_m": median_height,
                 }
             )
 
-    det["component_stats"] = stats
     return lines
+
 
 def _fit_plane_z(
     tree: cKDTree,
@@ -996,12 +926,6 @@ def refine_lines(
                 "scale_persistence": line[
                     "scale_persistence"
                 ],
-                "face_width_m": float(
-                    line.get("face_width_m", 0.0)
-                ),
-                "face_height_m": float(
-                    line.get("face_height_m", 0.0)
-                ),
                 "confidence": confidence,
                 "median_rmse": rmse_med,
                 "mean_support_points": float(
@@ -1131,7 +1055,6 @@ def _save_outputs_and_report(
         "faces_detected": len({line["face_id"] for line in lines}),
         "crest_lines": sum(1 for line in lines if line["type"] == "CREST"),
         "toe_lines": sum(1 for line in lines if line["type"] == "TOE"),
-        "face_filter": det.get("component_stats", {}),
         "elapsed_s": perf_counter() - t0,
         "config": cfg.to_dict(),
         "lines": [
