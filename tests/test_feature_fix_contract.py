@@ -131,3 +131,63 @@ def test_clicked_face_waits_for_density_and_caps_sparse_lod_cell():
     assert "if cfg.cell_size <= 0.0 and cell > 0.35" in bridge
     assert "cell = 0.35" in bridge
     assert "auto_cell_capped" in bridge
+
+
+def test_tin_edge_geometry_and_vertex_spacing_contract():
+    config = Path("src/talude_v1/config.py").read_text(encoding="utf-8")
+    engine = Path("src/talude_v1/engine.py").read_text(encoding="utf-8")
+    html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
+    auto = Path("studio/viewer/talude_auto.js").read_text(encoding="utf-8")
+    viewer = Path("studio/viewer/app.js").read_text(encoding="utf-8")
+
+    assert "vertex_spacing_m: float = 1.0" in config
+    assert "tin_snap_search_m: float = 1.25" in config
+    assert "def _tin_break_score" in engine
+    assert "def _face_boundary_pair" in engine
+    assert "face-boundary-local-gradient" in engine
+    assert "def _snap_line_to_tin_break" in engine
+    assert "def _resample_xy_spacing" in engine
+    assert 'id="vertexSpacing"' in html
+    assert 'vertex_spacing_m: numberValue("vertexSpacing", 1.0)' in auto
+    assert 'byId("vertexSpacing") ? byId("vertexSpacing").value : 1.0' in viewer
+
+
+def test_vertex_spacing_resamples_a_straight_line_at_about_one_metre():
+    from talude_v1.engine import _resample_xy_spacing
+
+    xy = np.array(
+        [[0.0, 0.0], [0.2, 0.0], [0.7, 0.0], [1.4, 0.0], [2.2, 0.0], [3.1, 0.0]],
+        dtype=float,
+    )
+    out = _resample_xy_spacing(xy, 1.0)
+    assert np.allclose(out[0], [0.0, 0.0])
+    assert np.allclose(out[-1], [3.1, 0.0])
+    distances = np.linalg.norm(np.diff(out, axis=0), axis=1)
+    assert np.all(distances[:-1] >= 0.95)
+    assert np.all(distances[:-1] <= 1.05)
+
+
+def test_tin_break_score_peaks_at_synthetic_crest_and_toe():
+    from talude_v1.engine import Grid, _tin_break_score
+
+    cell = 0.25
+    xs = np.arange(0.0, 20.0, cell)
+    ys = np.arange(0.0, 8.0, cell)
+    xx, yy = np.meshgrid(xs, ys)
+    zz = np.where(
+        xx < 7.0,
+        10.0,
+        np.where(xx > 10.0, 5.0, 10.0 - (xx - 7.0) * (5.0 / 3.0)),
+    )
+    grid = Grid(
+        z=zz.astype(np.float32),
+        valid=np.ones_like(zz, dtype=bool),
+        x0=0.0,
+        y0=0.0,
+        cell=cell,
+    )
+    score = _tin_break_score(grid).mean(axis=0)
+    top = np.argsort(score)[-6:]
+    x_breaks = {(int(i) + 1) * cell for i in top}
+    assert any(abs(x - 7.0) <= 0.5 for x in x_breaks)
+    assert any(abs(x - 10.0) <= 0.5 for x in x_breaks)
