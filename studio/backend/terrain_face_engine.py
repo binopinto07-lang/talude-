@@ -79,6 +79,11 @@ def _line_payload(line: dict) -> dict:
         "slope_mean_deg": float(line.get("slope_mean_deg", 0.0)),
         "gradient_coherence": float(line.get("gradient_coherence", 0.0)),
         "scale_persistence": float(line.get("scale_persistence", 0.0)),
+        "vertex_spacing_m": float(line.get("vertex_spacing_m") or 0.0),
+        "raw_vertex_count": int(line.get("raw_vertex_count") or len(vertices)),
+        "final_vertex_count": int(line.get("final_vertex_count") or len(vertices)),
+        "tin_mean_snap_m": float(line.get("tin_mean_snap_m", 0.0)),
+        "tin_max_snap_m": float(line.get("tin_max_snap_m", 0.0)),
         "median_rmse": (
             float(line["median_rmse"])
             if np.isfinite(line.get("median_rmse", np.nan))
