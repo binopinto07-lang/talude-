@@ -15,17 +15,12 @@ class ExtractConfig:
     slope_high_deg: float = 0.0
     min_face_area_m2: float = 4.0
     min_line_length_m: float = 2.0
-    # 0 = AUTO. Estes dois gates impedem que micro-relevos estreitos
-    # (sulcos, bardos/linhas de vinha, pequenos ressaltos) sejam promovidos
-    # a taludes completos.
-    min_face_width_m: float = 0.0
-    min_face_height_m: float = 0.0
     smooth_sigmas_cells: tuple[float, ...] = (0.8, 1.5, 3.0)
     min_scale_persistence: int = 2
     morphology_radius_cells: int = 1
     min_gradient_coherence: float = 0.50
     cross_section_bin_factor: float = 1.0
-    line_smooth_window: int = 7
+    line_smooth_window: int = 11
     refine_radius_factor: float = 2.5
     refine_min_points: int = 8
     use_ground_class: bool = True
