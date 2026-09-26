@@ -92,12 +92,18 @@
       const label = data.type === "CREST" ? "CRISTA" : "PÉ";
       const confidence = Math.round(Number(data.confidence || 0) * 100);
       const length = Number(data.length_m || 0);
+      const width = Number(data.face_width_m || 0);
+      const height = Number(data.face_height_m || 0);
+      const geometryText =
+        width > 0 && height > 0
+          ? " · face " + width.toFixed(1) + "×" + height.toFixed(1) + " m"
+          : "";
 
       row.innerHTML =
         '<i class="talude-dot ' + kind + '"></i>' +
         '<div><strong>' + label + " " + String(index + 1).padStart(3, "0") +
         "</strong>Face " + String(data.face_id ?? "-") +
-        " · " + length.toFixed(1) + " m</div>" +
+        " · " + length.toFixed(1) + " m" + geometryText + "</div>" +
         "<span>" + confidence + "%</span>";
 
       row.onclick = () => {
@@ -144,14 +150,23 @@
     byId("openTaludeResults").disabled = !lastOutputDir;
 
     const elapsed = Number(report.elapsed_s || 0);
+    const gate = report.face_filter || {};
+    const rejected =
+      Math.max(0, Number(gate.components_total || 0) - Number(gate.accepted_faces || 0));
     s.setStatus(
       "AUTO concluído · " +
       String(report.faces_detected || 0) + " faces · " +
       String(report.crest_lines || 0) + " cristas · " +
       String(report.toe_lines || 0) + " pés · " +
+      (rejected > 0 ? String(rejected) + " micro-feições rejeitadas · " : "") +
       elapsed.toFixed(1) + " s"
     );
-    s.toast("CRISTA + PÉ calculados e visíveis sobre a nuvem 3D.", 6500);
+    s.toast(
+      "CRISTA + PÉ calculados" +
+      (rejected > 0 ? " · " + String(rejected) + " micro-feições filtradas" : "") +
+      ".",
+      6500
+    );
   }
 
   async function monitorJob(jobId) {
