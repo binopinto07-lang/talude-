@@ -86,7 +86,7 @@ def test_output_lines_are_smoothed_without_changing_detection_stage():
     config = Path("src/talude_v1/config.py").read_text(encoding="utf-8")
     engine = Path("src/talude_v1/engine.py").read_text(encoding="utf-8")
 
-    assert "line_smooth_window: int = 15" in config
+    assert "line_smooth_window: int = 11" in config
     assert "Reamostragem uniforme" in engine
     assert "savgol_filter" in engine
     assert "smoothed[0] = pts[0]" in engine
@@ -112,3 +112,22 @@ def test_orbit_pan_click_vs_drag_and_cad_views_are_wired():
 
     for view in ("top", "front", "back", "left", "right", "iso"):
         assert f'data-standard-view="{view}"' in html
+
+
+def test_auto_unchecked_filter_falls_back_to_ground():
+    auto = Path("studio/viewer/talude_auto.js").read_text(encoding="utf-8")
+    backend = Path("studio/backend/auto_extract.py").read_text(encoding="utf-8")
+
+    assert "if (!control || !control.checked) return null;" in auto
+    assert "classes = normalized if normalized else None" in backend
+
+
+def test_clicked_face_waits_for_density_and_caps_sparse_lod_cell():
+    viewer = Path("studio/viewer/app.js").read_text(encoding="utf-8")
+    bridge = Path("studio/backend/terrain_face_engine.py").read_text(encoding="utf-8")
+
+    assert "minimumForSoftFinish" in viewer
+    assert "hardTimeoutMs: 9000" in viewer
+    assert "if cfg.cell_size <= 0.0 and cell > 0.35" in bridge
+    assert "cell = 0.35" in bridge
+    assert "auto_cell_capped" in bridge
