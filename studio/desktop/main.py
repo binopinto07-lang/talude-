@@ -167,11 +167,11 @@ def self_test() -> int:
         checks.append(("pyproj", False, repr(exc)))
 
     try:
-        from core.terrain_face import extract_terrain_face_edge  # noqa: F401
         from studio.backend.terrain_face_engine import extract_terrain_face_from_points  # noqa: F401
-        checks.append(("Terrain Face API engine", True, "ok"))
+        from talude_v1.engine import detect_faces  # noqa: F401
+        checks.append(("Clicked Face AUTO engine", True, "ok"))
     except Exception as exc:
-        checks.append(("Terrain Face API engine", False, repr(exc)))
+        checks.append(("Clicked Face AUTO engine", False, repr(exc)))
 
     assets = [
         ("Potree", potree_root() / "build" / "potree" / "potree.js"),
