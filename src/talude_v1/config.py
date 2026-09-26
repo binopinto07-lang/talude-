@@ -20,7 +20,7 @@ class ExtractConfig:
     morphology_radius_cells: int = 1
     min_gradient_coherence: float = 0.50
     cross_section_bin_factor: float = 1.0
-    line_smooth_window: int = 15
+    line_smooth_window: int = 11
     refine_radius_factor: float = 2.5
     refine_min_points: int = 8
     use_ground_class: bool = True
