@@ -114,8 +114,9 @@
             <label>Área mín. (m²)<input id="minArea" type="number" min="0.1" step="0.5" value="4"></label>
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
             <label>Suavização linha<input id="lineSmooth" type="number" min="3" max="51" step="2" value="11"></label>
+            <label>Espaçamento vértices (m)<input id="vertexSpacing" type="number" min="0.20" max="5" step="0.25" value="1.00"></label>
           </div>
-          <div class="hint">Detetor = base 1.1.2. Suavização atua só depois da deteção; 11 é o valor recomendado; valores maiores suavizam mais mas podem arredondar demasiado as curvas.</div>
+          <div class="hint">Detetor = base 1.1.2. A geometria final faz snap à quebra da TIN e depois reamostra os vértices; 1,00 m significa aproximadamente um vértice por metro.</div>
         </details>
       </section>
 
@@ -165,7 +166,7 @@
           <span>Zoom: roda</span>
           <span>Picar face: clique curto</span>
         </div>
-        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.7</div>
+        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.8</div>
       </div>
 
       <div id="potree_render_area"></div>
