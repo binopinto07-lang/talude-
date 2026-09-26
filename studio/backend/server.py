@@ -15,7 +15,7 @@ from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
 
 
-APP_VERSION = "1.1.6-face-click-pan"
+APP_VERSION = "1.1.7-refine"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -58,7 +58,7 @@ class TerrainFaceRequest(BaseModel):
     slope_high_deg: float = 0.0
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
-    line_smooth_window: int = Field(default=15, ge=3, le=51)
+    line_smooth_window: int = Field(default=11, ge=3, le=51)
 
 
 class AutoExtractRequest(BaseModel):
@@ -70,7 +70,7 @@ class AutoExtractRequest(BaseModel):
     slope_high_deg: float = 0.0
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
-    line_smooth_window: int = Field(default=15, ge=3, le=51)
+    line_smooth_window: int = Field(default=11, ge=3, le=51)
 
 
 @app.get("/api/health")
