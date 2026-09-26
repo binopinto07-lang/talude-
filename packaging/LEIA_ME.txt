@@ -1,20 +1,31 @@
-TALUDE V1 - Windows Portable
+TALUDE STUDIO V1 - Windows Portable
 
-Objetivo:
+OBJETIVO
   Extrair automaticamente linhas 3D de CRISTA e PE DE TALUDE.
 
-Arranque:
+INTERFACE
+  Viewer 3D profissional baseado na shell Cloud_to_lines:
+  - Potree LOD
+  - EDL
+  - RGB / Elevacao / Classificacao
+  - filtro de classes
+  - CRISTA e PE sobrepostos diretamente na nuvem
+
+ARRANQUE
   Execute START_TALUDE_V1.bat
 
-Formatos de entrada V1:
-  LAS / LAZ / XYZ / TXT / CSV
+FLUXO
+  1. Novo/Abrir projeto
+  2. + Adicionar LAS / LAZ / COPC
+  3. Escolher classes (por defeito: So Solo)
+  4. DETETAR CRISTA + PE
+  5. Rever as linhas na nuvem
+  6. Abrir resultados para DXF / GeoJSON / CSV / debug
 
-Resultados:
-  DXF 3D
-  GeoJSON 3D
-  CSV de vertices
-  relatorio JSON
-  debug slope/persistence/face mask
+CORES
+  Amarelo = CRISTA
+  Ciano   = PE DE TALUDE
 
-GitHub Actions nao sao necessarios.
-O build e os testes sao executados localmente pelo Local Build Manager.
+BUILD
+  GitHub Actions nao sao necessarios.
+  O build e executado localmente pelo Local Build Manager.
