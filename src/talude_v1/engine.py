@@ -602,31 +602,56 @@ def _line_length(xyz: np.ndarray) -> float:
 
 
 def _smooth_xy(xy: np.ndarray, window: int) -> np.ndarray:
+    """Suaviza a polyline por distância acumulada, sem mexer na deteção.
+
+    O detector continua a produzir exatamente os mesmos componentes/faces.
+    Esta fase atua apenas nos vértices da linha final para retirar o
+    stair-stepping da grelha e pequenas oscilações locais.
+    """
+    xy = np.asarray(xy, dtype=np.float64)
     if len(xy) < 5 or window < 3:
         return xy
 
-    win = min(
-        window if window % 2 else window + 1,
-        len(xy) if len(xy) % 2 else len(xy) - 1,
-    )
-    if win < 5:
+    # Remove apenas duplicados consecutivos para obter uma parametrização
+    # monotónica por comprimento.
+    step = np.linalg.norm(np.diff(xy, axis=0), axis=1)
+    keep = np.r_[True, step > 1e-9]
+    pts = xy[keep]
+    if len(pts) < 5:
         return xy
 
-    out = xy.copy()
-    out[:, 0] = savgol_filter(
-        xy[:, 0],
-        win,
-        2,
-        mode="interp",
-    )
-    out[:, 1] = savgol_filter(
-        xy[:, 1],
-        win,
-        2,
-        mode="interp",
-    )
-    return out
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    distance = np.r_[0.0, np.cumsum(seg)]
+    total = float(distance[-1])
+    if total <= 1e-9:
+        return xy
 
+    # Reamostragem uniforme evita que o Savitzky-Golay dê demasiado peso
+    # aos troços onde a grelha criou muitos vértices juntos.
+    samples = np.linspace(0.0, total, len(pts))
+    uniform = np.column_stack(
+        (
+            np.interp(samples, distance, pts[:, 0]),
+            np.interp(samples, distance, pts[:, 1]),
+        )
+    )
+
+    win = int(window)
+    if win % 2 == 0:
+        win += 1
+    max_win = len(uniform) if len(uniform) % 2 else len(uniform) - 1
+    win = min(win, max_win)
+    if win < 5:
+        return uniform
+
+    smoothed = uniform.copy()
+    smoothed[:, 0] = savgol_filter(uniform[:, 0], win, 2, mode="interp")
+    smoothed[:, 1] = savgol_filter(uniform[:, 1], win, 2, mode="interp")
+
+    # Os extremos identificados pelo detector são preservados.
+    smoothed[0] = pts[0]
+    smoothed[-1] = pts[-1]
+    return smoothed
 
 def _component_lines(
     grid: Grid,
