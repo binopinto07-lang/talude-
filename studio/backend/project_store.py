@@ -82,7 +82,7 @@ class ProjectStore:
 
         project_id = uuid.uuid4().hex
         manifest = {
-            "schema": "cloud-to-lines-project/v2",
+            "schema": "talude-project/v1",
             "id": project_id,
             "name": name.strip() or project_dir.name,
             "created_at": _now(),
@@ -96,7 +96,7 @@ class ProjectStore:
         _atomic_json(
             project_dir / "state.json",
             {
-                "schema": "cloud-to-lines-state/v2",
+                "schema": "talude-state/v1",
                 "updated_at": _now(),
                 "camera": None,
                 "display": {
