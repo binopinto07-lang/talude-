@@ -29,8 +29,6 @@ def start_auto_extract(
     slope_high_deg: float = 0.0,
     min_face_area_m2: float = 4.0,
     min_line_length_m: float = 2.0,
-    min_face_width_m: float = 0.0,
-    min_face_height_m: float = 0.0,
 ) -> str:
     job_id = jobs.create("Extrair CRISTA + PÉ automaticamente")
     thread = threading.Thread(
@@ -46,8 +44,6 @@ def start_auto_extract(
             slope_high_deg,
             min_face_area_m2,
             min_line_length_m,
-            min_face_width_m,
-            min_face_height_m,
         ),
         daemon=True,
         name=f"talude-auto-{job_id[:8]}",
@@ -67,8 +63,6 @@ def _worker(
     slope_high_deg: float,
     min_face_area_m2: float,
     min_line_length_m: float,
-    min_face_width_m: float,
-    min_face_height_m: float,
 ) -> None:
     try:
         project = store.get(project_id)
@@ -98,8 +92,6 @@ def _worker(
             slope_high_deg=float(slope_high_deg),
             min_face_area_m2=float(min_face_area_m2),
             min_line_length_m=float(min_line_length_m),
-            min_face_width_m=float(min_face_width_m),
-            min_face_height_m=float(min_face_height_m),
             use_ground_class=classes is None,
             classification_filter=classes,
         )
@@ -149,8 +141,6 @@ def _worker(
                     "confidence": props.get("confidence"),
                     "length_m": props.get("length_m"),
                     "slope_mean_deg": props.get("slope_mean_deg"),
-                    "face_width_m": props.get("face_width_m"),
-                    "face_height_m": props.get("face_height_m"),
                     "median_rmse": props.get("median_rmse"),
                     "vertices": coords,
                 }
@@ -191,7 +181,6 @@ def _worker(
                 "faces_detected": report.get("faces_detected"),
                 "crest_lines": report.get("crest_lines"),
                 "toe_lines": report.get("toe_lines"),
-                "face_filter": report.get("face_filter"),
                 "elapsed_s": report.get("elapsed_s"),
             },
             source="talude-engine",
