@@ -100,6 +100,7 @@ def extract_terrain_face_from_points(
     min_face_area_m2: float = 4.0,
     min_line_length_m: float = 2.0,
     line_smooth_window: int = 11,
+    vertex_spacing_m: float = 1.0,
 ) -> dict:
     """Executa o MESMO detector AUTO da 1.1.2, limitado à face clicada.
 
@@ -156,6 +157,7 @@ def extract_terrain_face_from_points(
         min_face_area_m2=float(min_face_area_m2),
         min_line_length_m=float(min_line_length_m),
         line_smooth_window=max(3, int(line_smooth_window)),
+        vertex_spacing_m=max(0.20, float(vertex_spacing_m)),
         use_ground_class=False,
         classification_filter=None,
     )
@@ -208,6 +210,7 @@ def extract_terrain_face_from_points(
         "grid_resolution": float(grid.cell),
         "estimated_spacing_m": float(spacing),
         "auto_cell_capped": bool(auto_cell_capped),
+        "vertex_spacing_m": float(cfg.vertex_spacing_m),
         "sample_density_pts_m2": float(
             len(points) / max(
                 (float(np.ptp(points[:, 0])) * float(np.ptp(points[:, 1]))),
