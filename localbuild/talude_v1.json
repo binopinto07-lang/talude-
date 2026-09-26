@@ -1,9 +1,10 @@
 {
   "id": "talude_v1",
-  "name": "Talude V1",
+  "name": "Talude V1 — Crista + Pé",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "main",
   "python_version": "3.12",
+  "dist_dir_name": "Talude_V1",
   "checks": [
     {
       "id": "python",
@@ -23,24 +24,24 @@
   "pipelines": {
     "test": [
       {
-        "id": "deps",
-        "name": "Instalar Talude V1 + testes",
-        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -e '.[dev]'",
-        "timeout_minutes": 20,
+        "id": "deps-test",
+        "name": "Instalar dependências de teste",
+        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt",
+        "timeout_minutes": 25,
         "category": "test",
         "venv": "test"
       },
       {
         "id": "compile",
-        "name": "Compilar fontes",
-        "command": "& '%PYTHON%' -m compileall -q src tests",
-        "timeout_minutes": 5,
+        "name": "Compilar fontes Python",
+        "command": "& '%PYTHON%' -m compileall -q src tests talude_gui.py",
+        "timeout_minutes": 10,
         "category": "test",
         "venv": "test"
       },
       {
         "id": "pytest",
-        "name": "Teste sintético CRISTA/PÉ",
+        "name": "Executar testes CRISTA/PÉ",
         "command": "$env:PYTHONPATH='src'; & '%PYTHON%' -m pytest -q",
         "timeout_minutes": 20,
         "category": "test",
@@ -50,26 +51,140 @@
     "build": [
       {
         "id": "deps-build",
-        "name": "Instalar dependências",
-        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -e '.[dev]'",
-        "timeout_minutes": 20,
+        "name": "Instalar dependências de build",
+        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt",
+        "timeout_minutes": 30,
         "category": "build",
         "venv": "v1"
       },
       {
         "id": "pytest-build",
-        "name": "Validar motor antes do pacote",
+        "name": "Validar motor antes do EXE",
         "command": "$env:PYTHONPATH='src'; & '%PYTHON%' -m pytest -q",
         "timeout_minutes": 20,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
+        "id": "clean",
+        "name": "Preparar pasta de build",
+        "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
+        "timeout_minutes": 5,
         "category": "build",
         "venv": "v1"
       },
       {
-        "id": "package",
-        "name": "Criar pacote local",
-        "command": "$out='builds/latest'; New-Item -ItemType Directory -Force -Path $out | Out-Null; if (Test-Path ($out + '/Talude_V1_Source.zip')) { Remove-Item ($out + '/Talude_V1_Source.zip') -Force }; Compress-Archive -Path src,config,scripts,README.md,pyproject.toml -DestinationPath ($out + '/Talude_V1_Source.zip') -Force; Write-Output ('ZIP: ' + (Resolve-Path ($out + '/Talude_V1_Source.zip')))",
-        "timeout_minutes": 10,
+        "id": "pyinstaller",
+        "name": "Criar Talude V1 Windows",
+        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%/src' --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all scipy --collect-all ezdxf '%REPO%/talude_gui.py'",
+        "timeout_minutes": 45,
         "category": "build",
+        "venv": "v1"
+      },
+      {
+        "id": "exe-check",
+        "name": "Verificar executável",
+        "command": "if (!(Test-Path '%WORK%/dist/Talude_V1/Talude_V1.exe')) { throw 'Talude_V1.exe não foi gerado' }; Get-Item '%WORK%/dist/Talude_V1/Talude_V1.exe' | Select-Object FullName,Length,LastWriteTime",
+        "timeout_minutes": 5,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
+        "id": "self-test",
+        "name": "Self-test do executável",
+        "command": "Push-Location '%WORK%/dist/Talude_V1'; try { Remove-Item TALUDE_V1_SELF_TEST.txt -ErrorAction SilentlyContinue; & ./Talude_V1.exe --self-test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (!(Test-Path './TALUDE_V1_SELF_TEST.txt')) { throw 'Self-test não criou relatório' }; Get-Content ./TALUDE_V1_SELF_TEST.txt } finally { Pop-Location }",
+        "timeout_minutes": 10,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
+        "id": "package",
+        "name": "Preparar pasta portátil",
+        "command": "$pkg='%WORK%/package'; if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }; New-Item -ItemType Directory -Force -Path $pkg | Out-Null; Copy-Item -Recurse '%WORK%/dist/Talude_V1' ($pkg + '/Talude_V1'); Copy-Item -Force 'packaging/START_TALUDE_V1.bat' $pkg; Copy-Item -Force 'packaging/LEIA_ME.txt' $pkg; Copy-Item -Force 'README.md' $pkg",
+        "timeout_minutes": 10,
+        "category": "package",
+        "venv": "v1"
+      },
+      {
+        "id": "zip",
+        "name": "Criar ZIP Windows validado",
+        "command": "$latest='%LATEST%/Talude_V1_Windows_x64.zip'; if (Test-Path $latest) { Remove-Item $latest -Force }; Compress-Archive -Path '%WORK%/package/*' -DestinationPath $latest -Force; Copy-Item -Force $latest '%ARCHIVE%/Talude_V1_%TIMESTAMP%.zip'; Write-Output ('ZIP: ' + (Resolve-Path $latest))",
+        "timeout_minutes": 20,
+        "category": "package",
+        "venv": "v1"
+      }
+    ],
+    "full": [
+      {
+        "id": "deps-test",
+        "name": "Instalar dependências de teste",
+        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt",
+        "timeout_minutes": 25,
+        "category": "test",
+        "venv": "test"
+      },
+      {
+        "id": "compile",
+        "name": "Compilar fontes Python",
+        "command": "& '%PYTHON%' -m compileall -q src tests talude_gui.py",
+        "timeout_minutes": 10,
+        "category": "test",
+        "venv": "test"
+      },
+      {
+        "id": "pytest",
+        "name": "Executar testes CRISTA/PÉ",
+        "command": "$env:PYTHONPATH='src'; & '%PYTHON%' -m pytest -q",
+        "timeout_minutes": 20,
+        "category": "test",
+        "venv": "test"
+      },
+      {
+        "id": "clean",
+        "name": "Preparar pasta de build",
+        "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
+        "timeout_minutes": 5,
+        "category": "build",
+        "venv": "v1"
+      },
+      {
+        "id": "pyinstaller",
+        "name": "Criar Talude V1 Windows",
+        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%/src' --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all scipy --collect-all ezdxf '%REPO%/talude_gui.py'",
+        "timeout_minutes": 45,
+        "category": "build",
+        "venv": "v1"
+      },
+      {
+        "id": "exe-check",
+        "name": "Verificar executável",
+        "command": "if (!(Test-Path '%WORK%/dist/Talude_V1/Talude_V1.exe')) { throw 'Talude_V1.exe não foi gerado' }; Get-Item '%WORK%/dist/Talude_V1/Talude_V1.exe' | Select-Object FullName,Length,LastWriteTime",
+        "timeout_minutes": 5,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
+        "id": "self-test",
+        "name": "Self-test do executável",
+        "command": "Push-Location '%WORK%/dist/Talude_V1'; try { Remove-Item TALUDE_V1_SELF_TEST.txt -ErrorAction SilentlyContinue; & ./Talude_V1.exe --self-test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (!(Test-Path './TALUDE_V1_SELF_TEST.txt')) { throw 'Self-test não criou relatório' }; Get-Content ./TALUDE_V1_SELF_TEST.txt } finally { Pop-Location }",
+        "timeout_minutes": 10,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
+        "id": "package",
+        "name": "Preparar pasta portátil",
+        "command": "$pkg='%WORK%/package'; if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }; New-Item -ItemType Directory -Force -Path $pkg | Out-Null; Copy-Item -Recurse '%WORK%/dist/Talude_V1' ($pkg + '/Talude_V1'); Copy-Item -Force 'packaging/START_TALUDE_V1.bat' $pkg; Copy-Item -Force 'packaging/LEIA_ME.txt' $pkg; Copy-Item -Force 'README.md' $pkg",
+        "timeout_minutes": 10,
+        "category": "package",
+        "venv": "v1"
+      },
+      {
+        "id": "zip",
+        "name": "Criar ZIP Windows validado",
+        "command": "$latest='%LATEST%/Talude_V1_Windows_x64.zip'; if (Test-Path $latest) { Remove-Item $latest -Force }; Compress-Archive -Path '%WORK%/package/*' -DestinationPath $latest -Force; Copy-Item -Force $latest '%ARCHIVE%/Talude_V1_%TIMESTAMP%.zip'; Write-Output ('ZIP: ' + (Resolve-Path $latest))",
+        "timeout_minutes": 20,
+        "category": "package",
         "venv": "v1"
       }
     ]
