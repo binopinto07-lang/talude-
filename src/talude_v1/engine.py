@@ -114,8 +114,9 @@ def rasterize_mean(xyz: np.ndarray, cell: float) -> Grid:
     valid = np.isfinite(z)
 
     if not valid.all():
-        _, inds = ndimage.distance_transform_edt(
+        inds = ndimage.distance_transform_edt(
             ~valid,
+            return_distances=False,
             return_indices=True,
         )
         z = z[tuple(inds)]
@@ -291,7 +292,11 @@ def rasterize_mean_stream(
     if not valid.all():
         if progress is not None:
             progress(50.0, "Streaming: a preencher pequenas lacunas da grelha…")
-        _, inds = ndimage.distance_transform_edt(~valid, return_indices=True)
+        inds = ndimage.distance_transform_edt(
+            ~valid,
+            return_distances=False,
+            return_indices=True,
+        )
         z = z[tuple(inds)].astype(np.float32, copy=False)
         del inds
 
