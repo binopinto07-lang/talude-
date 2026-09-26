@@ -29,7 +29,7 @@ def start_auto_extract(
     slope_high_deg: float = 0.0,
     min_face_area_m2: float = 4.0,
     min_line_length_m: float = 2.0,
-    line_smooth_window: int = 15,
+    line_smooth_window: int = 11,
 ) -> str:
     job_id = jobs.create("Extrair CRISTA + PÉ automaticamente")
     thread = threading.Thread(
@@ -87,7 +87,8 @@ def _worker(
 
         classes = None
         if selected_classes is not None:
-            classes = tuple(sorted({int(v) for v in selected_classes}))
+            normalized = tuple(sorted({int(v) for v in selected_classes}))
+            classes = normalized if normalized else None
 
         cfg = ExtractConfig(
             cell_size=float(cell_size),
