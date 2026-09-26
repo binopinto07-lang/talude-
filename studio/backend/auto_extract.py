@@ -30,6 +30,7 @@ def start_auto_extract(
     min_face_area_m2: float = 4.0,
     min_line_length_m: float = 2.0,
     line_smooth_window: int = 11,
+    vertex_spacing_m: float = 1.0,
 ) -> str:
     job_id = jobs.create("Extrair CRISTA + PÉ automaticamente")
     thread = threading.Thread(
@@ -46,6 +47,7 @@ def start_auto_extract(
             min_face_area_m2,
             min_line_length_m,
             line_smooth_window,
+            vertex_spacing_m,
         ),
         daemon=True,
         name=f"talude-auto-{job_id[:8]}",
@@ -66,6 +68,7 @@ def _worker(
     min_face_area_m2: float,
     min_line_length_m: float,
     line_smooth_window: int,
+    vertex_spacing_m: float,
 ) -> None:
     try:
         project = store.get(project_id)
@@ -97,6 +100,7 @@ def _worker(
             min_face_area_m2=float(min_face_area_m2),
             min_line_length_m=float(min_line_length_m),
             line_smooth_window=max(3, int(line_smooth_window)),
+            vertex_spacing_m=max(0.20, float(vertex_spacing_m)),
             use_ground_class=classes is None,
             classification_filter=classes,
         )
