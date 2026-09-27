@@ -1014,10 +1014,11 @@ def extract_face_raw_tin(
     def payload(kind: str, xyz: np.ndarray, meta: dict) -> dict:
         length_2d, length_3d = _polyline_lengths(xyz)
         top = topology[kind]
+        line_support_ratio = float(meta["support_ratio"])
         quality_score = float(
             np.clip(
                 0.40 * local_coherence["local_normal_coherence"]
-                + 0.35 * refine_ratio
+                + 0.35 * line_support_ratio
                 + 0.25 * min(len(xyz) / 20.0, 1.0),
                 0.0,
                 0.98,
