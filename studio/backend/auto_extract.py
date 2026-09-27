@@ -12,6 +12,7 @@ from talude_v1.engine import extract
 
 from .converter import jobs
 from .project_store import ProjectStore
+from .vector_documents import write_documents_from_geojson
 
 
 class AutoExtractCancelled(RuntimeError):
@@ -138,6 +139,19 @@ def _worker(
         geojson_path = output / "talude_breaklines.geojson"
         payload = json.loads(geojson_path.read_text(encoding="utf-8"))
 
+        vector_bundle = write_documents_from_geojson(
+            project.path,
+            output,
+            payload,
+            source={
+                "engine": report.get("engine"),
+                "mode": "AUTO_BASELINE_1_1_7",
+                "cloud_id": cloud_id,
+                "job_id": job_id,
+                "output_dir": str(output),
+            },
+        )
+
         lines: list[dict[str, Any]] = []
         for feature in payload.get("features", []):
             props = feature.get("properties") or {}
@@ -170,8 +184,11 @@ def _worker(
                     if k not in {"lines"}
                 },
                 "line_count": len(lines),
+                "vector_document": vector_bundle["run_path"],
             }
         )
+        state["active_vector_document"] = vector_bundle["active_path"]
+        state["active_vector_document_summary"] = vector_bundle["summary"]
         store.save_state(project_id, state)
 
         result = {
@@ -180,6 +197,8 @@ def _worker(
             "output_dir": str(output),
             "report": report,
             "lines": lines,
+            "vector_document": vector_bundle["active_path"],
+            "vector_document_summary": vector_bundle["summary"],
         }
 
         store.debug_event(
