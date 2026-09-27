@@ -12,6 +12,7 @@ from talude_v2 import V2Config, V2DetectionError, V2Reason, run_auto_global_v2
 
 from .converter import jobs
 from .project_store import ProjectStore
+from .vector_documents import write_documents_from_geojson
 
 
 def _stamp() -> str:
@@ -185,6 +186,19 @@ def _worker_v2(
         geojson_path = output / "talude_breaklines.geojson"
         payload = json.loads(geojson_path.read_text(encoding="utf-8"))
 
+        vector_bundle = write_documents_from_geojson(
+            project.path,
+            output,
+            payload,
+            source={
+                "engine": report.get("engine"),
+                "mode": "AUTO_GLOBAL_V2",
+                "cloud_id": cloud_id,
+                "job_id": job_id,
+                "output_dir": str(output),
+            },
+        )
+
         lines: list[dict[str, Any]] = []
         for feature in payload.get("features", []):
             props = feature.get("properties") or {}
@@ -222,8 +236,11 @@ def _worker_v2(
                     if key not in {"lines"}
                 },
                 "line_count": len(lines),
+                "vector_document": vector_bundle["run_path"],
             }
         )
+        state["active_vector_document"] = vector_bundle["active_path"]
+        state["active_vector_document_summary"] = vector_bundle["summary"]
         store.save_state(project_id, state)
 
         result = {
@@ -233,6 +250,8 @@ def _worker_v2(
             "output_dir": str(output),
             "report": report,
             "lines": lines,
+            "vector_document": vector_bundle["active_path"],
+            "vector_document_summary": vector_bundle["summary"],
         }
 
         store.debug_event(
@@ -249,6 +268,8 @@ def _worker_v2(
                 "crest_lines": report.get("crest_lines"),
                 "toe_lines": report.get("toe_lines"),
                 "reason_counts": report.get("reason_counts"),
+                "vector_document": vector_bundle["active_path"],
+                "vector_document_summary": vector_bundle["summary"],
                 "elapsed_s": report.get("elapsed_s"),
             },
             source="v2-auto-global",
