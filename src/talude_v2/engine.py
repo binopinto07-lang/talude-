@@ -26,6 +26,17 @@ class V2Config:
     patch_deadband_m: float = 0.12
     patch_min_points: int = 14
     max_refine_shift_m: float = 1.25
+    refine_smooth_window: int = 5
+    refine_bridge_stations: int = 2
+    refine_support_target: int = 28
+
+    # Phase 3 tiled AUTO defaults. These do not alter clicked-face behaviour;
+    # they are consumed by the global tiled orchestration layer.
+    tile_size_m: float = 60.0
+    tile_halo_m: float = 10.0
+    tile_min_fragment_m: float = 2.0
+    tile_stitch_gap_m: float = 4.0
+    tile_min_coverage_ratio: float = 0.55
     random_seed: int = 1701
 
 
@@ -553,15 +564,25 @@ def _resample_polyline(xyz: np.ndarray, spacing: float) -> np.ndarray:
     )
 
 
-def _robust_plane(points: np.ndarray, min_points: int) -> tuple[np.ndarray, float] | None:
+def _robust_plane(
+    points: np.ndarray,
+    min_points: int,
+) -> tuple[np.ndarray, float, int, float] | None:
+    """Robust local plane with explicit inlier support.
+
+    Phase 4 uses support as a first-class quality signal. A numerically valid
+    plane based on barely enough observations is intentionally treated as
+    weaker than one supported by a dense, coherent patch.
+    """
     pts = np.asarray(points, dtype=np.float64)
     if len(pts) < min_points:
         return None
 
+    original_count = int(len(pts))
     work = pts
     coef = None
     rmse = float("inf")
-    for _ in range(3):
+    for _ in range(4):
         A = np.column_stack((work[:, 0], work[:, 1], np.ones(len(work))))
         try:
             coef, *_ = np.linalg.lstsq(A, work[:, 2], rcond=None)
@@ -570,16 +591,24 @@ def _robust_plane(points: np.ndarray, min_points: int) -> tuple[np.ndarray, floa
         residual = work[:, 2] - A @ coef
         med = float(np.median(residual))
         mad = float(np.median(np.abs(residual - med)))
-        sigma = max(1.4826 * mad, 0.01)
+        sigma = max(1.4826 * mad, 0.008)
         keep = np.abs(residual - med) <= 3.0 * sigma
-        rmse = float(math.sqrt(np.mean(residual[keep] ** 2))) if np.any(keep) else float("inf")
-        if int(keep.sum()) == len(work) or int(keep.sum()) < min_points:
+        kept = int(keep.sum())
+        rmse = (
+            float(math.sqrt(np.mean(residual[keep] ** 2)))
+            if kept
+            else float("inf")
+        )
+        if kept == len(work) or kept < min_points:
             break
         work = work[keep]
 
     if coef is None:
         return None
-    return np.asarray(coef, dtype=np.float64), rmse
+
+    support = int(len(work))
+    inlier_ratio = float(np.clip(support / max(original_count, 1), 0.0, 1.0))
+    return np.asarray(coef, dtype=np.float64), rmse, support, inlier_ratio
 
 
 def _closest_point_on_plane_intersection_xy(
@@ -616,6 +645,97 @@ def _nearest_face_downhill(
     return geom["downhill"][ids[np.asarray(nearest, dtype=np.int64)]]
 
 
+def _support_aware_smooth(
+    stations: np.ndarray,
+    refined: np.ndarray,
+    valid: np.ndarray,
+    support_weight: np.ndarray,
+    window: int,
+) -> np.ndarray:
+    """Smooth refinement deltas only, preserving the detected line topology.
+
+    The preliminary TIN stations remain the reference. Robust local deltas are
+    combined with support weights so a weak patch cannot pull neighbouring
+    well-supported stations into a spike.
+    """
+    out = np.asarray(refined, dtype=np.float64).copy()
+    if len(out) < 3 or int(np.sum(valid)) < 2:
+        return out
+
+    win = max(3, int(window))
+    if win % 2 == 0:
+        win += 1
+    half = win // 2
+    delta = out - stations
+
+    for i in np.flatnonzero(valid):
+        lo = max(0, int(i) - half)
+        hi = min(len(out), int(i) + half + 1)
+        ids = np.flatnonzero(valid[lo:hi]) + lo
+        if len(ids) < 2:
+            continue
+
+        local = delta[ids]
+        med = np.median(local, axis=0)
+        dev = np.linalg.norm(local[:, :2] - med[:2], axis=1)
+        mad = float(np.median(np.abs(dev - np.median(dev))))
+        gate = max(0.15, 3.0 * 1.4826 * mad)
+        keep = dev <= gate
+        ids = ids[keep]
+        if len(ids) == 0:
+            continue
+
+        weights = np.maximum(support_weight[ids], 1e-3)
+        mean_delta = np.average(delta[ids], axis=0, weights=weights)
+        own_weight = float(np.clip(support_weight[i], 0.0, 1.0))
+        blend = 0.35 + 0.45 * own_weight
+        smoothed_delta = blend * delta[i] + (1.0 - blend) * mean_delta
+        out[i] = stations[i] + smoothed_delta
+
+    return out
+
+
+def _bridge_short_refine_gaps(
+    stations: np.ndarray,
+    refined: np.ndarray,
+    valid: np.ndarray,
+    max_gap: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Interpolate only short unsupported runs bounded by trusted stations."""
+    out = np.asarray(refined, dtype=np.float64).copy()
+    bridged = np.zeros(len(out), dtype=bool)
+    max_gap = max(0, int(max_gap))
+    if max_gap <= 0 or len(out) < 3:
+        return out, bridged
+
+    i = 0
+    while i < len(out):
+        if valid[i]:
+            i += 1
+            continue
+        start = i
+        while i < len(out) and not valid[i]:
+            i += 1
+        end = i
+        gap = end - start
+
+        if (
+            gap <= max_gap
+            and start > 0
+            and end < len(out)
+            and valid[start - 1]
+            and valid[end]
+        ):
+            a = out[start - 1]
+            b = out[end]
+            for j in range(gap):
+                t = (j + 1) / (gap + 1)
+                out[start + j] = (1.0 - t) * a + t * b
+                bridged[start + j] = True
+
+    return out, bridged
+
+
 def _refine_by_surface_intersection(
     preliminary: np.ndarray,
     raw_points: np.ndarray,
@@ -628,7 +748,11 @@ def _refine_by_surface_intersection(
     if len(stations) < 2:
         return stations, {
             "refined": 0,
+            "bridged": 0,
             "fallback": len(stations),
+            "support_ratio": 0.0,
+            "support_median": None,
+            "support_p10": None,
             "plane_rmse_median": None,
             "mean_shift_m": None,
             "p95_shift_m": None,
@@ -638,10 +762,11 @@ def _refine_by_surface_intersection(
     tree = cKDTree(raw_points[:, :2])
     downhill = _nearest_face_downhill(stations, geom, selected)
     out = stations.copy()
-    refined = 0
-    fallback = 0
+    valid = np.zeros(len(stations), dtype=bool)
+    support_weight = np.zeros(len(stations), dtype=np.float64)
     rmse_values: list[float] = []
     shifts: list[float] = []
+    supports: list[int] = []
 
     for i, station in enumerate(stations):
         if i == 0:
@@ -652,7 +777,6 @@ def _refine_by_surface_intersection(
             tangent = stations[i + 1, :2] - stations[i - 1, :2]
         tnorm = float(np.linalg.norm(tangent))
         if tnorm <= 1e-9:
-            fallback += 1
             continue
         tangent /= tnorm
 
@@ -666,7 +790,6 @@ def _refine_by_surface_intersection(
         radius = math.hypot(cfg.patch_along_m * 0.5, cfg.patch_cross_m) + 0.25
         ids = tree.query_ball_point(station[:2], r=radius)
         if len(ids) < cfg.patch_min_points * 2:
-            fallback += 1
             continue
         pts = raw_points[np.asarray(ids, dtype=np.int64)]
         rel = pts[:, :2] - station[:2]
@@ -686,7 +809,6 @@ def _refine_by_surface_intersection(
                 & (v <= cfg.patch_cross_m)
             )
         else:
-            # TOE: face is on the uphill side, bottom platform downhill.
             side_a = (
                 along
                 & (v >= cfg.patch_deadband_m)
@@ -701,7 +823,6 @@ def _refine_by_surface_intersection(
         fit_a = _robust_plane(pts[side_a], cfg.patch_min_points)
         fit_b = _robust_plane(pts[side_b], cfg.patch_min_points)
         if fit_a is None or fit_b is None:
-            fallback += 1
             continue
 
         point = _closest_point_on_plane_intersection_xy(
@@ -710,28 +831,68 @@ def _refine_by_surface_intersection(
             station[:2],
         )
         if point is None:
-            fallback += 1
             continue
 
         refined_point, shift = point
         if shift > cfg.max_refine_shift_m:
-            fallback += 1
             continue
 
-        out[i] = refined_point
-        refined += 1
-        shifts.append(float(shift))
-        rmse_values.extend((fit_a[1], fit_b[1]))
+        combined_support = min(int(fit_a[2]), int(fit_b[2]))
+        inlier_ratio = min(float(fit_a[3]), float(fit_b[3]))
+        support_score = min(
+            combined_support / max(int(cfg.refine_support_target), 1),
+            1.0,
+        )
+        rmse_score = math.exp(
+            -0.5 * (float(fit_a[1]) + float(fit_b[1]))
+            / max(cfg.target_tin_spacing_m, 0.05)
+        )
+        weight = float(
+            np.clip(0.55 * support_score + 0.25 * inlier_ratio + 0.20 * rmse_score, 0.0, 1.0)
+        )
 
-    # Fill fallback Z from nearest raw point so every output remains true 3D.
+        out[i] = refined_point
+        valid[i] = True
+        support_weight[i] = weight
+        shifts.append(float(shift))
+        supports.append(combined_support)
+        rmse_values.extend((float(fit_a[1]), float(fit_b[1])))
+
+    out = _support_aware_smooth(
+        stations,
+        out,
+        valid,
+        support_weight,
+        cfg.refine_smooth_window,
+    )
+    out, bridged = _bridge_short_refine_gaps(
+        stations,
+        out,
+        valid,
+        cfg.refine_bridge_stations,
+    )
+
+    refined = int(np.sum(valid))
+    bridged_count = int(np.sum(bridged))
+    fallback = int(max(0, len(stations) - refined - bridged_count))
+
+    # Preserve real 3D for unsupported ends/runs using the closest RAW point Z.
     _, nearest = tree.query(out[:, :2], k=1)
     nearest_z = raw_points[np.asarray(nearest, dtype=np.int64), 2]
-    missing = ~np.isfinite(out[:, 2])
-    out[missing, 2] = nearest_z[missing]
+    unsupported = ~(valid | bridged)
+    if np.any(unsupported):
+        out[unsupported, 2] = nearest_z[unsupported]
 
+    support_ratio = float(
+        np.clip((refined + bridged_count) / max(len(stations), 1), 0.0, 1.0)
+    )
     return out, {
-        "refined": int(refined),
-        "fallback": int(fallback),
+        "refined": refined,
+        "bridged": bridged_count,
+        "fallback": fallback,
+        "support_ratio": support_ratio,
+        "support_median": float(np.median(supports)) if supports else None,
+        "support_p10": float(np.percentile(supports, 10.0)) if supports else None,
         "plane_rmse_median": (
             float(np.median(rmse_values)) if rmse_values else None
         ),
@@ -739,7 +900,6 @@ def _refine_by_surface_intersection(
         "p95_shift_m": float(np.percentile(shifts, 95.0)) if shifts else None,
         "max_shift_m": float(np.max(shifts)) if shifts else None,
     }
-
 
 def _polyline_lengths(xyz: np.ndarray) -> tuple[float, float]:
     """Accumulated 2D/3D polyline lengths, never endpoint distance."""
@@ -842,9 +1002,14 @@ def extract_face_raw_tin(
 
     face_ids = np.flatnonzero(selected)
     face_slope = float(np.median(geom["slope"][face_ids]))
-    refined_total = crest_refine["refined"] + toe_refine["refined"]
+    supported_total = (
+        crest_refine["refined"]
+        + crest_refine["bridged"]
+        + toe_refine["refined"]
+        + toe_refine["bridged"]
+    )
     station_total = max(1, len(crest) + len(toe))
-    refine_ratio = float(np.clip(refined_total / station_total, 0.0, 1.0))
+    refine_ratio = float(np.clip(supported_total / station_total, 0.0, 1.0))
 
     def payload(kind: str, xyz: np.ndarray, meta: dict) -> dict:
         length_2d, length_3d = _polyline_lengths(xyz)
@@ -871,7 +1036,11 @@ def extract_face_raw_tin(
             "confidence": quality_score,
             "station_spacing_m": float(cfg.station_spacing_m),
             "refined_stations": int(meta["refined"]),
+            "bridged_stations": int(meta["bridged"]),
             "fallback_stations": int(meta["fallback"]),
+            "support_ratio": float(meta["support_ratio"]),
+            "support_median": meta["support_median"],
+            "support_p10": meta["support_p10"],
             "plane_rmse_median": meta["plane_rmse_median"],
             "mean_shift_m": meta["mean_shift_m"],
             "p95_shift_m": meta["p95_shift_m"],
@@ -934,8 +1103,14 @@ def extract_face_raw_tin(
             "toe_length_3d_m": toe_payload["length_3d_m"],
             "crest_refined_stations": crest_payload["refined_stations"],
             "toe_refined_stations": toe_payload["refined_stations"],
+            "crest_bridged_stations": crest_payload["bridged_stations"],
+            "toe_bridged_stations": toe_payload["bridged_stations"],
             "crest_fallback_stations": crest_payload["fallback_stations"],
             "toe_fallback_stations": toe_payload["fallback_stations"],
+            "crest_support_ratio": crest_payload["support_ratio"],
+            "toe_support_ratio": toe_payload["support_ratio"],
+            "crest_support_median": crest_payload["support_median"],
+            "toe_support_median": toe_payload["support_median"],
             "crest_plane_rmse_median": crest_payload["plane_rmse_median"],
             "toe_plane_rmse_median": toe_payload["plane_rmse_median"],
             "crest_mean_shift_m": crest_payload["mean_shift_m"],
@@ -948,6 +1123,7 @@ def extract_face_raw_tin(
         "pipeline": (
             "RAW -> XY_MEDIAN -> DELAUNAY -> REGION_GROW -> "
             "BOUNDARY -> KNN_GAPS -> KRUSKAL_MST -> "
-            "1M_STATIONS -> ROBUST_PLANE_INTERSECTION"
+            "1M_STATIONS -> SUPPORT_AWARE_ROBUST_PLANE_INTERSECTION -> "
+            "SHORT_GAP_BRIDGE -> ROBUST_DELTA_SMOOTH"
         ),
     }
