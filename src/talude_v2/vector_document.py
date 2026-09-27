@@ -28,6 +28,22 @@ DEFAULT_LAYERS = (
         "locked": False,
         "role": "breakline_toe",
     },
+    {
+        "id": "FACES",
+        "name": "FACES",
+        "geometry_type": "PolygonZ",
+        "visible": False,
+        "locked": True,
+        "role": "slope_faces",
+    },
+    {
+        "id": "DEBUG",
+        "name": "DEBUG",
+        "geometry_type": "MixedZ",
+        "visible": False,
+        "locked": True,
+        "role": "diagnostics",
+    },
 )
 
 
@@ -162,8 +178,10 @@ def validate_vector_document(document: dict[str, Any]) -> dict[str, Any]:
         for layer in document["layers"]
         if isinstance(layer, dict) and layer.get("id")
     }
-    if not {"CRISTA", "PE_TALUDE"}.issubset(layer_ids):
-        raise ValueError("Vector document precisa das layers CRISTA e PE_TALUDE.")
+    if not {"CRISTA", "PE_TALUDE", "FACES", "DEBUG"}.issubset(layer_ids):
+        raise ValueError(
+            "Vector document precisa das layers CRISTA, PE_TALUDE, FACES e DEBUG."
+        )
 
     seen: set[str] = set()
     for feature in document["features"]:
