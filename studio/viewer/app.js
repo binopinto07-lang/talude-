@@ -3729,7 +3729,7 @@
           ? "V2 RAW-TIN-MST experimental"
           : "Baseline 1.1.7";
         byId("traceHint").textContent =
-          label + " selecionada. Clique em Picar face automática.";
+          label + " selecionada. Picar face usa o motor escolhido; DETETAR CRISTA + PÉ usa o AUTO global do mesmo motor.";
         setStatus(label + " selecionada.");
         debugLog("feature.geometry_engine_changed", {
           geometry_engine: state.geometryEngine
