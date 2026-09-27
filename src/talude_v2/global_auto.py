@@ -639,10 +639,16 @@ def run_auto_global_v2(
             ),
         )
 
+    final_lines: list[dict] = []
+    face_records: list[dict] = []
+    reason_counts: dict[str, int] = {}
+    v2_success = 0
+    baseline_fallback = 0
+    tiled_stats: dict | None = None
+
     if not candidates:
         # Do not scan a 200M+ point cloud a second time when discovery found
-        # nothing to refine. Keep the empty/unpaired baseline result and make
-        # the reason explicit in the report.
+        # nothing to refine.
         if source.suffix.lower() in {".las", ".laz"}:
             info = inspect_point_cloud(source)
             crs_wkt = info.crs_wkt
@@ -651,8 +657,8 @@ def run_auto_global_v2(
             cloud_info = load_point_cloud(source)
             crs_wkt = cloud_info.crs_wkt
             points_total = int(len(cloud_info.xyz))
-        roi_points = []
         roi_stats = {
+            "mode": "NO_CANDIDATES",
             "points_total": points_total,
             "points_selected": 0,
             "points_routed_with_overlap": 0,
@@ -663,16 +669,88 @@ def run_auto_global_v2(
             "spatial_tile_size_m": None,
             "crs_wkt": crs_wkt,
         }
+
     elif source.suffix.lower() in {".las", ".laz"}:
-        roi_points, roi_stats = _collect_roi_points_stream(
+        # Phase 3: large clouds are processed as core tiles + halo. Ground is
+        # streamed once to temporary tile spools, local RAW-TIN fragments are
+        # solved independently, then deduplicated/stiched per baseline face.
+        from .tiled_auto import process_candidates_tiled
+
+        info = inspect_point_cloud(source)
+        tiled_results, tiled_stats = process_candidates_tiled(
             source,
             cfg,
             candidates,
-            max_roi_points=max_roi_points,
+            v2_cfg,
+            output_debug_dir=debug_dir,
+            min_line_length_m=cfg.min_line_length_m,
             progress=progress,
             cancel_check=cancel_check,
         )
+        spool = dict((tiled_stats or {}).get("spool") or {})
+        roi_stats = {
+            "mode": "TILED_HALO_STITCH",
+            "points_total": int(info.point_count),
+            "points_selected": int(spool.get("selected_seen", 0)),
+            "points_routed_with_overlap": int(spool.get("spooled_points", 0)),
+            "roi_max_points_per_face": int(v2_cfg.max_tin_points),
+            "roi_seen_total": int(spool.get("spooled_points", 0)),
+            "roi_kept_total": int(spool.get("spooled_points", 0)),
+            "spatial_index_cells": int((tiled_stats or {}).get("candidate_tiles", 0)),
+            "spatial_tile_size_m": float(v2_cfg.tile_size_m),
+            "crs_wkt": info.crs_wkt,
+        }
+
+        for index, candidate in enumerate(candidates, start=1):
+            _check_cancel(cancel_check)
+            face_id = int(candidate.face_id)
+            item = tiled_results.get(face_id) or {
+                "status": "FAILED",
+                "reason": V2Reason.MERGE_FAILED.value,
+                "message": "Sem resultado tiled para esta face.",
+                "lines": [],
+                "record": {
+                    "face_id": face_id,
+                    "status": "FAILED",
+                    "reason": V2Reason.MERGE_FAILED.value,
+                },
+            }
+
+            if item.get("status") == "SUCCESS" and len(item.get("lines") or []) == 2:
+                final_lines.extend(item["lines"])
+                face_records.append(item.get("record") or {})
+                v2_success += 1
+                reason = V2Reason.SUCCESS.value
+            else:
+                reason = str(item.get("reason") or V2Reason.MERGE_FAILED.value)
+                message = str(item.get("message") or "Falha tiled sem detalhe.")
+                final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+                record = dict(item.get("record") or {})
+                record.update(
+                    {
+                        "face_id": face_id,
+                        "status": "BASELINE_FALLBACK",
+                        "reason": reason,
+                        "message": message,
+                        "corridor_radius_m": float(candidate.corridor_radius_m),
+                    }
+                )
+                face_records.append(record)
+                baseline_fallback += 1
+
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            if progress is not None and candidates:
+                progress(
+                    88.0 + 8.0 * index / len(candidates),
+                    (
+                        f"AUTO V2 TILED · validar faces {index}/{len(candidates)} · "
+                        f"V2 {v2_success} · fallback {baseline_fallback}"
+                    ),
+                )
+
     else:
+        # XYZ/TXT/CSV development inputs keep the in-memory path. Production
+        # LAS/LAZ uses the tiled engine above.
         roi_points, roi_stats = _collect_roi_points_memory(
             source,
             cfg,
@@ -682,58 +760,52 @@ def run_auto_global_v2(
             cancel_check=cancel_check,
         )
 
-    final_lines: list[dict] = []
-    face_records: list[dict] = []
-    reason_counts: dict[str, int] = {}
-    v2_success = 0
-    baseline_fallback = 0
+        for index, (candidate, points) in enumerate(zip(candidates, roi_points), start=1):
+            _check_cancel(cancel_check)
+            try:
+                lines, record = refine_face_candidate_v2(
+                    candidate,
+                    points,
+                    v2_config=v2_cfg,
+                    min_line_length_m=cfg.min_line_length_m,
+                )
+                final_lines.extend(lines)
+                face_records.append(record)
+                v2_success += 1
+                reason = V2Reason.SUCCESS.value
+            except Exception as exc:
+                if isinstance(exc, V2DetectionError) and exc.reason == V2Reason.CANCELLED:
+                    raise
 
-    for index, (candidate, points) in enumerate(zip(candidates, roi_points), start=1):
-        _check_cancel(cancel_check)
-        try:
-            lines, record = refine_face_candidate_v2(
-                candidate,
-                points,
-                v2_config=v2_cfg,
-                min_line_length_m=cfg.min_line_length_m,
-            )
-            final_lines.extend(lines)
-            face_records.append(record)
-            v2_success += 1
-            reason = V2Reason.SUCCESS.value
-        except Exception as exc:
-            if isinstance(exc, V2DetectionError) and exc.reason == V2Reason.CANCELLED:
-                raise
+                if isinstance(exc, V2DetectionError):
+                    reason = exc.reason.value
+                    message = exc.message
+                else:
+                    reason = V2Reason.INTERNAL_ERROR.value
+                    message = f"{type(exc).__name__}: {exc}"
 
-            if isinstance(exc, V2DetectionError):
-                reason = exc.reason.value
-                message = exc.message
-            else:
-                reason = V2Reason.INTERNAL_ERROR.value
-                message = f"{type(exc).__name__}: {exc}"
+                final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+                face_records.append(
+                    {
+                        "face_id": int(candidate.face_id),
+                        "status": "BASELINE_FALLBACK",
+                        "reason": reason,
+                        "message": message,
+                        "roi_points": int(len(points)),
+                        "corridor_radius_m": float(candidate.corridor_radius_m),
+                    }
+                )
+                baseline_fallback += 1
 
-            final_lines.extend(_fallback_pair(candidate, baseline_by_face))
-            face_records.append(
-                {
-                    "face_id": int(candidate.face_id),
-                    "status": "BASELINE_FALLBACK",
-                    "reason": reason,
-                    "message": message,
-                    "roi_points": int(len(points)),
-                    "corridor_radius_m": float(candidate.corridor_radius_m),
-                }
-            )
-            baseline_fallback += 1
-
-        reason_counts[reason] = reason_counts.get(reason, 0) + 1
-        if progress is not None and candidates:
-            progress(
-                67.0 + 29.0 * index / len(candidates),
-                (
-                    f"AUTO V2 · faces {index}/{len(candidates)} · "
-                    f"V2 {v2_success} · fallback {baseline_fallback}"
-                ),
-            )
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            if progress is not None and candidates:
+                progress(
+                    67.0 + 29.0 * index / len(candidates),
+                    (
+                        f"AUTO V2 · faces {index}/{len(candidates)} · "
+                        f"V2 {v2_success} · fallback {baseline_fallback}"
+                    ),
+                )
 
     # Never discard an unpaired baseline result: completeness beats a silent
     # regression. These are logged separately for later diagnosis.
@@ -780,6 +852,7 @@ def run_auto_global_v2(
         "toe_lines": int(sum(1 for line in final_lines if line["type"] == "TOE")),
         "reason_counts": reason_counts,
         "roi": {k: v for k, v in roi_stats.items() if k != "crs_wkt"},
+        "tiled": tiled_stats,
         "baseline_report": {
             key: value
             for key, value in baseline_report.items()
@@ -814,6 +887,7 @@ def run_auto_global_v2(
                     "baseline_fallback_faces": baseline_fallback,
                     "reason_counts": reason_counts,
                     "roi": {k: v for k, v in roi_stats.items() if k != "crs_wkt"},
+                    "tiled": tiled_stats,
                 }
             ),
             ensure_ascii=False,
