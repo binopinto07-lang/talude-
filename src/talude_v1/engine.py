@@ -34,6 +34,8 @@ class Grid:
     x0: float
     y0: float
     cell: float
+    support_distance_m: np.ndarray | None = None
+    analysis_valid: np.ndarray | None = None
 
     def xy(self, rows: np.ndarray, cols: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         return self.x0 + (cols + 0.5) * self.cell, self.y0 + (rows + 0.5) * self.cell
@@ -83,7 +85,104 @@ def choose_cell_size(spacing: float, requested: float) -> float:
     return float(np.clip(spacing * 2.5, 0.05, 1.00))
 
 
-def rasterize_mean(xyz: np.ndarray, cell: float) -> Grid:
+def _reconstruct_sparse_ground(
+    z: np.ndarray,
+    valid: np.ndarray,
+    cell: float,
+    max_gap_m: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Reconstrói apenas pequenas lacunas do Ground, sem inventar terreno longe do suporte.
+
+    Estratégia:
+    - mantém intactas as células com Ground real;
+    - mede a distância até ao Ground real;
+    - interpola linearmente lacunas bracketed nas linhas/colunas;
+    - só marca como analisável o que está a <= max_gap_m e tem suporte dos dois lados;
+    - deixa grandes vazios fora do FACE_DETECTOR.
+
+    O array devolvido fica finito em todo o lado (fallback nearest) para permitir
+    gradientes, mas analysis_valid impede que o detector use extrapolações distantes.
+    """
+    arr = np.asarray(z, dtype=np.float32)
+    real = np.asarray(valid, dtype=bool)
+    if arr.size == 0:
+        return arr, real, np.zeros_like(arr, dtype=np.float32)
+
+    if real.all():
+        return arr.copy(), real.copy(), np.zeros_like(arr, dtype=np.float32)
+
+    distance_cells, inds = ndimage.distance_transform_edt(
+        ~real,
+        return_distances=True,
+        return_indices=True,
+    )
+    support_distance_m = (distance_cells * float(cell)).astype(np.float32)
+
+    # Base finita: vizinho Ground mais próximo. Só será usada fora das pequenas
+    # lacunas para cálculo numérico; analysis_valid continua False nesses locais.
+    filled = arr[tuple(inds)].astype(np.float32, copy=True)
+
+    if max_gap_m <= 0:
+        return filled, real.copy(), support_distance_m
+
+    max_gap_m = float(max_gap_m)
+    candidate = (~real) & (support_distance_m <= max_gap_m)
+    if not np.any(candidate):
+        return filled, real.copy(), support_distance_m
+
+    estimate_sum = np.zeros(arr.shape, dtype=np.float32)
+    estimate_count = np.zeros(arr.shape, dtype=np.uint8)
+
+    # Interpolação 1D nas linhas, apenas entre dois suportes reais.
+    x_all = np.arange(arr.shape[1], dtype=np.float64)
+    for row in range(arr.shape[0]):
+        idx = np.flatnonzero(real[row])
+        if len(idx) < 2:
+            continue
+        lo = int(idx[0])
+        hi = int(idx[-1])
+        target = candidate[row].copy()
+        target[:lo] = False
+        target[hi + 1:] = False
+        if not np.any(target):
+            continue
+        interp = np.interp(x_all, idx.astype(np.float64), arr[row, idx].astype(np.float64))
+        estimate_sum[row, target] += interp[target].astype(np.float32)
+        estimate_count[row, target] += 1
+
+    # Interpolação 1D nas colunas, novamente só entre suportes reais.
+    y_all = np.arange(arr.shape[0], dtype=np.float64)
+    for col in range(arr.shape[1]):
+        idx = np.flatnonzero(real[:, col])
+        if len(idx) < 2:
+            continue
+        lo = int(idx[0])
+        hi = int(idx[-1])
+        target = candidate[:, col].copy()
+        target[:lo] = False
+        target[hi + 1:] = False
+        if not np.any(target):
+            continue
+        interp = np.interp(y_all, idx.astype(np.float64), arr[idx, col].astype(np.float64))
+        estimate_sum[target, col] += interp[target].astype(np.float32)
+        estimate_count[target, col] += 1
+
+    reconstructed = candidate & (estimate_count > 0)
+    filled[reconstructed] = (
+        estimate_sum[reconstructed] / estimate_count[reconstructed].astype(np.float32)
+    )
+
+    # analysis_valid é deliberadamente conservador: não expande a cloud para
+    # fora do seu suporte e não fecha vazios grandes.
+    analysis_valid = real | reconstructed
+    return filled, analysis_valid, support_distance_m
+
+
+def rasterize_mean(
+    xyz: np.ndarray,
+    cell: float,
+    cfg: ExtractConfig | None = None,
+) -> Grid:
     xmin, ymin = np.min(xyz[:, :2], axis=0)
     xmax, ymax = np.max(xyz[:, :2], axis=0)
     nx = max(2, int(math.floor((xmax - xmin) / cell)) + 1)
@@ -113,13 +212,13 @@ def rasterize_mean(xyz: np.ndarray, cell: float) -> Grid:
     z = z.reshape(ny, nx)
     valid = np.isfinite(z)
 
-    if not valid.all():
-        inds = ndimage.distance_transform_edt(
-            ~valid,
-            return_distances=False,
-            return_indices=True,
-        )
-        z = z[tuple(inds)]
+    max_gap_m = float(cfg.max_ground_gap_m) if cfg is not None else 1.50
+    z, analysis_valid, support_distance_m = _reconstruct_sparse_ground(
+        z,
+        valid,
+        cell,
+        max_gap_m,
+    )
 
     return Grid(
         z=z,
@@ -127,6 +226,8 @@ def rasterize_mean(xyz: np.ndarray, cell: float) -> Grid:
         x0=float(xmin),
         y0=float(ymin),
         cell=float(cell),
+        support_distance_m=support_distance_m,
+        analysis_valid=analysis_valid,
     )
 
 
@@ -289,16 +390,15 @@ def rasterize_mean_stream(
 
     del sums, counts, valid_flat
 
-    if not valid.all():
-        if progress is not None:
-            progress(50.0, "Streaming: a preencher pequenas lacunas da grelha…")
-        inds = ndimage.distance_transform_edt(
-            ~valid,
-            return_distances=False,
-            return_indices=True,
-        )
-        z = z[tuple(inds)].astype(np.float32, copy=False)
-        del inds
+    if progress is not None:
+        progress(50.0, "Streaming: a reconstruir pequenas lacunas do Ground…")
+
+    z, analysis_valid, support_distance_m = _reconstruct_sparse_ground(
+        z,
+        valid,
+        cell,
+        float(cfg.max_ground_gap_m),
+    )
 
     return (
         Grid(
@@ -307,6 +407,8 @@ def rasterize_mean_stream(
             x0=float(xmin),
             y0=float(ymin),
             cell=float(cell),
+            support_distance_m=support_distance_m,
+            analysis_valid=analysis_valid,
         ),
         int(selected_count),
         adjusted,
@@ -568,11 +670,16 @@ def _tin_break_score(grid: Grid) -> np.ndarray:
     norm = np.linalg.norm(normal, axis=-1, keepdims=True)
     normal /= np.maximum(norm, 1e-12)
 
+    support = (
+        grid.analysis_valid
+        if grid.analysis_valid is not None
+        else grid.valid
+    )
     cell_valid = (
-        grid.valid[:-1, :-1]
-        & grid.valid[:-1, 1:]
-        & grid.valid[1:, :-1]
-        & grid.valid[1:, 1:]
+        support[:-1, :-1]
+        & support[:-1, 1:]
+        & support[1:, :-1]
+        & support[1:, 1:]
     )
     score = np.zeros(normal.shape[:2], dtype=np.float32)
 
@@ -615,13 +722,21 @@ def detect_faces(grid: Grid, cfg: ExtractConfig) -> dict:
     strong_each = slopes >= high
     persistence = weak_each.sum(axis=0).astype(np.uint8)
 
+    analysis_valid = (
+        grid.analysis_valid
+        if grid.analysis_valid is not None
+        else grid.valid
+    )
     weak = (
         persistence
         >= min(
             cfg.min_scale_persistence,
             len(cfg.smooth_sigmas_cells),
         )
-    ) & grid.valid
+    ) & analysis_valid
+
+    # Interpolação pode ligar uma face através de uma pequena falha de Ground,
+    # mas nunca cria sozinha uma nova face: as seeds fortes exigem suporte real.
     strong = strong_each.any(axis=0) & grid.valid
 
     face = ndimage.binary_propagation(
@@ -638,7 +753,7 @@ def detect_faces(grid: Grid, cfg: ExtractConfig) -> dict:
                 face,
                 structure=structure,
             )
-        face &= grid.valid
+        face &= analysis_valid
 
     min_cells = max(
         3,
@@ -838,10 +953,24 @@ def _face_boundary_pair(
     inside_down = component[rd, cd]
     inside_up = component[ru, cu]
 
+    # Rejeita os lados da face. CRISTA/PÉ devem ser aproximadamente
+    # transversais ao gradiente local; os lados são aproximadamente paralelos.
+    component_f = component.astype(np.float32)
+    mask_gx = ndimage.sobel(component_f, axis=1, mode="nearest")[rows, cols]
+    mask_gy = ndimage.sobel(component_f, axis=0, mode="nearest")[rows, cols]
+    mask_norm = np.hypot(mask_gx, mask_gy)
+    tangent_x = np.zeros_like(mask_gx, dtype=np.float64)
+    tangent_y = np.zeros_like(mask_gy, dtype=np.float64)
+    tangent_ok = mask_norm > 1e-9
+    tangent_x[tangent_ok] = -mask_gy[tangent_ok] / mask_norm[tangent_ok]
+    tangent_y[tangent_ok] = mask_gx[tangent_ok] / mask_norm[tangent_ok]
+    tangent_downhill_dot = np.abs(tangent_x * dx + tangent_y * dy)
+    transverse_boundary = tangent_ok & (tangent_downhill_dot <= 0.58)
+
     crest_mask = np.zeros_like(component, dtype=bool)
     toe_mask = np.zeros_like(component, dtype=bool)
-    crest_ids = inside_down & ~inside_up
-    toe_ids = inside_up & ~inside_down
+    crest_ids = inside_down & ~inside_up & transverse_boundary
+    toe_ids = inside_up & ~inside_down & transverse_boundary
     crest_mask[rows[crest_ids], cols[crest_ids]] = True
     toe_mask[rows[toe_ids], cols[toe_ids]] = True
 
@@ -910,6 +1039,63 @@ def _sample_tin_score(field: np.ndarray, grid: Grid, x: float, y: float) -> floa
     return float(field[row, col])
 
 
+def _remove_v_spikes(xy: np.ndarray, max_turn_deg: float = 65.0) -> np.ndarray:
+    """Remove picos tipo V quando a direção antes/depois continua quase igual.
+
+    Um canto real é preservado se as pernas externas também mudarem de direção.
+    Um spike é substituído pela interpolação entre os vizinhos.
+    """
+    pts = np.asarray(xy, dtype=np.float64).copy()
+    if len(pts) < 5:
+        return pts
+
+    for _ in range(3):
+        changed = False
+        for i in range(2, len(pts) - 2):
+            a = pts[i] - pts[i - 1]
+            b = pts[i + 1] - pts[i]
+            na = float(np.linalg.norm(a))
+            nb = float(np.linalg.norm(b))
+            if na <= 1e-9 or nb <= 1e-9:
+                continue
+
+            turn = math.degrees(
+                math.acos(float(np.clip(np.dot(a, b) / (na * nb), -1.0, 1.0)))
+            )
+            if turn < max_turn_deg:
+                continue
+
+            before = pts[i - 1] - pts[i - 2]
+            after = pts[i + 2] - pts[i + 1]
+            n_before = float(np.linalg.norm(before))
+            n_after = float(np.linalg.norm(after))
+            if n_before <= 1e-9 or n_after <= 1e-9:
+                continue
+
+            outer_turn = math.degrees(
+                math.acos(
+                    float(
+                        np.clip(
+                            np.dot(before, after) / (n_before * n_after),
+                            -1.0,
+                            1.0,
+                        )
+                    )
+                )
+            )
+
+            # Spike: a linha vinha e continua praticamente na mesma direção,
+            # mas o vértice central fez uma excursão abrupta.
+            if outer_turn <= 28.0:
+                pts[i] = 0.5 * (pts[i - 1] + pts[i + 1])
+                changed = True
+
+        if not changed:
+            break
+
+    return pts
+
+
 def _snap_line_to_tin_break(
     xy: np.ndarray,
     *,
@@ -948,7 +1134,14 @@ def _snap_line_to_tin_break(
     offsets = np.arange(-search_m, search_m + 0.5 * step, step, dtype=np.float64)
     half_probe = max(grid.cell * 1.25, 0.30)
     out = pts.copy()
-    snaps = []
+    raw_offsets: list[float] = []
+    local_directions: list[np.ndarray] = []
+
+    support_distance = (
+        np.asarray(grid.support_distance_m, dtype=np.float32)
+        if grid.support_distance_m is not None
+        else np.zeros_like(slope, dtype=np.float32)
+    )
 
     for i, p in enumerate(pts):
         local_gx = _sample_node_field(gx_field, grid, float(p[0]), float(p[1]))
@@ -968,6 +1161,8 @@ def _snap_line_to_tin_break(
             qy = float(p[1] + direction[1] * offset)
 
             edge_score = _sample_tin_score(tin_score, grid, qx, qy)
+            support_d = _sample_node_field(support_distance, grid, qx, qy)
+            support_factor = math.exp(-support_d / max(1.5, grid.cell))
             before = _sample_node_field(
                 slope,
                 grid,
@@ -989,21 +1184,50 @@ def _snap_line_to_tin_break(
 
             # O ângulo entre normais domina; o sinal de declive ajuda a não
             # trocar crista e pé quando as duas quebras estão próximas.
-            score = edge_score + 0.65 * max(signed_change, 0.0)
-            # Penalização pequena para impedir saltos desnecessários.
+            score = edge_score * (0.55 + 0.45 * support_factor)
+            score += 0.65 * max(signed_change, 0.0)
+            # Penalizações de distância e continuidade evitam trocar de uma
+            # quebra para outra vizinha e formar picos em V.
             score -= 1.5 * abs(offset) / max(search_m, 1e-6)
+            if raw_offsets:
+                score -= 6.0 * abs(offset - raw_offsets[-1])
 
             if score > best_score:
                 best_score = score
                 best_offset = float(offset)
 
-        out[i, 0] = p[0] + direction[0] * best_offset
-        out[i, 1] = p[1] + direction[1] * best_offset
-        snaps.append(abs(best_offset))
+        raw_offsets.append(best_offset)
+        local_directions.append(direction.copy())
 
+    offsets_arr = np.asarray(raw_offsets, dtype=np.float64)
+    if len(offsets_arr) >= 5:
+        offsets_arr = ndimage.median_filter(offsets_arr, size=5, mode="nearest")
+
+    # Limita variações bruscas do offset transversal em vértices consecutivos.
+    max_delta = max(grid.cell * 1.5, 0.45)
+    for i in range(1, len(offsets_arr)):
+        offsets_arr[i] = np.clip(
+            offsets_arr[i],
+            offsets_arr[i - 1] - max_delta,
+            offsets_arr[i - 1] + max_delta,
+        )
+    for i in range(len(offsets_arr) - 2, -1, -1):
+        offsets_arr[i] = np.clip(
+            offsets_arr[i],
+            offsets_arr[i + 1] - max_delta,
+            offsets_arr[i + 1] + max_delta,
+        )
+
+    for i, (p, direction, offset) in enumerate(
+        zip(pts, local_directions, offsets_arr)
+    ):
+        out[i, 0] = p[0] + direction[0] * float(offset)
+        out[i, 1] = p[1] + direction[1] * float(offset)
+
+    snaps = np.abs(offsets_arr)
     return out, {
-        "mean_snap_m": float(np.mean(snaps)) if snaps else 0.0,
-        "max_snap_m": float(np.max(snaps)) if snaps else 0.0,
+        "mean_snap_m": float(np.mean(snaps)) if len(snaps) else 0.0,
+        "max_snap_m": float(np.max(snaps)) if len(snaps) else 0.0,
     }
 
 
@@ -1161,6 +1385,18 @@ def _component_lines(
             toe_xy,
             cfg.line_smooth_window,
         )
+
+        crest_xy = _resample_xy_spacing(
+            crest_xy,
+            cfg.vertex_spacing_m,
+        )
+        toe_xy = _resample_xy_spacing(
+            toe_xy,
+            cfg.vertex_spacing_m,
+        )
+
+        crest_xy = _remove_v_spikes(crest_xy)
+        toe_xy = _remove_v_spikes(toe_xy)
 
         crest_xy = _resample_xy_spacing(
             crest_xy,
@@ -1537,6 +1773,19 @@ def _save_outputs_and_report(
         ),
         "estimated_spacing_m": float(spacing),
         "cell_size_m": float(grid.cell),
+        "ground_gap_fill_m": float(cfg.max_ground_gap_m),
+        "ground_real_cells": int(np.count_nonzero(grid.valid)),
+        "ground_analysis_cells": int(
+            np.count_nonzero(
+                grid.analysis_valid if grid.analysis_valid is not None else grid.valid
+            )
+        ),
+        "ground_reconstructed_cells": int(
+            np.count_nonzero(
+                (grid.analysis_valid if grid.analysis_valid is not None else grid.valid)
+                & ~grid.valid
+            )
+        ),
         "cell_adjusted_for_memory": bool(cell_adjusted_for_memory),
         "grid_rows": int(grid.z.shape[0]),
         "grid_cols": int(grid.z.shape[1]),
@@ -1649,7 +1898,7 @@ def extract(
     if progress is not None:
         progress(25.0, "A rasterizar nuvem…")
 
-    grid = rasterize_mean(xyz, cell)
+    grid = rasterize_mean(xyz, cell, cfg)
     det = detect_faces(grid, cfg)
     approx = _component_lines(grid, det, cfg)
     lines = refine_lines(approx, xyz, cell, cfg)
