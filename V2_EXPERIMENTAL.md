@@ -1,4 +1,4 @@
-# Talude Studio V2 Experimental — RAW TIN + MST
+# Talude Studio V2 Experimental — AUTO GLOBAL + RAW TIN + MST
 
 > Branch: `v2-experimental-raw-tin-mst`
 >
@@ -7,9 +7,17 @@
 
 ## Regra principal
 
-A baseline 1.1.7 não é alterada. O AUTO global continua a usar o motor que
-produziu ~563 pares CRISTA/PÉ na cloud real. O V2 entra apenas no fluxo
-**Picar face automática**, selecionável na UI.
+A baseline 1.1.7 continua **READ ONLY** e não é alterada.
+
+Na **Exp2 / Segunda Entrega**, o AUTO global V2 passa a existir como fluxo
+separado e selecionável na UI. A descoberta global continua a reutilizar o
+detetor comprovado 1.1.7 para encontrar as faces; depois cada face é refinada
+automaticamente pelo RAW TIN V2.
+
+Se o RAW TIN V2 falhar ou divergir de forma insegura numa face, essa face
+mantém o par da baseline através de `BASELINE_1_1_7_FALLBACK`. Assim a
+experimentação V2 não deve reduzir silenciosamente a cobertura já obtida pela
+baseline.
 
 ## Comparação na mesma aplicação
 
@@ -65,10 +73,10 @@ A ∩ B
 XYZ final
 ```
 
-## Objetivo do Exp1
+## Objetivo histórico do Exp1
 
-Ainda não substituir o AUTO global. Primeiro provar numa face conhecida que o
-V2 consegue simultaneamente:
+A primeira experiência foi deliberadamente limitada à face clicada para provar
+que o V2 conseguia simultaneamente:
 
 1. ficar mais próximo da aresta física do que a linha raster;
 2. eliminar spikes em V;
@@ -107,8 +115,9 @@ Os eventos ficam em `PROJECT_DEBUG.log` como:
 7. Picar aproximadamente o mesmo local.
 8. Comparar amarelo/ciano (baseline) com verde/magenta (V2).
 
-O AUTO global não deve ser usado para julgar o V2 Exp1: ele continua
-deliberadamente congelado na baseline.
+Este procedimento continua útil para comparação local do **Exp1**. Para testar
+a **Exp2**, selecionar **V2 RAW TIN** e executar **DETETAR CRISTA + PÉ**, que
+agora chama o AUTO GLOBAL V2.
 
 ## Build local
 
@@ -130,7 +139,7 @@ Depois usar o Local Build Manager normalmente.
 
 ## Critério de promoção
 
-Nada desta branch deve substituir a baseline enquanto não passar:
+Nada desta branch deve substituir ou modificar a baseline enquanto não passar:
 
 - teste sintético;
 - teste visual em faces limpas;
@@ -157,3 +166,50 @@ Ver:
 
 - `docs/V2_ARCHITECTURE.md`
 - `docs/V2_FIRST_DELIVERY.md`
+
+
+## Segunda entrega — AUTO GLOBAL V2 — 2026-09-27
+
+Implementada sem alterar a baseline:
+
+```text
+GLOBAL DETECTOR 1.1.7
+        ↓
+FACE CANDIDATES
+        ↓
+ROI RAW GROUND AUTOMÁTICA
+        ↓
+RAW TIN V2 POR FACE
+        ↓
+CREST / TOE
+        ↓
+3D REFINEMENT
+        ↓
+REGRESSION GUARD
+        ↓
+V2 RESULT ou BASELINE FALLBACK
+        ↓
+RESULTADO GLOBAL
+```
+
+Inclui:
+
+- processamento automático de todas as faces encontradas;
+- seed e ROI calculadas automaticamente, sem cliques;
+- recolha RAW Ground por streaming em LAS/LAZ;
+- índice espacial para evitar testar todas as faces contra todos os pontos;
+- reservoir limitado por face sem destruir precisão XYZ;
+- RAW TIN + MST + refinamento local por face;
+- preservação da geometria baseline quando a V2 falha;
+- `reason_counts` e debug por face;
+- progresso real;
+- cancelamento cooperativo;
+- export global DXF/GeoJSON/CSV;
+- testes de integração e testes sintéticos.
+
+Documentação detalhada:
+
+- `docs/V2_SECOND_DELIVERY.md`
+
+A terceira entrega será o **TILED ENGINE + HALO + stitching**. Não está
+misturada nesta Exp2.
