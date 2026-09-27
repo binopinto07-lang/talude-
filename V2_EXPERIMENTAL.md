@@ -1,6 +1,6 @@
 # Talude Studio V2 Experimental — RAW TIN + MST
 
-> Branch: `v2-experimental-raw-tin-mst`
+> Branch: `v2`
 >
 > Baseline protegida: commit `bfc21944eb337b57f2d8c31905cb7a0e85b3ed7f`
 > (Talude Studio 1.1.7-refine).
@@ -112,17 +112,17 @@ deliberadamente congelado na baseline.
 
 ## Build local
 
-O ficheiro `localbuild/talude_v1.json` desta branch está fixado em:
+O ficheiro `localbuild/talude_v1.json` desta branch usa a branch curta:
 
 ```text
-v2-experimental-raw-tin-mst
+v2
 ```
 
 Antes do primeiro build, confirmar no repositório local:
 
 ```powershell
 git fetch origin
-git switch v2-experimental-raw-tin-mst
+git switch v2
 git pull
 ```
 
