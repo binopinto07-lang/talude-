@@ -418,17 +418,28 @@ def export_gpkg(
             );
             """
         )
-        cur.execute(
-            "INSERT INTO gpkg_spatial_ref_sys VALUES (?,?,?,?,?,?)",
-            (
-                "Undefined Cartesian" if srs_id == 0 else f"CRS {srs_id}",
-                srs_id,
-                organization,
-                org_id,
-                definition,
-                "Talude Studio export",
-            ),
-        )
+        # Mandatory GeoPackage SRS rows plus the project CRS when known.
+        mandatory_srs = [
+            ("Undefined Cartesian", -1, "NONE", -1, "undefined", "undefined Cartesian"),
+            ("Undefined Geographic", 0, "NONE", 0, "undefined", "undefined geographic"),
+        ]
+        for row in mandatory_srs:
+            cur.execute(
+                "INSERT INTO gpkg_spatial_ref_sys VALUES (?,?,?,?,?,?)",
+                row,
+            )
+        if srs_id not in {-1, 0}:
+            cur.execute(
+                "INSERT INTO gpkg_spatial_ref_sys VALUES (?,?,?,?,?,?)",
+                (
+                    f"CRS {srs_id}",
+                    srs_id,
+                    organization,
+                    org_id,
+                    definition,
+                    "Talude Studio export",
+                ),
+            )
 
         grouped: dict[str, list[dict[str, Any]]] = {}
         for feature in features:
