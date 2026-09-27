@@ -130,11 +130,14 @@
     const coords = (feature.geometry || {}).coordinates || [];
     if (!coords.length) return;
 
+    // Keep Float32 positions local to the first vertex, exactly like the
+    // line renderer, otherwise UTM-scale coordinates lose centimetric detail.
+    const origin = coords[0];
     const positions = new Float32Array(coords.length * 3);
     for (let i = 0; i < coords.length; i++) {
-      positions[3 * i] = Number(coords[i][0]);
-      positions[3 * i + 1] = Number(coords[i][1]);
-      positions[3 * i + 2] = Number(coords[i][2]);
+      positions[3 * i] = Number(coords[i][0]) - Number(origin[0]);
+      positions[3 * i + 1] = Number(coords[i][1]) - Number(origin[1]);
+      positions[3 * i + 2] = Number(coords[i][2]) - Number(origin[2]);
     }
 
     const geometry = new THREE.BufferGeometry();
@@ -149,6 +152,7 @@
       opacity: 0.95,
     });
     const object = new THREE.Points(geometry, material);
+    object.position.set(Number(origin[0]), Number(origin[1]), Number(origin[2]));
     object.renderOrder = 10050;
     object.frustumCulled = false;
     s.addFeatureOverlayObject(object);
