@@ -14,6 +14,10 @@ from .converter import jobs
 from .project_store import ProjectStore
 
 
+class AutoExtractCancelled(RuntimeError):
+    pass
+
+
 def _stamp() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -119,6 +123,8 @@ def _worker(
         jobs.update(job_id, progress=18, message="A calcular grelha, declive e persistência multiescala…")
 
         def _progress(value: float, message: str) -> None:
+            if jobs.is_cancel_requested(job_id):
+                raise AutoExtractCancelled("Extração automática cancelada pelo utilizador.")
             jobs.update(
                 job_id,
                 status="running",
@@ -201,6 +207,29 @@ def _worker(
                 f'{report.get("toe_lines", 0)} pés'
             ),
             result=result,
+        )
+
+    except AutoExtractCancelled:
+        try:
+            store.debug_event(
+                project_id,
+                "talude.auto_cancelled",
+                {
+                    "job_id": job_id,
+                    "cloud_id": cloud_id,
+                },
+                source="talude-engine",
+                level="WARNING",
+            )
+        except Exception:
+            pass
+
+        jobs.update(
+            job_id,
+            status="cancelled",
+            progress=100,
+            message="Extração automática cancelada.",
+            error=None,
         )
 
     except Exception as exc:
