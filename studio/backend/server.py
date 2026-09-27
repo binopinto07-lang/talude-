@@ -14,6 +14,7 @@ from .converter import jobs, start_import
 from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
+from .vector_documents import active_document_info, read_active_document
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
@@ -150,6 +151,26 @@ def save_state(project_id: str, req: SaveStateRequest) -> dict[str, bool]:
     try:
         store.save_state(project_id, req.state)
         return {"ok": True}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/vector-document")
+def get_vector_document(project_id: str) -> dict[str, Any]:
+    try:
+        ref = store.get(project_id)
+        return read_active_document(ref.path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/vector-document/summary")
+def get_vector_document_summary(project_id: str) -> dict[str, Any]:
+    try:
+        ref = store.get(project_id)
+        return active_document_info(ref.path)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
