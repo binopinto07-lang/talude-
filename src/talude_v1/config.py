@@ -23,6 +23,7 @@ class ExtractConfig:
     line_smooth_window: int = 11
     vertex_spacing_m: float = 1.0
     tin_snap_search_m: float = 1.25
+    max_ground_gap_m: float = 1.50
     refine_radius_factor: float = 2.5
     refine_min_points: int = 8
     use_ground_class: bool = True
