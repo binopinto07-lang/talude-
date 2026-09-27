@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.spatial import Delaunay, QhullError, cKDTree
 
+from .reasons import V2DetectionError, V2Reason
+
 
 @dataclass(slots=True)
 class V2Config:
@@ -30,10 +32,16 @@ class V2Config:
 def _finite_points(points_xyz: np.ndarray) -> np.ndarray:
     pts = np.asarray(points_xyz, dtype=np.float64)
     if pts.ndim != 2 or pts.shape[1] != 3:
-        raise ValueError("V2 esperava pontos N x 3.")
+        raise V2DetectionError(
+            V2Reason.NO_GROUND,
+            "V2 esperava pontos Ground em matriz N x 3.",
+        )
     pts = pts[np.all(np.isfinite(pts), axis=1)]
     if len(pts) < 100:
-        raise ValueError("V2 recebeu poucos pontos para formar uma TIN local.")
+        raise V2DetectionError(
+            V2Reason.LOW_GROUND_SUPPORT,
+            "V2 recebeu poucos pontos para formar uma TIN local.",
+        )
     return pts
 
 
@@ -140,13 +148,19 @@ def _seed_triangle(
     )
     ids = np.flatnonzero(eligible)
     if len(ids) == 0:
-        raise ValueError("V2 não encontrou triângulos inclinados junto ao clique.")
+        raise V2DetectionError(
+            V2Reason.NO_FACE,
+            "V2 não encontrou triângulos inclinados junto ao clique.",
+        )
 
     # Strongly prefer the nearest inclined triangle, but allow a tiny relief bias.
     cost = dist[ids] - 0.008 * slope[ids]
     best = int(ids[int(np.argmin(cost))])
     if float(dist[best]) > max(5.0, cfg.graph_gap_m * 3.0):
-        raise ValueError("O clique ficou demasiado longe de uma face TIN inclinada.")
+        raise V2DetectionError(
+            V2Reason.NO_FACE,
+            "O clique ficou demasiado longe de uma face TIN inclinada.",
+        )
     return best
 
 
@@ -184,8 +198,73 @@ def _grow_face(
             queue.append(int(nxt))
 
     if int(selected.sum()) < 3:
-        raise ValueError("V2 encontrou uma face TIN demasiado pequena.")
+        raise V2DetectionError(
+            V2Reason.FACE_TOO_SMALL,
+            "V2 encontrou uma face TIN demasiado pequena.",
+        )
     return selected
+
+
+def _local_face_coherence(
+    tri: Delaunay,
+    geom: dict[str, np.ndarray],
+    selected: np.ndarray,
+) -> dict[str, float]:
+    """Measure coherence locally, never against one global mean direction.
+
+    Curved and S-shaped taludes are valid when neighbouring TIN triangles remain
+    locally compatible. Opposing directions at distant ends therefore do not
+    cancel each other as they did in the legacy global-vector metric.
+    """
+    ids = np.flatnonzero(selected)
+    if len(ids) < 2:
+        return {
+            "local_normal_coherence": 0.0,
+            "local_direction_median_deg": 180.0,
+            "local_direction_p95_deg": 180.0,
+            "local_pairs": 0,
+        }
+
+    normals = geom["normal"]
+    downhill = geom["downhill"]
+    angles: list[float] = []
+    normal_dots: list[float] = []
+
+    for current in ids:
+        for nxt in tri.neighbors[int(current)]:
+            if nxt < 0 or not selected[int(nxt)] or int(nxt) <= int(current):
+                continue
+
+            dot_n = float(np.clip(np.dot(normals[current], normals[nxt]), -1.0, 1.0))
+            normal_dots.append(max(dot_n, 0.0))
+
+            a = downhill[current]
+            b = downhill[nxt]
+            na = float(np.linalg.norm(a))
+            nb = float(np.linalg.norm(b))
+            if na <= 1e-9 or nb <= 1e-9:
+                continue
+            dot_d = float(np.clip(np.dot(a / na, b / nb), -1.0, 1.0))
+            angles.append(math.degrees(math.acos(dot_d)))
+
+    if not normal_dots:
+        return {
+            "local_normal_coherence": 0.0,
+            "local_direction_median_deg": 180.0,
+            "local_direction_p95_deg": 180.0,
+            "local_pairs": 0,
+        }
+
+    return {
+        "local_normal_coherence": float(np.mean(normal_dots)),
+        "local_direction_median_deg": (
+            float(np.median(angles)) if angles else 0.0
+        ),
+        "local_direction_p95_deg": (
+            float(np.percentile(angles, 95.0)) if angles else 0.0
+        ),
+        "local_pairs": int(len(normal_dots)),
+    }
 
 
 def _edge_incidence(simplices: np.ndarray) -> dict[tuple[int, int], list[tuple[int, int]]]:
@@ -426,13 +505,24 @@ def _polyline_from_candidates(
     points: np.ndarray,
     edges: list[tuple[int, int, float]],
     cfg: V2Config,
-) -> np.ndarray:
-    edges = _connect_short_gaps(points, edges, cfg.graph_gap_m)
-    tree = _kruskal_tree(points, edges)
+) -> tuple[np.ndarray, dict[str, int]]:
+    original_count = len(edges)
+    connected = _connect_short_gaps(points, edges, cfg.graph_gap_m)
+    gap_links = max(0, len(connected) - original_count)
+    tree = _kruskal_tree(points, connected)
     ids = _longest_tree_path(points, tree)
     if len(ids) < 2:
-        raise ValueError("V2 não conseguiu ordenar o boundary num caminho contínuo.")
-    return points[ids].copy()
+        raise V2DetectionError(
+            V2Reason.LOW_CONTINUITY,
+            "V2 não conseguiu ordenar o boundary num caminho contínuo.",
+        )
+    return points[ids].copy(), {
+        "candidate_edges": int(original_count),
+        "graph_edges": int(len(connected)),
+        "gap_links": int(gap_links),
+        "mst_edges": int(len(tree)),
+        "path_vertices": int(len(ids)),
+    }
 
 
 def _resample_polyline(xyz: np.ndarray, spacing: float) -> np.ndarray:
@@ -536,7 +626,14 @@ def _refine_by_surface_intersection(
 ) -> tuple[np.ndarray, dict]:
     stations = _resample_polyline(preliminary, cfg.station_spacing_m)
     if len(stations) < 2:
-        return stations, {"refined": 0, "fallback": len(stations)}
+        return stations, {
+            "refined": 0,
+            "fallback": len(stations),
+            "plane_rmse_median": None,
+            "mean_shift_m": None,
+            "p95_shift_m": None,
+            "max_shift_m": None,
+        }
 
     tree = cKDTree(raw_points[:, :2])
     downhill = _nearest_face_downhill(stations, geom, selected)
@@ -544,6 +641,7 @@ def _refine_by_surface_intersection(
     refined = 0
     fallback = 0
     rmse_values: list[float] = []
+    shifts: list[float] = []
 
     for i, station in enumerate(stations):
         if i == 0:
@@ -622,6 +720,7 @@ def _refine_by_surface_intersection(
 
         out[i] = refined_point
         refined += 1
+        shifts.append(float(shift))
         rmse_values.extend((fit_a[1], fit_b[1]))
 
     # Fill fallback Z from nearest raw point so every output remains true 3D.
@@ -636,13 +735,26 @@ def _refine_by_surface_intersection(
         "plane_rmse_median": (
             float(np.median(rmse_values)) if rmse_values else None
         ),
+        "mean_shift_m": float(np.mean(shifts)) if shifts else None,
+        "p95_shift_m": float(np.percentile(shifts, 95.0)) if shifts else None,
+        "max_shift_m": float(np.max(shifts)) if shifts else None,
     }
 
 
+def _polyline_lengths(xyz: np.ndarray) -> tuple[float, float]:
+    """Accumulated 2D/3D polyline lengths, never endpoint distance."""
+    pts = np.asarray(xyz, dtype=np.float64)
+    if len(pts) < 2:
+        return 0.0, 0.0
+    delta = np.diff(pts, axis=0)
+    length_2d = float(np.linalg.norm(delta[:, :2], axis=1).sum())
+    length_3d = float(np.linalg.norm(delta, axis=1).sum())
+    return length_2d, length_3d
+
+
 def _length_xy(xyz: np.ndarray) -> float:
-    if len(xyz) < 2:
-        return 0.0
-    return float(np.linalg.norm(np.diff(xyz[:, :2], axis=0), axis=1).sum())
+    # Compatibility alias used by existing callers.
+    return _polyline_lengths(xyz)[0]
 
 
 def extract_face_raw_tin(
@@ -656,7 +768,7 @@ def extract_face_raw_tin(
     raw = _finite_points(np.asarray(points_xyz, dtype=np.float64))
     seed = np.asarray(seed_xyz, dtype=np.float64)
     if seed.shape != (3,):
-        raise ValueError("Seed XYZ inválido.")
+        raise V2DetectionError(V2Reason.INTERNAL_ERROR, "Seed XYZ inválido.")
 
     tin_points, effective_spacing = _xy_voxel_median(
         raw,
@@ -664,16 +776,23 @@ def extract_face_raw_tin(
         cfg.max_tin_points,
     )
     if len(tin_points) < 30:
-        raise ValueError("V2 ficou com poucos pontos depois da redução TIN.")
+        raise V2DetectionError(
+            V2Reason.LOW_GROUND_SUPPORT,
+            "V2 ficou com poucos pontos depois da redução TIN.",
+        )
 
     try:
         tri = Delaunay(tin_points[:, :2], qhull_options="Qbb Qc Qz Q12")
     except QhullError as exc:
-        raise ValueError(f"Falha Delaunay V2: {exc}") from exc
+        raise V2DetectionError(
+            V2Reason.INVALID_TIN,
+            f"Falha Delaunay V2: {exc}",
+        ) from exc
 
     geom = _triangle_geometry(tin_points, tri.simplices)
     seed_id = _seed_triangle(geom, seed, cfg)
     selected = _grow_face(tri, geom, seed_id, cfg)
+    local_coherence = _local_face_coherence(tri, geom, selected)
     candidates = _boundary_candidates(
         tin_points,
         tri,
@@ -683,10 +802,19 @@ def extract_face_raw_tin(
     )
 
     preliminary: dict[str, np.ndarray] = {}
+    topology: dict[str, dict[str, int]] = {}
     for kind in ("CREST", "TOE"):
         if len(candidates[kind]) < 2:
-            raise ValueError(f"V2 não encontrou boundary {kind} suficiente.")
-        preliminary[kind] = _polyline_from_candidates(
+            reason = (
+                V2Reason.CREST_NOT_FOUND
+                if kind == "CREST"
+                else V2Reason.TOE_NOT_FOUND
+            )
+            raise V2DetectionError(
+                reason,
+                f"V2 não encontrou boundary {kind} suficiente.",
+            )
+        preliminary[kind], topology[kind] = _polyline_from_candidates(
             tin_points,
             candidates[kind],
             cfg,
@@ -719,24 +847,40 @@ def extract_face_raw_tin(
     refine_ratio = float(np.clip(refined_total / station_total, 0.0, 1.0))
 
     def payload(kind: str, xyz: np.ndarray, meta: dict) -> dict:
+        length_2d, length_3d = _polyline_lengths(xyz)
+        top = topology[kind]
+        quality_score = float(
+            np.clip(
+                0.40 * local_coherence["local_normal_coherence"]
+                + 0.35 * refine_ratio
+                + 0.25 * min(len(xyz) / 20.0, 1.0),
+                0.0,
+                0.98,
+            )
+        )
         return {
             "type": kind,
             "profile": "ridge" if kind == "CREST" else "toe",
             "vertices": xyz.tolist(),
-            "length_m": _length_xy(xyz),
-            "confidence": float(
-                np.clip(
-                    0.55
-                    + 0.25 * refine_ratio
-                    + 0.20 * min(len(xyz) / 20.0, 1.0),
-                    0.0,
-                    0.98,
-                )
-            ),
+            "length_m": length_2d,
+            "length_2d_m": length_2d,
+            "length_3d_m": length_3d,
+            "quality_score": quality_score,
+            # Kept for current viewer compatibility; semantically this is now
+            # a quality score rather than a calibrated probability.
+            "confidence": quality_score,
             "station_spacing_m": float(cfg.station_spacing_m),
             "refined_stations": int(meta["refined"]),
             "fallback_stations": int(meta["fallback"]),
             "plane_rmse_median": meta["plane_rmse_median"],
+            "mean_shift_m": meta["mean_shift_m"],
+            "p95_shift_m": meta["p95_shift_m"],
+            "max_shift_m": meta["max_shift_m"],
+            "candidate_edges": top["candidate_edges"],
+            "graph_edges": top["graph_edges"],
+            "gap_links": top["gap_links"],
+            "mst_edges": top["mst_edges"],
+            "path_vertices": top["path_vertices"],
         }
 
     crest_payload = payload("CREST", crest, crest_refine)
@@ -750,8 +894,13 @@ def extract_face_raw_tin(
         "lines": [crest_payload, toe_payload],
         "crest": crest_payload,
         "toe": toe_payload,
+        "status": "SUCCESS",
+        "reason": V2Reason.SUCCESS.value,
+        "quality_score": float(
+            0.5 * crest_payload["quality_score"] + 0.5 * toe_payload["quality_score"]
+        ),
         "confidence": float(
-            0.5 * crest_payload["confidence"] + 0.5 * toe_payload["confidence"]
+            0.5 * crest_payload["quality_score"] + 0.5 * toe_payload["quality_score"]
         ),
         "raw_points": int(len(raw)),
         "tin_points": int(len(tin_points)),
@@ -763,6 +912,39 @@ def extract_face_raw_tin(
         "toe_candidate_edges": int(len(candidates["TOE"])),
         "station_spacing_m": float(cfg.station_spacing_m),
         "refine_ratio": refine_ratio,
+        **local_coherence,
+        "metrics": {
+            "raw_points": int(len(raw)),
+            "tin_points": int(len(tin_points)),
+            "tin_triangles": int(len(tri.simplices)),
+            "face_triangles": int(selected.sum()),
+            "face_slope_median_deg": face_slope,
+            "local_normal_coherence": local_coherence["local_normal_coherence"],
+            "local_direction_median_deg": local_coherence["local_direction_median_deg"],
+            "local_direction_p95_deg": local_coherence["local_direction_p95_deg"],
+            "crest_candidate_edges": int(len(candidates["CREST"])),
+            "toe_candidate_edges": int(len(candidates["TOE"])),
+            "crest_mst_edges": topology["CREST"]["mst_edges"],
+            "toe_mst_edges": topology["TOE"]["mst_edges"],
+            "crest_gap_links": topology["CREST"]["gap_links"],
+            "toe_gap_links": topology["TOE"]["gap_links"],
+            "crest_length_2d_m": crest_payload["length_2d_m"],
+            "crest_length_3d_m": crest_payload["length_3d_m"],
+            "toe_length_2d_m": toe_payload["length_2d_m"],
+            "toe_length_3d_m": toe_payload["length_3d_m"],
+            "crest_refined_stations": crest_payload["refined_stations"],
+            "toe_refined_stations": toe_payload["refined_stations"],
+            "crest_fallback_stations": crest_payload["fallback_stations"],
+            "toe_fallback_stations": toe_payload["fallback_stations"],
+            "crest_plane_rmse_median": crest_payload["plane_rmse_median"],
+            "toe_plane_rmse_median": toe_payload["plane_rmse_median"],
+            "crest_mean_shift_m": crest_payload["mean_shift_m"],
+            "toe_mean_shift_m": toe_payload["mean_shift_m"],
+            "crest_p95_shift_m": crest_payload["p95_shift_m"],
+            "toe_p95_shift_m": toe_payload["p95_shift_m"],
+            "crest_max_shift_m": crest_payload["max_shift_m"],
+            "toe_max_shift_m": toe_payload["max_shift_m"],
+        },
         "pipeline": (
             "RAW -> XY_MEDIAN -> DELAUNAY -> REGION_GROW -> "
             "BOUNDARY -> KNN_GAPS -> KRUSKAL_MST -> "
