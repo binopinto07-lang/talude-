@@ -13,9 +13,10 @@ from .converter import jobs, start_import
 from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
+from talude_v2 import V2Config, extract_face_raw_tin
 
 
-APP_VERSION = "1.1.7-refine"
+APP_VERSION = "2.0.0-exp1-raw-tin-mst"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -59,6 +60,16 @@ class TerrainFaceRequest(BaseModel):
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
     line_smooth_window: int = Field(default=11, ge=3, le=51)
+
+
+class V2TerrainFaceRequest(TerrainFaceRequest):
+    tin_spacing_m: float = Field(default=0.25, ge=0.08, le=2.0)
+    max_tin_points: int = Field(default=45000, ge=2000, le=120000)
+    max_triangle_edge_m: float = Field(default=2.25, ge=0.25, le=10.0)
+    graph_gap_m: float = Field(default=1.50, ge=0.0, le=10.0)
+    station_spacing_m: float = Field(default=1.00, ge=0.20, le=5.0)
+    patch_along_m: float = Field(default=2.50, ge=0.50, le=10.0)
+    patch_cross_m: float = Field(default=1.80, ge=0.40, le=10.0)
 
 
 class AutoExtractRequest(BaseModel):
@@ -228,6 +239,108 @@ def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
                     "error": str(exc),
                 },
                 source="feature_engine",
+                level="ERROR",
+            )
+        except Exception:
+            pass
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v2/feature-lines/terrain-face")
+def terrain_face_v2(req: V2TerrainFaceRequest) -> dict[str, Any]:
+    try:
+        import numpy as np
+
+        if len(req.seed) != 3:
+            raise ValueError("Seed XYZ inválido.")
+
+        manifest = store.manifest(req.project_id)
+        if not any(c.get("id") == req.cloud_id for c in manifest.get("clouds", [])):
+            raise ValueError("Nuvem não pertence ao projeto ativo.")
+
+        pts = np.asarray(req.points, dtype=np.float64)
+        if pts.ndim != 2 or pts.shape[1] != 3:
+            raise ValueError("Pontos locais V2 inválidos.")
+
+        selected = req.selected_classes
+        if req.classifications is not None:
+            classes = np.asarray(req.classifications, dtype=np.int16).reshape(-1)
+            if len(classes) != len(pts):
+                raise ValueError("classification não corresponde aos pontos V2.")
+
+            if selected:
+                mask = np.isin(classes, np.asarray(selected, dtype=np.int16))
+                if int(mask.sum()) >= 100:
+                    pts = pts[mask]
+            elif np.any(classes == 2):
+                mask = classes == 2
+                if int(mask.sum()) >= 100:
+                    pts = pts[mask]
+
+        store.debug_event(
+            req.project_id,
+            "v2_raw_tin.backend_started",
+            {
+                "cloud_id": req.cloud_id,
+                "seed": req.seed,
+                "input_points": len(req.points),
+                "filtered_points": int(len(pts)),
+                "selected_classes": selected,
+                "tin_spacing_m": req.tin_spacing_m,
+                "max_tin_points": req.max_tin_points,
+                "station_spacing_m": req.station_spacing_m,
+            },
+            source="v2_raw_tin",
+        )
+
+        cfg = V2Config(
+            target_tin_spacing_m=req.tin_spacing_m,
+            max_tin_points=req.max_tin_points,
+            max_triangle_edge_m=req.max_triangle_edge_m,
+            graph_gap_m=req.graph_gap_m,
+            station_spacing_m=req.station_spacing_m,
+            patch_along_m=req.patch_along_m,
+            patch_cross_m=req.patch_cross_m,
+        )
+        result = extract_face_raw_tin(
+            pts,
+            req.seed,
+            config=cfg,
+        )
+
+        store.debug_event(
+            req.project_id,
+            "v2_raw_tin.backend_completed",
+            {
+                "cloud_id": req.cloud_id,
+                "detector": result.get("detector"),
+                "raw_points": result.get("raw_points"),
+                "tin_points": result.get("tin_points"),
+                "tin_triangles": result.get("tin_triangles"),
+                "face_triangles": result.get("face_triangles"),
+                "crest_candidate_edges": result.get("crest_candidate_edges"),
+                "toe_candidate_edges": result.get("toe_candidate_edges"),
+                "crest_vertices": len((result.get("crest") or {}).get("vertices", [])),
+                "toe_vertices": len((result.get("toe") or {}).get("vertices", [])),
+                "refine_ratio": result.get("refine_ratio"),
+                "face_slope_median_deg": result.get("face_slope_median_deg"),
+            },
+            source="v2_raw_tin",
+        )
+        return result
+    except Exception as exc:
+        try:
+            store.debug_event(
+                req.project_id,
+                "v2_raw_tin.backend_failed",
+                {
+                    "cloud_id": req.cloud_id,
+                    "seed": req.seed,
+                    "input_points": len(req.points),
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+                source="v2_raw_tin",
                 level="ERROR",
             )
         except Exception:
