@@ -161,10 +161,12 @@ def self_test() -> int:
         checks.append(("BREAKLINE_ENGINE_V1", False, repr(exc)))
 
     try:
-        from talude_v2 import extract_face_raw_tin  # noqa: F401
+        from talude_v2 import extract_face_raw_tin, run_auto_global_v2  # noqa: F401
         checks.append(("BREAKLINE_ENGINE_V2_RAW_TIN_MST", True, "experimental"))
+        checks.append(("AUTO_GLOBAL_V2", True, "second-delivery"))
     except Exception as exc:
         checks.append(("BREAKLINE_ENGINE_V2_RAW_TIN_MST", False, repr(exc)))
+        checks.append(("AUTO_GLOBAL_V2", False, repr(exc)))
 
     try:
         import pyproj  # noqa: F401
