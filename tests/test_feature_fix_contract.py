@@ -191,3 +191,79 @@ def test_tin_break_score_peaks_at_synthetic_crest_and_toe():
     x_breaks = {(int(i) + 1) * cell for i in top}
     assert any(abs(x - 7.0) <= 0.5 for x in x_breaks)
     assert any(abs(x - 10.0) <= 0.5 for x in x_breaks)
+
+
+def test_sparse_ground_reconstruction_bridges_small_internal_gap():
+    from talude_v1.engine import _reconstruct_sparse_ground
+
+    z = np.tile(np.linspace(10.0, 5.0, 30, dtype=np.float32), (20, 1))
+    valid = np.ones_like(z, dtype=bool)
+    valid[:, 12:15] = False
+    z[~valid] = np.nan
+
+    filled, analysis_valid, support = _reconstruct_sparse_ground(
+        z,
+        valid,
+        cell=0.25,
+        max_gap_m=1.50,
+    )
+
+    assert np.all(np.isfinite(filled))
+    assert np.all(analysis_valid[:, 12:15])
+    assert np.max(support[:, 12:15]) <= 1.50
+    # A reconstrução deve continuar monotónica através da falha.
+    row = filled[10]
+    assert np.all(np.diff(row[10:17]) <= 1e-4)
+
+
+def test_sparse_ground_reconstruction_does_not_fill_large_void_for_detection():
+    from talude_v1.engine import _reconstruct_sparse_ground
+
+    z = np.tile(np.linspace(10.0, 5.0, 40, dtype=np.float32), (30, 1))
+    valid = np.ones_like(z, dtype=bool)
+    valid[8:22, 12:28] = False
+    z[~valid] = np.nan
+
+    filled, analysis_valid, support = _reconstruct_sparse_ground(
+        z,
+        valid,
+        cell=0.25,
+        max_gap_m=1.00,
+    )
+
+    assert np.all(np.isfinite(filled))
+    assert not bool(analysis_valid[15, 20])
+    assert support[15, 20] > 1.00
+
+
+def test_v_spike_cleanup_preserves_straight_direction():
+    from talude_v1.engine import _remove_v_spikes
+
+    xy = np.array(
+        [
+            [0.0, 0.0],
+            [1.0, 0.0],
+            [2.0, 0.0],
+            [3.0, 2.0],
+            [4.0, 0.0],
+            [5.0, 0.0],
+            [6.0, 0.0],
+        ],
+        dtype=float,
+    )
+    out = _remove_v_spikes(xy)
+    assert abs(out[3, 1]) < 0.25
+
+
+def test_ground_rebuild_ui_and_api_contract():
+    config = Path("src/talude_v1/config.py").read_text(encoding="utf-8")
+    server = Path("studio/backend/server.py").read_text(encoding="utf-8")
+    html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
+    auto = Path("studio/viewer/talude_auto.js").read_text(encoding="utf-8")
+    viewer = Path("studio/viewer/app.js").read_text(encoding="utf-8")
+
+    assert "max_ground_gap_m: float = 1.50" in config
+    assert "ground_gap_fill_m: float = Field(default=1.50" in server
+    assert 'id="groundGapFill"' in html
+    assert 'ground_gap_fill_m: numberValue("groundGapFill", 1.5)' in auto
+    assert 'byId("groundGapFill") ? byId("groundGapFill").value : 1.5' in viewer
