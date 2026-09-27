@@ -11,7 +11,7 @@ def test_v2_api_is_isolated_from_baseline_and_has_global_auto():
     assert "start_auto_extract_v2" in server
     assert "extract_terrain_face_from_points" in server
     assert "extract_face_raw_tin" in server
-    assert 'APP_VERSION = "2.0.0-exp5-tiled-vector"' in server
+    assert 'APP_VERSION = "2.0.0-exp9-vector-editor"' in server
 
 
 def test_v2_viewer_can_switch_global_and_clicked_engines():
@@ -94,3 +94,28 @@ def test_v2_phases_3_to_5_are_wired_end_to_end():
     assert "active_vector_document" in auto_v2
     assert '@app.get("/api/projects/{project_id}/vector-document")' in server
     assert '@app.get("/api/projects/{project_id}/vector-document/summary")' in server
+
+
+def test_v2_phases_6_to_9_are_wired_end_to_end():
+    vector = Path("src/talude_v2/vector_document.py").read_text(encoding="utf-8")
+    backend = Path("studio/backend/vector_documents.py").read_text(encoding="utf-8")
+    export = Path("studio/backend/vector_export.py").read_text(encoding="utf-8")
+    server = Path("studio/backend/server.py").read_text(encoding="utf-8")
+    html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
+    js = Path("studio/viewer/vector_editor.js").read_text(encoding="utf-8")
+    build = Path("scripts/build_windows.py").read_text(encoding="utf-8")
+
+    assert '"FACES"' in vector and '"DEBUG"' in vector
+    assert "save_active_document" in backend
+    assert "recover_revision" in backend
+    assert "export_shapefiles" in export
+    assert "export_gpkg" in export
+    assert "export_dxf" in export
+    assert "vector-document/export" in server
+    assert "vector-document/recover" in server
+    assert 'id="vectorLayers"' in html
+    assert "vectorMoveVertex" in js
+    assert "vectorInsertVertex" in js
+    assert "vectorDeleteVertex" in js
+    assert "vectorDeleteLine" in js
+    assert "TaludeStudioBuild" in build
