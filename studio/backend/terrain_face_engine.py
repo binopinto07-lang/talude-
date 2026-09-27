@@ -106,6 +106,7 @@ def extract_terrain_face_from_points(
     min_line_length_m: float = 2.0,
     line_smooth_window: int = 11,
     vertex_spacing_m: float = 1.0,
+    ground_gap_fill_m: float = 1.50,
 ) -> dict:
     """Executa o MESMO detector AUTO da 1.1.2, limitado à face clicada.
 
@@ -163,6 +164,7 @@ def extract_terrain_face_from_points(
         min_line_length_m=float(min_line_length_m),
         line_smooth_window=max(3, int(line_smooth_window)),
         vertex_spacing_m=max(0.20, float(vertex_spacing_m)),
+        max_ground_gap_m=max(0.0, float(ground_gap_fill_m)),
         use_ground_class=False,
         classification_filter=None,
     )
@@ -177,7 +179,7 @@ def extract_terrain_face_from_points(
         cell = 0.35
         auto_cell_capped = True
 
-    grid = rasterize_mean(points, cell)
+    grid = rasterize_mean(points, cell, cfg)
     det = detect_faces(grid, cfg)
     approx = _component_lines(
         grid,
@@ -216,6 +218,13 @@ def extract_terrain_face_from_points(
         "estimated_spacing_m": float(spacing),
         "auto_cell_capped": bool(auto_cell_capped),
         "vertex_spacing_m": float(cfg.vertex_spacing_m),
+        "ground_gap_fill_m": float(cfg.max_ground_gap_m),
+        "ground_reconstructed_cells": int(
+            np.count_nonzero(
+                (grid.analysis_valid if grid.analysis_valid is not None else grid.valid)
+                & ~grid.valid
+            )
+        ),
         "sample_density_pts_m2": float(
             len(points) / max(
                 (float(np.ptp(points[:, 0])) * float(np.ptp(points[:, 1]))),
