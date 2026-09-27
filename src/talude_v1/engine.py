@@ -965,7 +965,7 @@ def _face_boundary_pair(
     tangent_x[tangent_ok] = -mask_gy[tangent_ok] / mask_norm[tangent_ok]
     tangent_y[tangent_ok] = mask_gx[tangent_ok] / mask_norm[tangent_ok]
     tangent_downhill_dot = np.abs(tangent_x * dx + tangent_y * dy)
-    transverse_boundary = tangent_ok & (tangent_downhill_dot <= 0.58)
+    transverse_boundary = tangent_ok & (tangent_downhill_dot <= 0.75)
 
     crest_mask = np.zeros_like(component, dtype=bool)
     toe_mask = np.zeros_like(component, dtype=bool)
@@ -976,8 +976,16 @@ def _face_boundary_pair(
 
     # Fecha apenas falhas de um pixel, sempre restringido ao boundary original.
     structure = np.ones((3, 3), dtype=bool)
-    crest_mask = ndimage.binary_closing(crest_mask, structure=structure) & boundary
-    toe_mask = ndimage.binary_closing(toe_mask, structure=structure) & boundary
+    crest_mask = ndimage.binary_closing(
+        crest_mask,
+        structure=structure,
+        iterations=2,
+    ) & boundary
+    toe_mask = ndimage.binary_closing(
+        toe_mask,
+        structure=structure,
+        iterations=2,
+    ) & boundary
 
     crest_rc = _longest_pixel_chain(crest_mask)
     toe_rc = _longest_pixel_chain(toe_mask)
@@ -1745,6 +1753,20 @@ def _save_outputs_and_report(
             cell=grid.cell,
         )
         _write_ascii_grid(debug / "04_tin_break_score.asc", det["tin_break_score"], tin_grid)
+        _write_ascii_grid(
+            debug / "05_ground_analysis_valid.asc",
+            np.asarray(
+                grid.analysis_valid if grid.analysis_valid is not None else grid.valid,
+                dtype=float,
+            ),
+            grid,
+        )
+        if grid.support_distance_m is not None:
+            _write_ascii_grid(
+                debug / "06_ground_support_distance_m.asc",
+                np.asarray(grid.support_distance_m, dtype=float),
+                grid,
+            )
         debug_format = "ASC"
     else:
         np.savez_compressed(
@@ -1753,6 +1775,16 @@ def _save_outputs_and_report(
             persistence=np.asarray(det["persistence"], dtype=np.uint8),
             face_mask=np.asarray(det["mask"], dtype=np.uint8),
             tin_break_score=np.asarray(det["tin_break_score"], dtype=np.float32),
+            ground_analysis_valid=np.asarray(
+                grid.analysis_valid if grid.analysis_valid is not None else grid.valid,
+                dtype=np.uint8,
+            ),
+            ground_support_distance_m=np.asarray(
+                grid.support_distance_m
+                if grid.support_distance_m is not None
+                else np.zeros_like(grid.z),
+                dtype=np.float32,
+            ),
             x0=np.float64(grid.x0),
             y0=np.float64(grid.y0),
             cell=np.float64(grid.cell),
