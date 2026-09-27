@@ -64,6 +64,12 @@
           <button data-mode="multiple">Múltiplo</button>
         </div>
 
+        <label>Motor da face</label>
+        <div class="segmented engine-selector" id="geometryEngine">
+          <button data-engine="baseline" class="active">Baseline 1.1.7</button>
+          <button data-engine="v2">V2 RAW TIN</button>
+        </div>
+
         <label>Deteção</label>
         <select id="profile">
           <option value="face">Face de talude — CRISTA + PÉ</option>
@@ -77,13 +83,13 @@
         </div>
 
         <div id="traceHint" class="hint">
-          Clique aproximadamente no centro da face inclinada. É executado o mesmo detector AUTO da 1.1.2, mas apenas nessa face, devolvendo CRISTA + PÉ.
+          Baseline = geometria 1.1.7. V2 = pontos RAW → Delaunay TIN → region growing → boundary → Kruskal MST → interseção local de superfícies a cada ~1 m.
         </div>
 
         <div class="legend">
-          <span><i class="swatch candidate"></i>Candidato</span>
-          <span><i class="swatch accepted"></i>Aceite</span>
-          <span><i class="dot midpoint"></i>Inserir vértice</span>
+          <span><i class="swatch candidate"></i>Baseline</span>
+          <span><i class="swatch v2-crest"></i>V2 crista</span>
+          <span><i class="swatch v2-toe"></i>V2 pé</span>
         </div>
       </section>
 
@@ -115,7 +121,7 @@
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
             <label>Suavização linha<input id="lineSmooth" type="number" min="3" max="51" step="2" value="11"></label>
           </div>
-          <div class="hint">Detetor = base 1.1.2. Suavização atua só depois da deteção; 11 é o valor recomendado; valores maiores suavizam mais mas podem arredondar demasiado as curvas.</div>
+          <div class="hint">AUTO global fica congelado na baseline 1.1.7. O motor V2 experimental atua apenas em Picar face automática e não altera o resultado global.</div>
         </details>
       </section>
 
@@ -138,7 +144,7 @@
         <div id="featureList" class="layer-list"></div>
       </section>
 
-      <footer id="status">V2 pronta.</footer>
+      <footer id="status">Baseline 1.1.7 protegida · V2 experimental pronta.</footer>
     </aside>
 
     <main class="viewport-shell">
@@ -165,7 +171,7 @@
           <span>Zoom: roda</span>
           <span>Picar face: clique curto</span>
         </div>
-        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.7</div>
+        <div id="pointStats">Potree · baseline 1.1.7 + V2 RAW-TIN-MST</div>
       </div>
 
       <div id="potree_render_area"></div>
