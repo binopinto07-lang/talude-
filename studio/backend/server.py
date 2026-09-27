@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .auto_extract import start_auto_extract
+from .auto_extract_v2 import start_auto_extract_v2
 from .converter import jobs, start_import
 from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
@@ -16,7 +17,7 @@ from .terrain_face_engine import extract_terrain_face_from_points
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
-APP_VERSION = "2.0.0-exp1-raw-tin-mst"
+APP_VERSION = "2.0.0-exp2-auto-global"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -82,6 +83,16 @@ class AutoExtractRequest(BaseModel):
     min_face_area_m2: float = Field(default=4.0, gt=0)
     min_line_length_m: float = Field(default=2.0, gt=0)
     line_smooth_window: int = Field(default=11, ge=3, le=51)
+
+
+class V2AutoExtractRequest(AutoExtractRequest):
+    tin_spacing_m: float = Field(default=0.25, ge=0.08, le=2.0)
+    max_tin_points: int = Field(default=45000, ge=2000, le=120000)
+    max_triangle_edge_m: float = Field(default=2.25, ge=0.25, le=10.0)
+    graph_gap_m: float = Field(default=1.50, ge=0.0, le=10.0)
+    station_spacing_m: float = Field(default=1.00, ge=0.20, le=5.0)
+    patch_along_m: float = Field(default=2.50, ge=0.50, le=10.0)
+    patch_cross_m: float = Field(default=1.80, ge=0.40, le=10.0)
 
 
 @app.get("/api/health")
@@ -381,10 +392,45 @@ def talude_auto(req: AutoExtractRequest) -> dict[str, str]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/api/v2/talude/auto")
+def talude_auto_v2(req: V2AutoExtractRequest) -> dict[str, str]:
+    try:
+        job_id = start_auto_extract_v2(
+            store,
+            req.project_id,
+            req.cloud_id,
+            selected_classes=req.selected_classes,
+            cell_size=req.cell_size,
+            slope_low_deg=req.slope_low_deg,
+            slope_high_deg=req.slope_high_deg,
+            min_face_area_m2=req.min_face_area_m2,
+            min_line_length_m=req.min_line_length_m,
+            line_smooth_window=req.line_smooth_window,
+            tin_spacing_m=req.tin_spacing_m,
+            max_tin_points=req.max_tin_points,
+            max_triangle_edge_m=req.max_triangle_edge_m,
+            graph_gap_m=req.graph_gap_m,
+            station_spacing_m=req.station_spacing_m,
+            patch_along_m=req.patch_along_m,
+            patch_cross_m=req.patch_cross_m,
+        )
+        return {"job_id": job_id}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str) -> dict[str, Any]:
     try:
         return jobs.get(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Job não encontrado") from exc
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str) -> dict[str, Any]:
+    try:
+        return jobs.request_cancel(job_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Job não encontrado") from exc
 
