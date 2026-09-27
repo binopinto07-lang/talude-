@@ -677,13 +677,20 @@
       return;
     }
 
+    const filteredLayerOnly = byId("exportFilteredLayer").checked;
+    const filteredLayer = byId("vectorLayerFilter").value;
+    if (filteredLayerOnly && !filteredLayer) {
+      s.toast("Escolha uma layer no filtro antes de exportar só essa layer.", 6500);
+      return;
+    }
+
     const result = await s.api(
       "/api/projects/" + encodeURIComponent(pid) + "/vector-document/export",
       {
         method: "POST",
         body: JSON.stringify({
           formats,
-          layer_ids: null,
+          layer_ids: filteredLayerOnly ? [filteredLayer] : null,
           feature_ids: selectedOnly ? [editor.selectedFeatureId] : null,
           visible_only: byId("exportVisibleOnly").checked,
           selected_only: false,
