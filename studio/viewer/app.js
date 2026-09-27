@@ -402,7 +402,7 @@
     viewer.renderer.domElement.addEventListener("mouseup", onViewerNavMouseUp, true);
     viewer.renderer.domElement.addEventListener("mouseleave", onViewerNavMouseUp, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.8 · AUTO 1.1.2 + face clicada");
+    setStatus("Potree pronto · Talude V1.1.9 · AUTO 1.1.2 + face clicada");
   }
 
   function configurePointcloud(pointcloud) {
@@ -784,8 +784,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.8 · motor MDT + Declive pronto."
-              : "Talude V1.1.8 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V1.1.9 · motor MDT + Declive pronto."
+              : "Talude V1.1.9 · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -810,8 +810,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.8 · a ler MDT + Declive…"
-        : "Talude V1.1.8 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V1.1.9 · a ler MDT + Declive…"
+        : "Talude V1.1.9 · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -868,7 +868,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.8 · raster-terrain · " +
+      "Talude V1.1.9 · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1616,7 +1616,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.8 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V1.1.9 used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -2014,7 +2014,7 @@
       half_m: half
     });
 
-    setStatus("Talude V1.1.8 · AUTO 1.1.2 apenas na face clicada…");
+    setStatus("Talude V1.1.9 · AUTO 1.1.2 apenas na face clicada…");
     byId("traceHint").textContent =
       "A recolher a zona da face e executar o mesmo processo do AUTO: " +
       "slope multiescala → persistence/hysteresis → FACE_DETECTOR → CRISTA + PÉ…";
@@ -2055,6 +2055,9 @@
         ),
         vertex_spacing_m: Number(
           byId("vertexSpacing") ? byId("vertexSpacing").value : 1.0
+        ),
+        ground_gap_fill_m: Number(
+          byId("groundGapFill") ? byId("groundGapFill").value : 1.5
         )
       })
     });
@@ -2082,11 +2085,12 @@
       Number(toe.length_m || 0).toFixed(1) + " m · " +
       "cell " + Number(result.grid_resolution || 0).toFixed(3) + " m · " +
       "vértices ~" + Number(result.vertex_spacing_m || 0).toFixed(2) + " m · " +
+      "Ground gap " + Number(result.ground_gap_fill_m || 0).toFixed(2) + " m · " +
       "confiança " + confidence + "% · " +
       result.trace_elapsed_ms.toFixed(0) + " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.8 · face clicada · CRISTA + PÉ · " +
+      "Talude V1.1.9 · face clicada · CRISTA + PÉ · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
 
@@ -2109,6 +2113,8 @@
       crest_length_m: crest.length_m,
       toe_length_m: toe.length_m,
       vertex_spacing_m: result.vertex_spacing_m,
+      ground_gap_fill_m: result.ground_gap_fill_m,
+      ground_reconstructed_cells: result.ground_reconstructed_cells,
       crest_vertices_before: crest.raw_vertex_count,
       crest_vertices_after: crest.final_vertex_count,
       toe_vertices_before: toe.raw_vertex_count,
