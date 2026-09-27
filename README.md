@@ -206,3 +206,48 @@ Não é criada uma Delaunay global com os 241 milhões de pontos: isso seria pes
 6. O relatório guarda `geometry_source`, `raw_vertex_count`, `final_vertex_count`, `tin_mean_snap_m` e `tin_max_snap_m`.
 
 O objetivo não é aumentar o número de taludes, mas colocar as linhas sobre a aresta topográfica e produzir polylines CAD mais limpas e com muito menos vértices.
+
+
+## V1.1.9 — Ground rebuild + anti-V
+
+Esta versão responde a dois problemas observados na cloud real:
+
+1. segmentos em **V / bicos** nas linhas finais;
+2. taludes interrompidos onde a classe **Ground** tem pouca densidade ou pequenas falhas.
+
+### Reconstrução controlada do Ground
+
+O motor deixa de tratar cada célula Ground vazia como um corte definitivo. Para pequenas falhas internas:
+
+- mede a distância ao Ground real;
+- interpola apenas entre suportes reais dos dois lados;
+- por defeito reconstrói até **1,50 m**;
+- grandes vazios continuam excluídos do FACE_DETECTOR;
+- células reconstruídas podem **ligar** uma face, mas não podem iniciar sozinhas uma nova face forte.
+
+Isto reduz linhas partidas sem inventar terreno em zonas sem suporte.
+
+### Anti-V
+
+Os picos em V tinham duas origens principais:
+
+- o boundary da face podia entrar pelos lados do talude;
+- o snap TIN podia saltar entre duas quebras vizinhas em vértices consecutivos.
+
+A V1.1.9:
+
+- rejeita boundary aproximadamente paralelo ao downhill;
+- reforça continuidade do offset transversal durante o snap;
+- aplica median filtering aos offsets;
+- limita mudanças bruscas de offset;
+- remove spikes isolados apenas quando a direção antes/depois continua praticamente igual.
+
+### Debug novo
+
+- `05_ground_analysis_valid.asc`
+- `06_ground_support_distance_m.asc`
+- `ground_real_cells`
+- `ground_analysis_cells`
+- `ground_reconstructed_cells`
+
+O detector de base continua a ser o 1.1.2; estas alterações atuam na reconstrução do terreno e na geometria/continuidade final.
