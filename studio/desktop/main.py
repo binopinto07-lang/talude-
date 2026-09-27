@@ -162,11 +162,19 @@ def self_test() -> int:
 
     try:
         from talude_v2 import extract_face_raw_tin, run_auto_global_v2  # noqa: F401
+        from talude_v2.tiled_auto import process_candidates_tiled, stitch_fragments  # noqa: F401
+        from talude_v2.vector_document import create_vector_document  # noqa: F401
         checks.append(("BREAKLINE_ENGINE_V2_RAW_TIN_MST", True, "experimental"))
         checks.append(("AUTO_GLOBAL_V2", True, "second-delivery"))
+        checks.append(("V2_TILED_HALO_STITCH", True, "phase-3"))
+        checks.append(("V2_SUPPORT_AWARE_REFINEMENT", True, "phase-4"))
+        checks.append(("V2_VECTOR_DOCUMENT", True, "phase-5"))
     except Exception as exc:
         checks.append(("BREAKLINE_ENGINE_V2_RAW_TIN_MST", False, repr(exc)))
         checks.append(("AUTO_GLOBAL_V2", False, repr(exc)))
+        checks.append(("V2_TILED_HALO_STITCH", False, repr(exc)))
+        checks.append(("V2_SUPPORT_AWARE_REFINEMENT", False, repr(exc)))
+        checks.append(("V2_VECTOR_DOCUMENT", False, repr(exc)))
 
     try:
         import pyproj  # noqa: F401
