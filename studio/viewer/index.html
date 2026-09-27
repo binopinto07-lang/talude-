@@ -139,7 +139,72 @@
         </div>
         <div id="taludeFeatureList" class="layer-list talude-feature-list"></div>
       </section>
-\n      <section class="card grow">
+\n      <section class="card vector-editor-card">
+        <div class="section-title">LAYERS + EDITOR 3D</div>
+
+        <div class="vector-toolbar">
+          <button id="vectorRefresh">Atualizar</button>
+          <button id="vectorSave">Guardar</button>
+          <button id="vectorUndo" title="Undo">↶</button>
+          <button id="vectorRedo" title="Redo">↷</button>
+        </div>
+
+        <div id="vectorStatus" class="hint">Sem Vector Document carregado.</div>
+        <div id="vectorLayers" class="vector-layer-list"></div>
+
+        <label>Features</label>
+        <div class="vector-filter-row">
+          <select id="vectorLayerFilter">
+            <option value="">Todas as layers</option>
+          </select>
+          <input id="vectorSearch" type="text" placeholder="Face / ID…" />
+        </div>
+        <div id="vectorFeatures" class="vector-feature-list"></div>
+
+        <div id="vectorEditBox" class="vector-edit-box hidden">
+          <div class="vector-selected-title" id="vectorSelectedTitle">Feature</div>
+          <label>Vértice</label>
+          <select id="vectorVertexSelect"></select>
+          <div id="vectorVertexXYZ" class="vector-coordinate-readout">X — · Y — · Z —</div>
+
+          <div class="vector-action-grid">
+            <button id="vectorMoveVertex">Mover por clique</button>
+            <button id="vectorInsertVertex">Inserir depois</button>
+            <button id="vectorDeleteVertex">Apagar vértice</button>
+            <button id="vectorDeleteLine" class="danger-soft">Apagar linha</button>
+          </div>
+        </div>
+
+        <div class="vector-new-line">
+          <select id="vectorNewType">
+            <option value="CREST">Nova CRISTA</option>
+            <option value="TOE">Novo PÉ</option>
+          </select>
+          <button id="vectorNewLine">Iniciar linha</button>
+        </div>
+        <div id="vectorDraftActions" class="vector-toolbar hidden">
+          <button id="vectorFinishLine" class="primary">Concluir</button>
+          <button id="vectorCancelLine">Cancelar</button>
+        </div>
+
+        <details class="vector-project-tools">
+          <summary>Projeto / recuperação / exportação</summary>
+          <div class="vector-toolbar">
+            <button id="vectorRecover">Recuperar anterior</button>
+          </div>
+          <div class="vector-export-form">
+            <label><input id="exportDxf" type="checkbox" checked /> DXF 3D</label>
+            <label><input id="exportShp" type="checkbox" checked /> SHP 3D</label>
+            <label><input id="exportGpkg" type="checkbox" checked /> GPKG</label>
+            <label><input id="exportGeojson" type="checkbox" /> GeoJSON</label>
+            <label><input id="exportVisibleOnly" type="checkbox" /> Só visíveis</label>
+            <label><input id="exportSelectedOnly" type="checkbox" /> Só selecionada</label>
+          </div>
+          <button id="vectorExport" class="primary wide">EXPORTAR VETORES 3D</button>
+        </details>
+      </section>
+
+      <section class="card grow">
         <div class="section-title">CAMADAS</div>
         <div id="cloudList" class="layer-list"></div>
         <div id="featureList" class="layer-list"></div>
@@ -203,6 +268,6 @@
   <script src="/potree/libs/three.js/extra/lines.js"></script>
   <script src="/potree/libs/plasio/js/laslaz.js"></script>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-  <script src="./app.js"></script>\n  <script src="./talude_auto.js"></script>
+  <script src="./app.js"></script>\n  <script src="./talude_auto.js"></script>\n  <script src="./vector_editor.js"></script>
 </body>
 </html>
