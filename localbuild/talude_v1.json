@@ -1,8 +1,8 @@
 {
   "id": "talude_v1",
-  "name": "Talude Studio V1 — Crista + Pé",
+  "name": "Talude Studio V2 Experimental — RAW TIN MST",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
-  "branch": "main",
+  "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
   "dist_dir_name": "Talude_V1",
   "checks": [
