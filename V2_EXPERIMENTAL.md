@@ -139,3 +139,21 @@ Nada desta branch deve substituir a baseline enquanto não passar:
 - comparação quantitativa contra linha manual;
 - ausência de spikes/loops/branches falsos.
 
+
+
+## Primeira entrega obrigatória — 2026-09-27
+
+Implementada em V2 sem alterar a baseline:
+
+- coerência local neighbour↔neighbour para curvas e S;
+- comprimentos 2D/3D acumulados;
+- reason codes estáveis;
+- quality score explícito;
+- métricas de topologia/refinement;
+- testes straight/curved/S;
+- documentação de arquitetura e before/after.
+
+Ver:
+
+- `docs/V2_ARCHITECTURE.md`
+- `docs/V2_FIRST_DELIVERY.md`
