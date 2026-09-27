@@ -178,6 +178,16 @@ def validate_vector_document(document: dict[str, Any]) -> dict[str, Any]:
         for layer in document["layers"]
         if isinstance(layer, dict) and layer.get("id")
     }
+
+    # Forward-compatible migration: documents created by phase 5 only contained
+    # CRISTA and PE_TALUDE. Opening them in phases 6-9 must never fail merely
+    # because the UI introduced FACES/DEBUG layers later.
+    for default_layer in DEFAULT_LAYERS:
+        layer_id = str(default_layer["id"])
+        if layer_id not in layer_ids:
+            document["layers"].append(copy.deepcopy(default_layer))
+            layer_ids.add(layer_id)
+
     if not {"CRISTA", "PE_TALUDE", "FACES", "DEBUG"}.issubset(layer_ids):
         raise ValueError(
             "Vector document precisa das layers CRISTA, PE_TALUDE, FACES e DEBUG."
