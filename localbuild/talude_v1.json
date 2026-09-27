@@ -1,6 +1,6 @@
 {
   "id": "talude_v1",
-  "name": "Talude Studio V2 Experimental — AUTO GLOBAL RAW TIN",
+  "name": "Talude Studio V2 — TILED + REFINEMENT + VECTOR DOCUMENT",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
