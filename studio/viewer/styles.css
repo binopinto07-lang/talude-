@@ -262,3 +262,17 @@ footer { color: #8092a8; font-size: 10px; padding: 3px; }
 #potree_render_area.pan-mode.panning {
   cursor: grabbing !important;
 }
+
+.engine-selector {
+  margin: 6px 0 10px;
+}
+.engine-selector button[data-engine="v2"].active {
+  background: #44204f;
+  border-color: #ff4fd8;
+}
+.swatch.v2-crest {
+  background: #7cff4f;
+}
+.swatch.v2-toe {
+  background: #ff4fd8;
+}
