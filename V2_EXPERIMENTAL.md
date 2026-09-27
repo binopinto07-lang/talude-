@@ -257,3 +257,25 @@ Ver:
 
 As Fases 6–9 devem trabalhar sobre o Vector Document e não voltar a alterar o
 motor geométrico sem uma razão técnica isolada e testada.
+
+
+## Fases 6–9 — Layers / Editor / Project / Export — 2026-09-27
+
+Implementado sobre o Vector Document, sem alterar a baseline:
+
+- Layers CRISTA / PE_TALUDE / FACES / DEBUG;
+- editor 3D com move/insert/delete de vértices por clique;
+- apagar/criar linhas;
+- locks;
+- undo/redo;
+- autosave;
+- revisões e recuperação;
+- DXF 3D;
+- SHP PolyLineZ;
+- GPKG LineStringZ;
+- export por layer, visibilidade ou seleção.
+
+O build Windows passa por short path em
+`%LOCALAPPDATA%\LBM\TaludeStudioBuild` e possui `builder-preflight`.
+
+Ver `docs/V2_PHASES_6_9.md`.
