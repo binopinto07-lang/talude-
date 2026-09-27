@@ -249,3 +249,31 @@ Cada execução cria também:
 que será a base das próximas layers, edição, save/load e exportação profissional.
 
 Documentação: `docs/V2_PHASES_3_5.md`.
+
+
+## V2 Fases 6–9
+
+A branch experimental inclui agora o segundo bloco completo:
+
+```text
+Vector Document
+   ↓
+Layers
+   ↓
+Editor 3D
+   ↓
+Autosave / revisões / recovery
+   ↓
+DXF 3D + SHP 3D + GPKG
+```
+
+Layers base: **CRISTA**, **PE_TALUDE**, **FACES** e **DEBUG**.
+
+O editor permite mover/inserir/apagar vértices por clique na point cloud,
+apagar linhas, criar CRISTA/PÉ manual, bloquear layers e usar undo/redo.
+
+O Windows builder deixou de executar o PyInstaller dentro do path longo do ZIP.
+Agora usa `%LOCALAPPDATA%\LBM\TaludeStudioBuild`, com preflight de imports e
+assets antes de empacotar.
+
+Detalhes: `docs/V2_PHASES_6_9.md`.
