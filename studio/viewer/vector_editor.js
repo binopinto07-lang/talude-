@@ -412,6 +412,7 @@
     const s = shell();
     const pid = projectId();
     if (!s || !pid || !editor.document) return;
+    if (!editor.dirty && reason !== "manual_save") return;
     if (editor.saving) {
       editor.savePending = true;
       return;
