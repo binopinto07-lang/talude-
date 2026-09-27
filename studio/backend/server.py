@@ -14,11 +14,20 @@ from .converter import jobs, start_import
 from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
-from .vector_documents import active_document_info, read_active_document
+from .vector_documents import (
+    active_document_info,
+    autosave_active_document,
+    list_revisions,
+    read_active_document,
+    recover_autosave,
+    recover_revision,
+    save_active_document,
+)
+from .vector_export import export_vector_document
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
-APP_VERSION = "2.0.0-exp5-tiled-vector"
+APP_VERSION = "2.0.0-exp9-vector-editor"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -46,6 +55,25 @@ class DebugEventRequest(BaseModel):
     level: str = "INFO"
     source: str = "viewer"
     details: dict[str, Any] = {}
+
+
+class SaveVectorDocumentRequest(BaseModel):
+    document: dict[str, Any]
+    expected_revision: int | None = None
+    reason: str = "edit"
+
+
+class RecoverVectorDocumentRequest(BaseModel):
+    revision: int | None = None
+    autosave: bool = False
+
+
+class ExportVectorDocumentRequest(BaseModel):
+    formats: list[str] = ["dxf", "shp", "gpkg"]
+    layer_ids: list[str] | None = None
+    feature_ids: list[str] | None = None
+    visible_only: bool = False
+    selected_only: bool = False
 
 
 class TerrainFaceRequest(BaseModel):
@@ -171,6 +199,133 @@ def get_vector_document_summary(project_id: str) -> dict[str, Any]:
     try:
         ref = store.get(project_id)
         return active_document_info(ref.path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/projects/{project_id}/vector-document")
+def put_vector_document(
+    project_id: str,
+    req: SaveVectorDocumentRequest,
+) -> dict[str, Any]:
+    try:
+        ref = store.get(project_id)
+        result = save_active_document(
+            ref.path,
+            req.document,
+            expected_revision=req.expected_revision,
+            reason=req.reason,
+        )
+        store.debug_event(
+            project_id,
+            "vector_document.saved",
+            {
+                "revision": result["summary"]["revision"],
+                "feature_count": result["summary"]["feature_count"],
+                "reason": req.reason,
+            },
+            source="vector_editor",
+        )
+        return result
+    except RuntimeError as exc:
+        if str(exc).startswith("REVISION_CONFLICT:"):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/projects/{project_id}/vector-document/autosave")
+def autosave_vector_document(
+    project_id: str,
+    req: SaveVectorDocumentRequest,
+) -> dict[str, Any]:
+    try:
+        ref = store.get(project_id)
+        result = autosave_active_document(
+            ref.path,
+            req.document,
+            expected_revision=req.expected_revision,
+            reason=req.reason or "autosave",
+        )
+        return result
+    except RuntimeError as exc:
+        if str(exc).startswith("REVISION_CONFLICT:"):
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/projects/{project_id}/vector-document/revisions")
+def get_vector_document_revisions(project_id: str) -> dict[str, Any]:
+    try:
+        ref = store.get(project_id)
+        return {"revisions": list_revisions(ref.path)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/vector-document/recover")
+def recover_vector_document(
+    project_id: str,
+    req: RecoverVectorDocumentRequest,
+) -> dict[str, Any]:
+    try:
+        ref = store.get(project_id)
+        if req.autosave:
+            result = recover_autosave(ref.path)
+        else:
+            result = recover_revision(ref.path, req.revision)
+        store.debug_event(
+            project_id,
+            "vector_document.recovered",
+            {
+                "requested_revision": req.revision,
+                "autosave": req.autosave,
+                "new_revision": result["summary"]["revision"],
+            },
+            source="vector_editor",
+            level="WARNING",
+        )
+        return result
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/projects/{project_id}/vector-document/export")
+def export_project_vector_document(
+    project_id: str,
+    req: ExportVectorDocumentRequest,
+) -> dict[str, Any]:
+    try:
+        ref = store.get(project_id)
+        document = read_active_document(ref.path)
+        result = export_vector_document(
+            ref.path,
+            document,
+            formats=req.formats,
+            layer_ids=req.layer_ids,
+            feature_ids=req.feature_ids,
+            visible_only=req.visible_only,
+            selected_only=req.selected_only,
+        )
+        store.debug_event(
+            project_id,
+            "vector_document.exported",
+            {
+                "formats": req.formats,
+                "feature_count": result["feature_count"],
+                "output_dir": result["output_dir"],
+                "layer_ids": req.layer_ids,
+                "visible_only": req.visible_only,
+                "selected_only": req.selected_only,
+            },
+            source="vector_export",
+        )
+        return result
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
