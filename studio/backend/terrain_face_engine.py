@@ -79,6 +79,7 @@ def _line_payload(line: dict) -> dict:
         "slope_mean_deg": float(line.get("slope_mean_deg", 0.0)),
         "gradient_coherence": float(line.get("gradient_coherence", 0.0)),
         "scale_persistence": float(line.get("scale_persistence", 0.0)),
+        "geometry_source": line.get("geometry_source"),
         "vertex_spacing_m": float(line.get("vertex_spacing_m") or 0.0),
         "raw_vertex_count": int(line.get("raw_vertex_count") or len(vertices)),
         "final_vertex_count": int(line.get("final_vertex_count") or len(vertices)),
