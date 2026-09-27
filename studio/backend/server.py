@@ -18,7 +18,7 @@ from .vector_documents import active_document_info, read_active_document
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
-APP_VERSION = "2.0.0-exp2-auto-global"
+APP_VERSION = "2.0.0-exp5-tiled-vector"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
