@@ -55,13 +55,21 @@ def _xy_voxel_median(
         groups = int(inv.max()) + 1 if len(inv) else 0
 
         if groups <= max_points:
-            order = np.argsort(inv, kind="mergesort")
-            inv_sorted = inv[order]
-            changes = np.r_[0, np.flatnonzero(np.diff(inv_sorted)) + 1, len(order)]
-            out = np.empty((len(changes) - 1, 3), dtype=np.float64)
-            for g in range(len(changes) - 1):
-                ids = order[changes[g]:changes[g + 1]]
-                out[g] = np.median(pts[ids], axis=0)
+            counts = np.bincount(inv, minlength=groups).astype(np.int64)
+            mean_x = np.bincount(inv, weights=pts[:, 0], minlength=groups) / counts
+            mean_y = np.bincount(inv, weights=pts[:, 1], minlength=groups) / counts
+
+            # Robust Z without tens of thousands of Python-level group loops:
+            # lexsort by (group, Z), then pick the middle observation per group.
+            order = np.lexsort((pts[:, 2], inv))
+            starts = np.r_[0, np.cumsum(counts[:-1])]
+            median_pos = starts + (counts - 1) // 2
+            median_z = pts[order[median_pos], 2]
+
+            out = np.column_stack((mean_x, mean_y, median_z)).astype(
+                np.float64,
+                copy=False,
+            )
             return out, spacing
 
         spacing *= math.sqrt(groups / max_points) * 1.05
