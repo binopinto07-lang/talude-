@@ -6,5 +6,6 @@ TIN, graph continuity and local surface intersections.
 """
 
 from .engine import V2Config, extract_face_raw_tin
+from .reasons import V2DetectionError, V2Reason
 
-__all__ = ["V2Config", "extract_face_raw_tin"]
+__all__ = ["V2Config", "V2DetectionError", "V2Reason", "extract_face_raw_tin"]
