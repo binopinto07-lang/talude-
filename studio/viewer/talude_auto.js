@@ -64,6 +64,12 @@
     }, 1200);
   }
 
+  function setAutoVisibility(visible) {
+    for (const item of autoObjects) {
+      if (item && item.object) item.object.visible = Boolean(visible);
+    }
+  }
+
   function clearAutoLines() {
     const s = shell();
     if (s && s.state && s.state.featureOverlayScene) {
@@ -181,6 +187,13 @@
       );
       s.toast("CRISTA + PÉ calculados e visíveis sobre a nuvem 3D.", 6500);
     }
+
+    window.dispatchEvent(new CustomEvent("talude:vector-document-updated", {
+      detail: {
+        project_id: s.state.project ? s.state.project.id : null,
+        result: result
+      }
+    }));
   }
 
   async function monitorJob(jobId) {
@@ -337,6 +350,12 @@
     refreshEnabledState();
     window.setInterval(refreshEnabledState, 500);
   }
+
+  window.TaludeAuto = {
+    clearAutoLines,
+    setAutoVisibility,
+    getAutoObjects: () => autoObjects.slice()
+  };
 
   window.addEventListener("DOMContentLoaded", waitForShell);
 })();
