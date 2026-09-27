@@ -2778,9 +2778,13 @@
       const confidence = item.data.confidence == null
         ? ""
         : " · " + Math.round(item.data.confidence * 100) + "%";
+      const engine = item.data.engine === "v2"
+        ? " · V2 RAW TIN"
+        : " · baseline";
       el.innerHTML =
         "<strong>Feature " + String(i + 1).padStart(3, "0") + "</strong>" +
         escapeHtml(item.data.profile || "feature") +
+        engine +
         confidence;
       box.appendChild(el);
     }
@@ -2801,6 +2805,7 @@
       id: "fl_" + Date.now(),
       profile: data.profile,
       detector: data.detector,
+      engine: data.engine || "baseline",
       vertices: data.vertices,
       confidence: data.confidence,
       mean_break_angle_deg: data.mean_break_angle_deg,
