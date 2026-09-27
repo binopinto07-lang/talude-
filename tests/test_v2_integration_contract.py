@@ -26,4 +26,4 @@ def test_v2_viewer_can_switch_engines_without_replacing_global_auto():
 
 def test_v2_build_is_pinned_to_experimental_branch():
     build = Path("localbuild/talude_v1.json").read_text(encoding="utf-8")
-    assert '"branch": "v2-experimental-raw-tin-mst"' in build
+    assert '"branch": "v2"' in build
