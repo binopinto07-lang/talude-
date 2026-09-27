@@ -26,6 +26,7 @@ def test_localbuild_packages_studio_not_legacy_tkinter():
     full_ids = [step["id"] for step in cfg["pipelines"]["full"]]
     assert "deps-build" in full_ids
     assert "vendor" in full_ids
+    assert "builder-preflight" in full_ids
     assert "pyinstaller" in full_ids
     assert "self-test" in full_ids
 
@@ -40,4 +41,6 @@ def test_short_path_windows_builder_contains_required_desktop_assets():
     assert "studio/viewer" in text
     assert "studio/vendor" in text
     assert "TaludeStudioBuild" in text
+    assert "--preflight" in text
+    assert "studio.backend.vector_export" in text
     assert "Talude_V1.exe" in text
