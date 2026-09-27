@@ -6,6 +6,7 @@
   let autoObjects = [];
   let running = false;
   let lastOutputDir = null;
+  let currentJobId = null;
 
   function shell() {
     return window.TaludeShell || null;
@@ -48,6 +49,12 @@
     const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
     byId("jobText").textContent = job.message || job.title || "A processar…";
     byId("jobProgress").style.width = progress + "%";
+    const cancel = byId("cancelJob");
+    if (cancel) {
+      const canCancel = !["completed", "failed", "cancelled"].includes(job.status);
+      cancel.classList.toggle("hidden", !canCancel);
+      cancel.disabled = job.status === "cancelling";
+    }
   }
 
   function hideJobSoon() {
@@ -90,14 +97,20 @@
 
       const kind = data.type === "CREST" ? "crest" : "toe";
       const label = data.type === "CREST" ? "CRISTA" : "PÉ";
-      const confidence = Math.round(Number(data.confidence || 0) * 100);
+      const confidence = Math.round(Number(data.quality_score ?? data.confidence ?? 0) * 100);
       const length = Number(data.length_m || 0);
+      const source = String(data.source || "");
+      const sourceTag = source.startsWith("V2_")
+        ? " · V2"
+        : source.includes("FALLBACK")
+          ? " · fallback"
+          : "";
 
       row.innerHTML =
         '<i class="talude-dot ' + kind + '"></i>' +
         '<div><strong>' + label + " " + String(index + 1).padStart(3, "0") +
         "</strong>Face " + String(data.face_id ?? "-") +
-        " · " + length.toFixed(1) + " m</div>" +
+        " · " + length.toFixed(1) + " m" + sourceTag + "</div>" +
         "<span>" + confidence + "%</span>";
 
       row.onclick = () => {
@@ -144,14 +157,30 @@
     byId("openTaludeResults").disabled = !lastOutputDir;
 
     const elapsed = Number(report.elapsed_s || 0);
-    s.setStatus(
-      "AUTO concluído · " +
-      String(report.faces_detected || 0) + " faces · " +
-      String(report.crest_lines || 0) + " cristas · " +
-      String(report.toe_lines || 0) + " pés · " +
-      elapsed.toFixed(1) + " s"
-    );
-    s.toast("CRISTA + PÉ calculados e visíveis sobre a nuvem 3D.", 6500);
+    const isV2 = result.engine === "v2-global" ||
+      report.engine === "BREAKLINE_ENGINE_V2_GLOBAL_HYBRID";
+    if (isV2) {
+      s.setStatus(
+        "AUTO V2 concluído · " +
+        String(report.faces_detected || 0) + " faces · " +
+        "V2 " + String(report.v2_success_faces || 0) + " · " +
+        "fallback " + String(report.baseline_fallback_faces || 0) + " · " +
+        elapsed.toFixed(1) + " s"
+      );
+      s.toast(
+        "AUTO GLOBAL V2 concluído. As faces inseguras mantiveram a geometria baseline.",
+        8000
+      );
+    } else {
+      s.setStatus(
+        "AUTO concluído · " +
+        String(report.faces_detected || 0) + " faces · " +
+        String(report.crest_lines || 0) + " cristas · " +
+        String(report.toe_lines || 0) + " pés · " +
+        elapsed.toFixed(1) + " s"
+      );
+      s.toast("CRISTA + PÉ calculados e visíveis sobre a nuvem 3D.", 6500);
+    }
   }
 
   async function monitorJob(jobId) {
@@ -159,6 +188,7 @@
     if (!s) throw new Error("TaludeShell indisponível.");
 
     running = true;
+    currentJobId = jobId;
     byId("detectTalude").disabled = true;
 
     try {
@@ -176,10 +206,20 @@
           throw new Error(job.error || job.message || "Extração automática falhou.");
         }
 
+        if (job.status === "cancelled") {
+          s.setStatus("Processamento cancelado.");
+          s.toast("AUTO GLOBAL V2 cancelado.", 5000);
+          hideJobSoon();
+          return;
+        }
+
         await sleep(600);
       }
     } finally {
       running = false;
+      currentJobId = null;
+      const cancel = byId("cancelJob");
+      if (cancel) cancel.classList.add("hidden");
       refreshEnabledState();
     }
   }
@@ -197,21 +237,41 @@
     }
 
     clearAutoLines();
-    s.setStatus("AUTO TALUDE · a iniciar FACE_DETECTOR…");
+    const useV2 = s.state.geometryEngine === "v2";
+    s.setStatus(
+      useV2
+        ? "AUTO GLOBAL V2 · descoberta de faces → ROI RAW Ground → TIN…"
+        : "AUTO TALUDE baseline · a iniciar FACE_DETECTOR…"
+    );
 
-    const response = await s.api("/api/talude/auto", {
+    const payload = {
+      project_id: project.id,
+      cloud_id: cloudId,
+      selected_classes: classesForEngine(),
+      cell_size: numberValue("cellSize", 0),
+      slope_low_deg: numberValue("slopeLow", 0),
+      slope_high_deg: numberValue("slopeHigh", 0),
+      min_face_area_m2: numberValue("minArea", 4),
+      min_line_length_m: numberValue("minLength", 2),
+      line_smooth_window: numberValue("lineSmooth", 11)
+    };
+
+    if (useV2) {
+      Object.assign(payload, {
+        tin_spacing_m: 0.25,
+        max_tin_points: 45000,
+        max_triangle_edge_m: 2.25,
+        graph_gap_m: 1.50,
+        station_spacing_m: 1.00,
+        patch_along_m: 2.50,
+        patch_cross_m: 1.80
+      });
+    }
+
+    const endpoint = useV2 ? "/api/v2/talude/auto" : "/api/talude/auto";
+    const response = await s.api(endpoint, {
       method: "POST",
-      body: JSON.stringify({
-        project_id: project.id,
-        cloud_id: cloudId,
-        selected_classes: classesForEngine(),
-        cell_size: numberValue("cellSize", 0),
-        slope_low_deg: numberValue("slopeLow", 0),
-        slope_high_deg: numberValue("slopeHigh", 0),
-        min_face_area_m2: numberValue("minArea", 4),
-        min_line_length_m: numberValue("minLength", 2),
-        line_smooth_window: numberValue("lineSmooth", 11)
-      })
+      body: JSON.stringify(payload)
     });
 
     await monitorJob(response.job_id);
@@ -235,6 +295,24 @@
     };
 
     byId("clearTaludeLines").onclick = clearAutoLines;
+
+    if (byId("cancelJob")) {
+      byId("cancelJob").onclick = async () => {
+        const s = shell();
+        if (!s || !currentJobId) return;
+        byId("cancelJob").disabled = true;
+        try {
+          await s.api(
+            "/api/jobs/" + encodeURIComponent(currentJobId) + "/cancel",
+            { method: "POST", body: "{}" }
+          );
+          s.setStatus("A cancelar processamento…");
+        } catch (error) {
+          s.toast(error.message || String(error), 8000);
+          byId("cancelJob").disabled = false;
+        }
+      };
+    }
 
     byId("openTaludeResults").onclick = () => {
       const s = shell();
