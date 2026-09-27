@@ -184,3 +184,38 @@ Esta versão corrige duas regressões observadas nos testes reais da cloud de 24
 - **Face clicada:** o ProfileRequest estava a terminar por `soft_timeout` ainda com apenas alguns milhares de pontos e o espaçamento dessa amostra LOD fazia a grelha subir até **1.0 m**. Agora uma amostra pobre continua a carregar até ao limite duro e a grelha AUTO local é limitada a **0.35 m** quando o utilizador deixa Cell size = 0.
 
 A suavização predefinida regressa a **11**, que preserva melhor curvas e extremos. A deteção de faces continua a ser a base 1.1.2; a suavização permanece exclusivamente pós-deteção.
+
+
+## V2 Exp2 — AUTO GLOBAL RAW TIN
+
+A branch `v2-experimental-raw-tin-mst` acrescenta um segundo AUTO global sem
+alterar a baseline `baseline-1.1.7-refine`.
+
+Na UI, o seletor **Motor da face** passa a controlar também
+**DETETAR CRISTA + PÉ**:
+
+```text
+Baseline 1.1.7
+  → AUTO comprovado 1.1.7
+
+V2 RAW TIN
+  → AUTO GLOBAL V2
+  → descoberta de faces pela baseline
+  → ROI RAW Ground automática
+  → Delaunay TIN por face
+  → local region growing
+  → boundary CREST/TOE
+  → Kruskal MST
+  → refinamento 3D
+  → fallback baseline quando V2 não é segura
+```
+
+A V2 global produz ainda:
+
+- `debug/v2_faces.jsonl`;
+- `debug/summary.json`;
+- contadores de faces V2 bem sucedidas e fallbacks;
+- reason codes por falha/rejeição;
+- botão de cancelamento do processamento.
+
+Ver `docs/V2_SECOND_DELIVERY.md`.
