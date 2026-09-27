@@ -39,6 +39,7 @@
         <div id="jobBox" class="job hidden">
           <div id="jobText">A preparar…</div>
           <div class="progress-track"><div id="jobProgress"></div></div>
+          <button id="cancelJob" class="wide hidden">Cancelar processamento</button>
         </div>
       </section>
 
@@ -121,7 +122,7 @@
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
             <label>Suavização linha<input id="lineSmooth" type="number" min="3" max="51" step="2" value="11"></label>
           </div>
-          <div class="hint">AUTO global fica congelado na baseline 1.1.7. O motor V2 experimental atua apenas em Picar face automática e não altera o resultado global.</div>
+          <div class="hint">Baseline 1.1.7 mantém o AUTO comprovado. Com V2 RAW TIN selecionado, DETETAR CRISTA + PÉ executa AUTO GLOBAL V2: descoberta 1.1.7 → ROI RAW Ground → TIN local → refinamento por face, com fallback seguro para não perder taludes.</div>
         </details>
       </section>
 
@@ -144,7 +145,7 @@
         <div id="featureList" class="layer-list"></div>
       </section>
 
-      <footer id="status">Baseline 1.1.7 protegida · V2 experimental pronta.</footer>
+      <footer id="status">Baseline 1.1.7 protegida · AUTO GLOBAL V2 disponível.</footer>
     </aside>
 
     <main class="viewport-shell">
