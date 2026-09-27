@@ -74,6 +74,14 @@
         "venv": "v1"
       },
       {
+        "id": "builder-preflight",
+        "name": "Preflight Windows builder",
+        "command": "& '%PYTHON%' 'scripts/build_windows.py' --preflight",
+        "timeout_minutes": 10,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
         "id": "clean",
         "name": "Preparar pasta de build",
         "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; $short=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild'; if (Test-Path $short) { Remove-Item $short -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
@@ -172,6 +180,14 @@
         "venv": "v1"
       },
       {
+        "id": "builder-preflight",
+        "name": "Preflight Windows builder",
+        "command": "& '%PYTHON%' 'scripts/build_windows.py' --preflight",
+        "timeout_minutes": 10,
+        "category": "test",
+        "venv": "v1"
+      },
+      {
         "id": "clean",
         "name": "Preparar pasta de build",
         "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; $short=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild'; if (Test-Path $short) { Remove-Item $short -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
@@ -222,5 +238,5 @@
     ]
   },
   "release": {},
-  "config_revision": 6
+  "config_revision": 7
 }
