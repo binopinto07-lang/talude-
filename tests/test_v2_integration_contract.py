@@ -11,7 +11,7 @@ def test_v2_api_is_isolated_from_baseline_and_has_global_auto():
     assert "start_auto_extract_v2" in server
     assert "extract_terrain_face_from_points" in server
     assert "extract_face_raw_tin" in server
-    assert 'APP_VERSION = "2.0.0-exp2-auto-global"' in server
+    assert 'APP_VERSION = "2.0.0-exp5-tiled-vector"' in server
 
 
 def test_v2_viewer_can_switch_global_and_clicked_engines():
@@ -59,3 +59,38 @@ def test_v2_global_auto_has_progress_cancel_and_regression_fallback():
 def test_v2_build_is_pinned_to_experimental_branch():
     build = Path("localbuild/talude_v1.json").read_text(encoding="utf-8")
     assert '"branch": "v2-experimental-raw-tin-mst"' in build
+
+
+def test_v2_phases_3_to_5_are_wired_end_to_end():
+    global_engine = Path("src/talude_v2/global_auto.py").read_text(encoding="utf-8")
+    tiled = Path("src/talude_v2/tiled_auto.py").read_text(encoding="utf-8")
+    engine = Path("src/talude_v2/engine.py").read_text(encoding="utf-8")
+    vector = Path("src/talude_v2/vector_document.py").read_text(encoding="utf-8")
+    vector_backend = Path("studio/backend/vector_documents.py").read_text(encoding="utf-8")
+    auto_v2 = Path("studio/backend/auto_extract_v2.py").read_text(encoding="utf-8")
+    server = Path("studio/backend/server.py").read_text(encoding="utf-8")
+
+    # Phase 3
+    assert "process_candidates_tiled" in global_engine
+    assert "TILED_HALO_STITCH" in tiled
+    assert "_spool_tiles" in tiled
+    assert "_load_tile_halo" in tiled
+    assert "stitch_fragments" in tiled
+    assert "v2_tiles.jsonl" in tiled
+    assert "tile_size_m" in engine
+    assert "tile_halo_m" in engine
+
+    # Phase 4
+    assert "_support_aware_smooth" in engine
+    assert "_bridge_short_refine_gaps" in engine
+    assert "support_ratio" in engine
+    assert "bridged_stations" in engine
+    assert "refine_support_target" in engine
+
+    # Phase 5
+    assert 'SCHEMA = "talude-vector-document/v1"' in vector
+    assert "create_vector_document" in vector
+    assert "write_documents_from_geojson" in vector_backend
+    assert "active_vector_document" in auto_v2
+    assert '@app.get("/api/projects/{project_id}/vector-document")' in server
+    assert '@app.get("/api/projects/{project_id}/vector-document/summary")' in server
