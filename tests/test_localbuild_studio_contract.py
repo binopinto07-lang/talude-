@@ -5,10 +5,9 @@ from pathlib import Path
 def test_localbuild_packages_studio_not_legacy_tkinter():
     cfg = json.loads(Path("localbuild/talude_v1.json").read_text(encoding="utf-8"))
 
-    # A V2 experimental continua a usar o mesmo empacotamento desktop do
-    # Talude Studio, mas o nome apresentado pelo Local Build Manager identifica
-    # explicitamente o motor RAW TIN MST. Não prender este contrato ao nome V1.
-    assert cfg["name"] == "Talude Studio V2 Experimental — RAW TIN MST"
+    # O projeto do Local Build Manager mantém a identidade estável da versão
+    # que já construía corretamente; o V2 muda o motor, não o pipeline.
+    assert cfg["name"] == "Talude Studio V1 — Crista + Pé"
 
     build = cfg["pipelines"]["build"]
     commands = "\n".join(step["command"] for step in build)
