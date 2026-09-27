@@ -667,7 +667,7 @@ def extract_face_raw_tin(
         raise ValueError("V2 ficou com poucos pontos depois da redução TIN.")
 
     try:
-        tri = Delaunay(tin_points[:, :2], qhull_options="Qbb Qc Q12")
+        tri = Delaunay(tin_points[:, :2], qhull_options="Qbb Qc Qz Q12")
     except QhullError as exc:
         raise ValueError(f"Falha Delaunay V2: {exc}") from exc
 
