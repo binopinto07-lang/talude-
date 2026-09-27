@@ -7,8 +7,8 @@ def test_localbuild_packages_studio_not_legacy_tkinter():
 
     # A V2 experimental continua a usar o mesmo empacotamento desktop do
     # Talude Studio, mas o nome apresentado pelo Local Build Manager identifica
-    # explicitamente o AUTO GLOBAL V2 com RAW TIN. Não prender este contrato ao nome V1.
-    assert cfg["name"] == "Talude Studio V2 Experimental — AUTO GLOBAL RAW TIN"
+    # explicitamente o marco V2 TILED + REFINEMENT + VECTOR DOCUMENT. Não prender este contrato ao nome V1.
+    assert cfg["name"] == "Talude Studio V2 — TILED + REFINEMENT + VECTOR DOCUMENT"
 
     build = cfg["pipelines"]["build"]
     commands = "\n".join(step["command"] for step in build)
