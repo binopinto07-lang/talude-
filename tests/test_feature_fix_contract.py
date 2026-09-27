@@ -56,10 +56,13 @@ def test_auto_engine_has_crs_dependency_and_safe_fallback():
     requirements = Path("requirements.txt").read_text(encoding="utf-8")
     io = Path("src/talude_v1/io.py").read_text(encoding="utf-8")
     build = Path("localbuild/talude_v1.json").read_text(encoding="utf-8")
+    windows_builder = Path("scripts/build_windows.py").read_text(encoding="utf-8")
 
     assert "pyproj" in requirements
     assert "crs_wkt = None" in io
-    assert "--hidden-import pyproj" in build
+    assert "scripts/build_windows.py" in build
+    assert '"pyproj"' in windows_builder
+    assert '"--hidden-import", "pyproj"' in windows_builder
 
 
 def test_auto_detector_is_restored_to_112_without_face_gate():
