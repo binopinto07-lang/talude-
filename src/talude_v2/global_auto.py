@@ -639,7 +639,31 @@ def run_auto_global_v2(
             ),
         )
 
-    if source.suffix.lower() in {".las", ".laz"}:
+    if not candidates:
+        # Do not scan a 200M+ point cloud a second time when discovery found
+        # nothing to refine. Keep the empty/unpaired baseline result and make
+        # the reason explicit in the report.
+        if source.suffix.lower() in {".las", ".laz"}:
+            info = inspect_point_cloud(source)
+            crs_wkt = info.crs_wkt
+            points_total = int(info.point_count)
+        else:
+            cloud_info = load_point_cloud(source)
+            crs_wkt = cloud_info.crs_wkt
+            points_total = int(len(cloud_info.xyz))
+        roi_points = []
+        roi_stats = {
+            "points_total": points_total,
+            "points_selected": 0,
+            "points_routed_with_overlap": 0,
+            "roi_max_points_per_face": int(max_roi_points),
+            "roi_seen_total": 0,
+            "roi_kept_total": 0,
+            "spatial_index_cells": 0,
+            "spatial_tile_size_m": None,
+            "crs_wkt": crs_wkt,
+        }
+    elif source.suffix.lower() in {".las", ".laz"}:
         roi_points, roi_stats = _collect_roi_points_stream(
             source,
             cfg,
