@@ -121,6 +121,7 @@ def _reconstruct_sparse_ground(
     # Base finita: vizinho Ground mais próximo. Só será usada fora das pequenas
     # lacunas para cálculo numérico; analysis_valid continua False nesses locais.
     filled = arr[tuple(inds)].astype(np.float32, copy=True)
+    del inds, distance_cells
 
     if max_gap_m <= 0:
         return filled, real.copy(), support_distance_m
