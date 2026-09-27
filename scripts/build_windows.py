@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import importlib
 import json
 import os
 import shutil
@@ -24,7 +26,50 @@ def _require(path: Path, label: str) -> None:
         raise FileNotFoundError(f"{label} não encontrado: {path}")
 
 
+def _module_preflight(repo: Path) -> list[tuple[str, str]]:
+    for path in (repo, repo / "src"):
+        value = str(path)
+        if value not in sys.path:
+            sys.path.insert(0, value)
+
+    modules = [
+        "numpy",
+        "scipy",
+        "laspy",
+        "lazrs",
+        "ezdxf",
+        "pyproj",
+        "fastapi",
+        "uvicorn",
+        "PySide6.QtWebEngineWidgets",
+        "PySide6.QtWebEngineCore",
+        "PySide6.QtWebChannel",
+        "talude_v1.engine",
+        "talude_v2.engine",
+        "talude_v2.tiled_auto",
+        "talude_v2.vector_document",
+        "studio.backend.server",
+        "studio.backend.vector_documents",
+        "studio.backend.vector_export",
+        "studio.desktop.main",
+    ]
+    result: list[tuple[str, str]] = []
+    for name in modules:
+        module = importlib.import_module(name)
+        version = getattr(module, "__version__", "ok")
+        result.append((name, str(version)))
+    return result
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Validar imports/assets sem executar PyInstaller.",
+    )
+    args_cli = parser.parse_args()
+
     repo = _repo_root()
     root = _short_root()
     dist = root / "dist"
@@ -34,7 +79,20 @@ def main() -> int:
 
     _require(repo / "talude_studio.py", "Entry point")
     _require(repo / "studio" / "viewer" / "index.html", "Viewer")
+    _require(repo / "studio" / "viewer" / "vector_editor.js", "Vector Editor")
     _require(repo / "studio" / "vendor", "Vendor Potree/PotreeConverter")
+
+    print("=" * 72)
+    print("TALUDE STUDIO BUILD PREFLIGHT")
+    print(f"Repo      : {repo}")
+    print(f"Short root: {root}")
+    print(f"Python    : {sys.executable}")
+    for name, version in _module_preflight(repo):
+        print(f"[OK] {name} | {version}")
+    print("=" * 72)
+
+    if args_cli.preflight:
+        return 0
 
     if root.exists():
         shutil.rmtree(root, ignore_errors=True)
@@ -91,13 +149,7 @@ def main() -> int:
     }
     log.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-    print("=" * 72)
-    print("TALUDE STUDIO WINDOWS BUILDER")
-    print(f"Repo      : {repo}")
-    print(f"Short root: {root}")
-    print(f"Python    : {sys.executable}")
-    print("=" * 72)
-
+    print("TALUDE STUDIO WINDOWS BUILDER · PyInstaller")
     try:
         PyInstaller.__main__.run(args)
     except SystemExit as exc:
