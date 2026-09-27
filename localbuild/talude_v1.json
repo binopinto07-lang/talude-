@@ -1,6 +1,6 @@
 {
   "id": "talude_v1",
-  "name": "Talude Studio V2 — TILED + REFINEMENT + VECTOR DOCUMENT",
+  "name": "Talude Studio V2 — LAYERS + EDITOR + PROJECT + EXPORT",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
@@ -76,15 +76,15 @@
       {
         "id": "clean",
         "name": "Preparar pasta de build",
-        "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
+        "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; $short=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild'; if (Test-Path $short) { Remove-Item $short -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
         "timeout_minutes": 5,
         "category": "build",
         "venv": "v1"
       },
       {
         "id": "pyinstaller",
-        "name": "Criar Talude Studio Windows (paths absolutos)",
-        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%' --paths '%REPO%/src' --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --hidden-import PySide6.QtWebChannel --hidden-import uvicorn.loops.asyncio --hidden-import uvicorn.protocols.http.h11_impl --hidden-import h11 --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all uvicorn --collect-all h11 --collect-all fastapi --collect-all starlette --collect-all anyio --collect-all scipy --hidden-import ezdxf --hidden-import pyproj --add-data '%REPO%/studio/viewer;studio/viewer' --add-data '%REPO%/studio/vendor;studio/vendor' '%REPO%/talude_studio.py'",
+        "name": "Criar Talude Studio Windows (short-path builder)",
+        "command": "& '%PYTHON%' 'scripts/build_windows.py'",
         "timeout_minutes": 70,
         "category": "build",
         "venv": "v1"
@@ -92,7 +92,7 @@
       {
         "id": "exe-check",
         "name": "Verificar Talude_V1.exe",
-        "command": "if (!(Test-Path '%WORK%/dist/Talude_V1/Talude_V1.exe')) { throw 'Talude_V1.exe não foi gerado' }; Get-Item '%WORK%/dist/Talude_V1/Talude_V1.exe' | Select-Object FullName,Length,LastWriteTime",
+        "command": "$exe=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild\\dist\\Talude_V1\\Talude_V1.exe'; if (!(Test-Path $exe)) { throw ('Talude_V1.exe não foi gerado: ' + $exe) }; Get-Item $exe | Select-Object FullName,Length,LastWriteTime",
         "timeout_minutes": 5,
         "category": "test",
         "venv": "v1"
@@ -100,7 +100,7 @@
       {
         "id": "self-test",
         "name": "Self-test QtWebEngine + Potree + motor",
-        "command": "Push-Location '%WORK%/dist/Talude_V1'; try { Remove-Item TALUDE_V1_SELF_TEST.txt -ErrorAction SilentlyContinue; & ./Talude_V1.exe --self-test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (!(Test-Path './TALUDE_V1_SELF_TEST.txt')) { throw 'Self-test não criou relatório' }; Get-Content ./TALUDE_V1_SELF_TEST.txt } finally { Pop-Location }",
+        "command": "$dist=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild\\dist\\Talude_V1'; Push-Location $dist; try { Remove-Item TALUDE_V1_SELF_TEST.txt -ErrorAction SilentlyContinue; & ./Talude_V1.exe --self-test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (!(Test-Path './TALUDE_V1_SELF_TEST.txt')) { throw 'Self-test não criou relatório' }; Get-Content ./TALUDE_V1_SELF_TEST.txt } finally { Pop-Location }",
         "timeout_minutes": 15,
         "category": "test",
         "venv": "v1"
@@ -108,7 +108,7 @@
       {
         "id": "package",
         "name": "Preparar Talude Studio portátil",
-        "command": "$pkg='%WORK%/package'; if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }; New-Item -ItemType Directory -Force -Path $pkg | Out-Null; Copy-Item -Recurse '%WORK%/dist/Talude_V1' ($pkg + '/Talude_V1'); Copy-Item -Force 'packaging/START_TALUDE_V1.bat' $pkg; Copy-Item -Force 'packaging/LEIA_ME.txt' $pkg; Copy-Item -Force 'README.md' $pkg",
+        "command": "$root=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild'; $pkg=Join-Path $root 'package'; $dist=Join-Path $root 'dist\\Talude_V1'; if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }; New-Item -ItemType Directory -Force -Path $pkg | Out-Null; Copy-Item -Recurse $dist (Join-Path $pkg 'Talude_V1'); Copy-Item -Force 'packaging/START_TALUDE_V1.bat' $pkg; Copy-Item -Force 'packaging/LEIA_ME.txt' $pkg; Copy-Item -Force 'README.md' $pkg",
         "timeout_minutes": 12,
         "category": "package",
         "venv": "v1"
@@ -116,7 +116,7 @@
       {
         "id": "zip",
         "name": "Criar ZIP Talude Studio Windows",
-        "command": "$latest='%LATEST%/Talude_V1_Windows_x64.zip'; if (Test-Path $latest) { Remove-Item $latest -Force }; Compress-Archive -Path '%WORK%/package/*' -DestinationPath $latest -Force; Copy-Item -Force $latest '%ARCHIVE%/Talude_V1_%TIMESTAMP%.zip'; Write-Output ('ZIP: ' + (Resolve-Path $latest))",
+        "command": "$pkg=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild\\package'; $latest='%LATEST%/Talude_V1_Windows_x64.zip'; if (Test-Path $latest) { Remove-Item $latest -Force }; Compress-Archive -Path ($pkg + '/*') -DestinationPath $latest -Force; Copy-Item -Force $latest '%ARCHIVE%/Talude_V1_%TIMESTAMP%.zip'; Write-Output ('ZIP: ' + (Resolve-Path $latest))",
         "timeout_minutes": 25,
         "category": "package",
         "venv": "v1"
@@ -174,15 +174,15 @@
       {
         "id": "clean",
         "name": "Preparar pasta de build",
-        "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
+        "command": "if (Test-Path '%WORK%') { Remove-Item '%WORK%' -Recurse -Force }; $short=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild'; if (Test-Path $short) { Remove-Item $short -Recurse -Force }; New-Item -ItemType Directory -Force -Path '%WORK%', '%LATEST%', '%ARCHIVE%' | Out-Null",
         "timeout_minutes": 5,
         "category": "build",
         "venv": "v1"
       },
       {
         "id": "pyinstaller",
-        "name": "Criar Talude Studio Windows (paths absolutos)",
-        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%' --paths '%REPO%/src' --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --hidden-import PySide6.QtWebChannel --hidden-import uvicorn.loops.asyncio --hidden-import uvicorn.protocols.http.h11_impl --hidden-import h11 --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all uvicorn --collect-all h11 --collect-all fastapi --collect-all starlette --collect-all anyio --collect-all scipy --hidden-import ezdxf --hidden-import pyproj --add-data '%REPO%/studio/viewer;studio/viewer' --add-data '%REPO%/studio/vendor;studio/vendor' '%REPO%/talude_studio.py'",
+        "name": "Criar Talude Studio Windows (short-path builder)",
+        "command": "& '%PYTHON%' 'scripts/build_windows.py'",
         "timeout_minutes": 70,
         "category": "build",
         "venv": "v1"
@@ -190,7 +190,7 @@
       {
         "id": "exe-check",
         "name": "Verificar Talude_V1.exe",
-        "command": "if (!(Test-Path '%WORK%/dist/Talude_V1/Talude_V1.exe')) { throw 'Talude_V1.exe não foi gerado' }; Get-Item '%WORK%/dist/Talude_V1/Talude_V1.exe' | Select-Object FullName,Length,LastWriteTime",
+        "command": "$exe=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild\\dist\\Talude_V1\\Talude_V1.exe'; if (!(Test-Path $exe)) { throw ('Talude_V1.exe não foi gerado: ' + $exe) }; Get-Item $exe | Select-Object FullName,Length,LastWriteTime",
         "timeout_minutes": 5,
         "category": "test",
         "venv": "v1"
@@ -198,7 +198,7 @@
       {
         "id": "self-test",
         "name": "Self-test QtWebEngine + Potree + motor",
-        "command": "Push-Location '%WORK%/dist/Talude_V1'; try { Remove-Item TALUDE_V1_SELF_TEST.txt -ErrorAction SilentlyContinue; & ./Talude_V1.exe --self-test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (!(Test-Path './TALUDE_V1_SELF_TEST.txt')) { throw 'Self-test não criou relatório' }; Get-Content ./TALUDE_V1_SELF_TEST.txt } finally { Pop-Location }",
+        "command": "$dist=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild\\dist\\Talude_V1'; Push-Location $dist; try { Remove-Item TALUDE_V1_SELF_TEST.txt -ErrorAction SilentlyContinue; & ./Talude_V1.exe --self-test; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; if (!(Test-Path './TALUDE_V1_SELF_TEST.txt')) { throw 'Self-test não criou relatório' }; Get-Content ./TALUDE_V1_SELF_TEST.txt } finally { Pop-Location }",
         "timeout_minutes": 15,
         "category": "test",
         "venv": "v1"
@@ -206,7 +206,7 @@
       {
         "id": "package",
         "name": "Preparar Talude Studio portátil",
-        "command": "$pkg='%WORK%/package'; if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }; New-Item -ItemType Directory -Force -Path $pkg | Out-Null; Copy-Item -Recurse '%WORK%/dist/Talude_V1' ($pkg + '/Talude_V1'); Copy-Item -Force 'packaging/START_TALUDE_V1.bat' $pkg; Copy-Item -Force 'packaging/LEIA_ME.txt' $pkg; Copy-Item -Force 'README.md' $pkg",
+        "command": "$root=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild'; $pkg=Join-Path $root 'package'; $dist=Join-Path $root 'dist\\Talude_V1'; if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }; New-Item -ItemType Directory -Force -Path $pkg | Out-Null; Copy-Item -Recurse $dist (Join-Path $pkg 'Talude_V1'); Copy-Item -Force 'packaging/START_TALUDE_V1.bat' $pkg; Copy-Item -Force 'packaging/LEIA_ME.txt' $pkg; Copy-Item -Force 'README.md' $pkg",
         "timeout_minutes": 12,
         "category": "package",
         "venv": "v1"
@@ -214,7 +214,7 @@
       {
         "id": "zip",
         "name": "Criar ZIP Talude Studio Windows",
-        "command": "$latest='%LATEST%/Talude_V1_Windows_x64.zip'; if (Test-Path $latest) { Remove-Item $latest -Force }; Compress-Archive -Path '%WORK%/package/*' -DestinationPath $latest -Force; Copy-Item -Force $latest '%ARCHIVE%/Talude_V1_%TIMESTAMP%.zip'; Write-Output ('ZIP: ' + (Resolve-Path $latest))",
+        "command": "$pkg=Join-Path $env:LOCALAPPDATA 'LBM\\TaludeStudioBuild\\package'; $latest='%LATEST%/Talude_V1_Windows_x64.zip'; if (Test-Path $latest) { Remove-Item $latest -Force }; Compress-Archive -Path ($pkg + '/*') -DestinationPath $latest -Force; Copy-Item -Force $latest '%ARCHIVE%/Talude_V1_%TIMESTAMP%.zip'; Write-Output ('ZIP: ' + (Resolve-Path $latest))",
         "timeout_minutes": 25,
         "category": "package",
         "venv": "v1"
@@ -222,5 +222,5 @@
     ]
   },
   "release": {},
-  "config_revision": 4
+  "config_revision": 6
 }
