@@ -46,12 +46,14 @@ class _PriorityReservoir:
     def __init__(self, max_points: int, seed: int) -> None:
         self.max_points = max(100, int(max_points))
         self.rng = np.random.default_rng(int(seed))
-        self.points = np.empty((0, 3), dtype=np.float32)
+        # Keep absolute survey coordinates in float64. UTM-scale northings in
+        # float32 can lose decimetres, which is unacceptable for breaklines.
+        self.points = np.empty((0, 3), dtype=np.float64)
         self.priority = np.empty((0,), dtype=np.float32)
         self.seen = 0
 
     def add(self, points: np.ndarray) -> None:
-        pts = np.asarray(points, dtype=np.float32)
+        pts = np.asarray(points, dtype=np.float64)
         if len(pts) == 0:
             return
 
