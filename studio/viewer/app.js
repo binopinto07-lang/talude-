@@ -31,6 +31,7 @@
     viewer: null,
     pointclouds: new Map(),
     featureMode: "guided",
+    geometryEngine: "baseline",
     traceArmed: false,
     currentSeed: null,
     seedMarker: null,
@@ -101,6 +102,7 @@
       details: Object.assign({
         sequence: ++state.debugSequence,
         feature_mode: state.featureMode,
+        geometry_engine: state.geometryEngine,
         profile: byId("profile") ? byId("profile").value : null,
         class_filter_mode: state.classFilterMode,
         selected_classes: Array.from(state.selectedClasses).sort((a, b) => a - b),
@@ -402,7 +404,7 @@
     viewer.renderer.domElement.addEventListener("mouseup", onViewerNavMouseUp, true);
     viewer.renderer.domElement.addEventListener("mouseleave", onViewerNavMouseUp, true);
     viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.7 · AUTO 1.1.2 + face clicada");
+    setStatus("Potree pronto · Talude V2 EXP · AUTO 1.1.2 + face clicada");
   }
 
   function configurePointcloud(pointcloud) {
@@ -784,8 +786,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.7 · motor MDT + Declive pronto."
-              : "Talude V1.1.7 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V2 EXP · motor MDT + Declive pronto."
+              : "Talude V2 EXP · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -810,8 +812,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.7 · a ler MDT + Declive…"
-        : "Talude V1.1.7 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V2 EXP · a ler MDT + Declive…"
+        : "Talude V2 EXP · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -868,7 +870,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.7 · raster-terrain · " +
+      "Talude V2 EXP · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1616,7 +1618,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.7 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V2 EXP used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -2010,14 +2012,21 @@
       profile: "face",
       seed: [seed.x, seed.y, seed.z],
       selected_classes: selectedClasses,
-      detector: "same-auto-1.1.2-clicked-face",
+      detector: state.geometryEngine === "v2"
+        ? "V2_RAW_TIN_MST"
+        : "same-auto-1.1.2-clicked-face",
+      geometry_engine: state.geometryEngine,
       half_m: half
     });
 
-    setStatus("Talude V1.1.7 · AUTO 1.1.2 apenas na face clicada…");
+    const selectedEngineLabel = state.geometryEngine === "v2"
+      ? "V2 RAW-TIN-MST"
+      : "Baseline 1.1.7";
+    setStatus(selectedEngineLabel + " · a processar face clicada…");
     byId("traceHint").textContent =
-      "A recolher a zona da face e executar o mesmo processo do AUTO: " +
-      "slope multiescala → persistence/hysteresis → FACE_DETECTOR → CRISTA + PÉ…";
+      state.geometryEngine === "v2"
+        ? "V2: RAW points → Delaunay TIN → region growing → boundary → Kruskal MST → plane intersections…"
+        : "Baseline: slope multiescala → persistence/hysteresis → FACE_DETECTOR → CRISTA + PÉ…";
 
     const tile = await collectTerrainTile(
       pointcloud,
@@ -2035,25 +2044,42 @@
       );
     }
 
-    const result = await api("/api/feature-lines/terrain-face", {
+    const useV2 = state.geometryEngine === "v2";
+    const endpoint = useV2
+      ? "/api/v2/feature-lines/terrain-face"
+      : "/api/feature-lines/terrain-face";
+
+    const payload = {
+      project_id: state.project.id,
+      cloud_id: cloudId,
+      profile: "face",
+      seed: [seed.x, seed.y, seed.z],
+      points: tile.points,
+      classifications: tile.classifications,
+      selected_classes: selectedClasses,
+      grid_resolution: Number(byId("cellSize") ? byId("cellSize").value : 0),
+      slope_low_deg: Number(byId("slopeLow") ? byId("slopeLow").value : 0),
+      slope_high_deg: Number(byId("slopeHigh") ? byId("slopeHigh").value : 0),
+      min_face_area_m2: Number(byId("minArea") ? byId("minArea").value : 4),
+      min_line_length_m: Number(byId("minLength") ? byId("minLength").value : 2),
+      line_smooth_window: Number(
+        byId("lineSmooth") ? byId("lineSmooth").value : 11
+      )
+    };
+
+    if (useV2) {
+      payload.tin_spacing_m = 0.25;
+      payload.max_tin_points = 45000;
+      payload.max_triangle_edge_m = 2.25;
+      payload.graph_gap_m = 1.50;
+      payload.station_spacing_m = 1.00;
+      payload.patch_along_m = 2.50;
+      payload.patch_cross_m = 1.80;
+    }
+
+    const result = await api(endpoint, {
       method: "POST",
-      body: JSON.stringify({
-        project_id: state.project.id,
-        cloud_id: cloudId,
-        profile: "face",
-        seed: [seed.x, seed.y, seed.z],
-        points: tile.points,
-        classifications: tile.classifications,
-        selected_classes: selectedClasses,
-        grid_resolution: Number(byId("cellSize") ? byId("cellSize").value : 0),
-        slope_low_deg: Number(byId("slopeLow") ? byId("slopeLow").value : 0),
-        slope_high_deg: Number(byId("slopeHigh") ? byId("slopeHigh").value : 0),
-        min_face_area_m2: Number(byId("minArea") ? byId("minArea").value : 4),
-        min_line_length_m: Number(byId("minLength") ? byId("minLength").value : 2),
-        line_smooth_window: Number(
-          byId("lineSmooth") ? byId("lineSmooth").value : 11
-        )
-      })
+      body: JSON.stringify(payload)
     });
 
     if (runId !== state.traceRunId) return;
@@ -2073,16 +2099,28 @@
     const toe = result.toe || {};
     const confidence = Math.round(Number(result.confidence || 0) * 100);
 
+    const engineLabel = result.engine === "v2"
+      ? "V2 RAW-TIN-MST"
+      : "Baseline 1.1.7";
+    const geometryInfo = result.engine === "v2"
+      ? (
+          " · TIN " + Number(result.tin_points || 0).toLocaleString("pt-PT") +
+          " pts · refine " + Math.round(Number(result.refine_ratio || 0) * 100) + "%"
+        )
+      : (
+          " · cell " + Number(result.grid_resolution || 0).toFixed(3) + " m"
+        );
+
     byId("traceHint").textContent =
-      "Face clicada · CRISTA " +
+      engineLabel + " · CRISTA " +
       Number(crest.length_m || 0).toFixed(1) + " m · PÉ " +
-      Number(toe.length_m || 0).toFixed(1) + " m · " +
-      "cell " + Number(result.grid_resolution || 0).toFixed(3) + " m · " +
-      "confiança " + confidence + "% · " +
+      Number(toe.length_m || 0).toFixed(1) + " m" +
+      geometryInfo +
+      " · confiança " + confidence + "% · " +
       result.trace_elapsed_ms.toFixed(0) + " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.7 · face clicada · CRISTA + PÉ · " +
+      engineLabel + " · face clicada · CRISTA + PÉ · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
 
@@ -2093,7 +2131,15 @@
       profile_query_points: tile.points.length,
       tile_finish_reason: tile.finish_reason,
       detector: result.detector,
+      engine: result.engine || "baseline",
       grid_resolution: result.grid_resolution,
+      tin_points: result.tin_points,
+      tin_triangles: result.tin_triangles,
+      face_triangles: result.face_triangles,
+      crest_candidate_edges: result.crest_candidate_edges,
+      toe_candidate_edges: result.toe_candidate_edges,
+      refine_ratio: result.refine_ratio,
+      face_slope_median_deg: result.face_slope_median_deg,
       estimated_spacing_m: result.estimated_spacing_m,
       auto_cell_capped: result.auto_cell_capped,
       sample_density_pts_m2: result.sample_density_pts_m2,
@@ -2685,12 +2731,15 @@
       throw new Error("A face clicada não devolveu CRISTA + PÉ.");
     }
 
+    const isV2 = result.engine === "v2" || result.detector === "V2_RAW_TIN_MST";
     const objects = [];
     for (const data of lines) {
       const isCrest = data.type === "CREST";
       const line = createLineObject(data.vertices, {
-        color: isCrest ? 0xffd54a : 0x38d5ff,
-        widthPx: isCrest ? 3.4 : 3.1,
+        color: isV2
+          ? (isCrest ? 0x7cff4f : 0xff4fd8)
+          : (isCrest ? 0xffd54a : 0x38d5ff),
+        widthPx: isV2 ? 4.0 : (isCrest ? 3.4 : 3.1),
         dashed: true,
         dashSize: 0.95,
         gapSize: 0.45
@@ -2705,6 +2754,7 @@
 
     debugLog("feature.face_pair_candidate_drawn", {
       detector: result.detector,
+      engine: result.engine || "baseline",
       line_count: lines.length,
       crest_vertices: result.crest && result.crest.vertices
         ? result.crest.vertices.length
@@ -2805,6 +2855,7 @@
         const persisted = Object.assign({}, lineData, {
           profile: isCrest ? "ridge" : "toe",
           detector: data.detector,
+          engine: data.engine || "baseline",
           seed: data.seed || null,
           cloud_id: data.cloud_id || null,
           selected_classes: data.selected_classes || null,
@@ -2812,9 +2863,12 @@
           query_source: data.query_source || "potree-local-auto-face"
         });
 
+        const isV2 = data.engine === "v2" || data.detector === "V2_RAW_TIN_MST";
         const accepted = createLineObject(lineData.vertices, {
-          color: isCrest ? 0xffd54a : 0x38d5ff,
-          widthPx: isCrest ? 3.2 : 3.0,
+          color: isV2
+            ? (isCrest ? 0x7cff4f : 0xff4fd8)
+            : (isCrest ? 0xffd54a : 0x38d5ff),
+          widthPx: isV2 ? 3.6 : (isCrest ? 3.2 : 3.0),
           dashed: false
         });
         addFeatureOverlayObject(accepted);
@@ -3581,7 +3635,9 @@
       armed: state.traceArmed,
       feature_mode: state.featureMode,
       profile: "face",
-      detector: "same-auto-1.1.2-clicked-face"
+      detector: state.geometryEngine === "v2"
+        ? "V2_RAW_TIN_MST"
+        : "same-auto-1.1.2-clicked-face"
     });
 
     if (state.traceArmed) {
@@ -3593,9 +3649,15 @@
             : "janela média da face";
 
       byId("traceHint").textContent =
-        "Clique curto aproximadamente no CENTRO da face inclinada. " +
-        "O mesmo detector AUTO da 1.1.2 processará apenas essa " +
-        extent + " e devolverá CRISTA + PÉ. Arraste para rodar.";
+        state.geometryEngine === "v2"
+          ? (
+              "V2 experimental: clique no CENTRO da face. RAW TIN + MST + " +
+              "interseção local das superfícies processará essa " + extent + "."
+            )
+          : (
+              "Baseline 1.1.7: clique no CENTRO da face. O detector base " +
+              "processará essa " + extent + " e devolverá CRISTA + PÉ."
+            );
     } else {
       byId("traceHint").textContent =
         state.candidateData
@@ -3646,6 +3708,29 @@
       acceptCandidate().catch((e) => toast(e.message, 8000));
     };
     byId("rejectTrace").onclick = rejectCandidate;
+
+    document.querySelectorAll("#geometryEngine button").forEach((button) => {
+      button.onclick = () => {
+        document
+          .querySelectorAll("#geometryEngine button")
+          .forEach((b) => b.classList.remove("active"));
+        button.classList.add("active");
+        state.geometryEngine = button.dataset.engine || "baseline";
+        state.traceArmed = false;
+        byId("traceButton").classList.remove("active");
+        if (state.candidateObject) removeCandidate();
+        resetWaypointSession();
+        const label = state.geometryEngine === "v2"
+          ? "V2 RAW-TIN-MST experimental"
+          : "Baseline 1.1.7";
+        byId("traceHint").textContent =
+          label + " selecionada. Clique em Picar face automática.";
+        setStatus(label + " selecionada.");
+        debugLog("feature.geometry_engine_changed", {
+          geometry_engine: state.geometryEngine
+        });
+      };
+    });
 
     document.querySelectorAll("#featureMode button").forEach((button) => {
       button.onclick = () => {
