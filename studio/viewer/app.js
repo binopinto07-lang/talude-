@@ -56,6 +56,8 @@
     navPointerDown: null,
     panMode: false,
     panPointer: null,
+    editorPickArmed: false,
+    editorPickContext: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -606,6 +608,10 @@
     } else {
       byId("emptyState").classList.remove("hidden");
     }
+
+    window.dispatchEvent(new CustomEvent("talude:project-activated", {
+      detail: { project: project }
+    }));
   }
 
   function initDesktopBridge() {
@@ -3520,17 +3526,55 @@
     const start = state.navPointerDown;
     state.navPointerDown = null;
 
-    if (!state.traceArmed || !start || event.shiftKey || state.panMode) return;
+    if (!start || event.shiftKey || state.panMode) return;
 
     const moved = Math.hypot(
       event.clientX - start.x,
       event.clientY - start.y
     );
 
+    if (moved <= 5 && state.editorPickArmed && state.viewer) {
+      const hit = Potree.Utils.getMousePointCloudIntersection(
+        state.viewer.inputHandler.mouse,
+        state.viewer.scene.getActiveCamera(),
+        state.viewer,
+        state.viewer.scene.pointclouds
+      );
+      if (hit) {
+        const context = state.editorPickContext || {};
+        state.editorPickArmed = false;
+        state.editorPickContext = null;
+        window.dispatchEvent(new CustomEvent("talude:editor-pick", {
+          detail: {
+            xyz: [hit.location.x, hit.location.y, hit.location.z],
+            context: context
+          }
+        }));
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+    }
+
     // Clique curto = selecionar a face. Arrastar = OrbitControls.
-    if (moved <= 5) {
+    if (moved <= 5 && state.traceArmed) {
       onViewerPickClick(event);
     }
+  }
+
+
+  function armEditorPick(context) {
+    state.editorPickArmed = true;
+    state.editorPickContext = context || {};
+    state.traceArmed = false;
+    const traceButton = byId("traceButton");
+    if (traceButton) traceButton.classList.remove("active");
+    setStatus("Editor vetorial · clique curto na nuvem para escolher XYZ.");
+  }
+
+  function cancelEditorPick() {
+    state.editorPickArmed = false;
+    state.editorPickContext = null;
   }
 
 
@@ -3856,6 +3900,8 @@
     toast,
     selectedClassesForEngine,
     setClassificationPreset,
-    updateWideLineResolution
+    updateWideLineResolution,
+    armEditorPick,
+    cancelEditorPick
   };
 })();
