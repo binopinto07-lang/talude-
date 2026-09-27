@@ -219,3 +219,33 @@ A V2 global produz ainda:
 - botão de cancelamento do processamento.
 
 Ver `docs/V2_SECOND_DELIVERY.md`.
+
+
+## V2 Fases 3–5 — estado atual
+
+A branch `v2-experimental-raw-tin-mst` avançou para:
+
+```text
+AUTO GLOBAL
+  ↓
+TILED + HALO
+  ↓
+RAW TIN por tile/face
+  ↓
+STITCHING
+  ↓
+SUPPORT-AWARE REFINEMENT
+  ↓
+VECTOR DOCUMENT
+```
+
+Produção LAS/LAZ usa tiles e halo; resultados frágeis continuam protegidos pelo
+fallback da baseline 1.1.7.
+
+Cada execução cria também:
+
+`vector_document.json`
+
+que será a base das próximas layers, edição, save/load e exportação profissional.
+
+Documentação: `docs/V2_PHASES_3_5.md`.
