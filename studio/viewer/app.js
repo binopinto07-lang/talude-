@@ -3728,6 +3728,12 @@
         const label = state.geometryEngine === "v2"
           ? "V2 RAW-TIN-MST experimental"
           : "Baseline 1.1.7";
+        const autoButton = byId("detectTalude");
+        if (autoButton) {
+          autoButton.textContent = state.geometryEngine === "v2"
+            ? "AUTO GLOBAL V2 — CRISTA + PÉ"
+            : "DETETAR CRISTA + PÉ";
+        }
         byId("traceHint").textContent =
           label + " selecionada. Picar face usa o motor escolhido; DETETAR CRISTA + PÉ usa o AUTO global do mesmo motor.";
         setStatus(label + " selecionada.");
