@@ -213,3 +213,47 @@ Documentação detalhada:
 
 A terceira entrega será o **TILED ENGINE + HALO + stitching**. Não está
 misturada nesta Exp2.
+
+
+## Fases 3–5 — TILED + REFINEMENT + VECTOR DOCUMENT — 2026-09-27
+
+Implementadas na branch experimental sem alterar a baseline:
+
+### Fase 3
+
+- core tiles;
+- halo;
+- spool RAW Ground em float64;
+- uma passagem streaming pela cloud;
+- RAW TIN por face × tile;
+- clipping ao core;
+- deduplicação dos overlaps;
+- stitching por face;
+- coverage guard;
+- gap guard;
+- fallback 1.1.7.
+
+### Fase 4
+
+- robust plane com support + inlier ratio;
+- quality support-aware;
+- smooth robusto apenas dos deltas de refinement;
+- bridge de gaps curtos;
+- métricas de support por CRISTA/PÉ.
+
+### Fase 5
+
+- `talude-vector-document/v1`;
+- Engine Result → Vector Document → Features;
+- LineStringZ;
+- layers base CRISTA / PE_TALUDE;
+- documento por run;
+- documento ativo do projeto;
+- API read-only do documento.
+
+Ver:
+
+- `docs/V2_PHASES_3_5.md`
+
+As Fases 6–9 devem trabalhar sobre o Vector Document e não voltar a alterar o
+motor geométrico sem uma razão técnica isolada e testada.
