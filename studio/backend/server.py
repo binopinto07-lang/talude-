@@ -13,7 +13,7 @@ from .converter import jobs, start_import
 from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
-from talude_v2 import V2Config, extract_face_raw_tin
+from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
 APP_VERSION = "2.0.0-exp1-raw-tin-mst"
@@ -324,12 +324,23 @@ def terrain_face_v2(req: V2TerrainFaceRequest) -> dict[str, Any]:
                 "toe_vertices": len((result.get("toe") or {}).get("vertices", [])),
                 "refine_ratio": result.get("refine_ratio"),
                 "face_slope_median_deg": result.get("face_slope_median_deg"),
+                "local_normal_coherence": result.get("local_normal_coherence"),
+                "local_direction_p95_deg": result.get("local_direction_p95_deg"),
+                "quality_score": result.get("quality_score"),
+                "status": result.get("status"),
+                "reason": result.get("reason"),
+                "metrics": result.get("metrics"),
             },
             source="v2_raw_tin",
         )
         return result
     except Exception as exc:
         try:
+            reason = (
+                exc.reason.value
+                if isinstance(exc, V2DetectionError)
+                else V2Reason.INTERNAL_ERROR.value
+            )
             store.debug_event(
                 req.project_id,
                 "v2_raw_tin.backend_failed",
@@ -339,6 +350,8 @@ def terrain_face_v2(req: V2TerrainFaceRequest) -> dict[str, Any]:
                     "input_points": len(req.points),
                     "error_type": type(exc).__name__,
                     "error": str(exc),
+                    "status": "FAILED",
+                    "reason": reason,
                 },
                 source="v2_raw_tin",
                 level="ERROR",
