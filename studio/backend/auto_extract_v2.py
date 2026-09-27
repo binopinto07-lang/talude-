@@ -1,0 +1,329 @@
+from __future__ import annotations
+
+import json
+import threading
+import traceback
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from talude_v1.config import ExtractConfig
+from talude_v2 import V2Config, V2DetectionError, V2Reason, run_auto_global_v2
+
+from .converter import jobs
+from .project_store import ProjectStore
+
+
+def _stamp() -> str:
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def start_auto_extract_v2(
+    store: ProjectStore,
+    project_id: str,
+    cloud_id: str,
+    *,
+    selected_classes: list[int] | None = None,
+    cell_size: float = 0.0,
+    slope_low_deg: float = 0.0,
+    slope_high_deg: float = 0.0,
+    min_face_area_m2: float = 4.0,
+    min_line_length_m: float = 2.0,
+    line_smooth_window: int = 11,
+    tin_spacing_m: float = 0.25,
+    max_tin_points: int = 45_000,
+    max_triangle_edge_m: float = 2.25,
+    graph_gap_m: float = 1.50,
+    station_spacing_m: float = 1.00,
+    patch_along_m: float = 2.50,
+    patch_cross_m: float = 1.80,
+) -> str:
+    job_id = jobs.create("AUTO GLOBAL V2 — CRISTA + PÉ")
+    thread = threading.Thread(
+        target=_worker_v2,
+        args=(
+            store,
+            project_id,
+            cloud_id,
+            job_id,
+            selected_classes,
+            cell_size,
+            slope_low_deg,
+            slope_high_deg,
+            min_face_area_m2,
+            min_line_length_m,
+            line_smooth_window,
+            tin_spacing_m,
+            max_tin_points,
+            max_triangle_edge_m,
+            graph_gap_m,
+            station_spacing_m,
+            patch_along_m,
+            patch_cross_m,
+        ),
+        daemon=True,
+        name=f"talude-auto-v2-{job_id[:8]}",
+    )
+    thread.start()
+    return job_id
+
+
+def _worker_v2(
+    store: ProjectStore,
+    project_id: str,
+    cloud_id: str,
+    job_id: str,
+    selected_classes: list[int] | None,
+    cell_size: float,
+    slope_low_deg: float,
+    slope_high_deg: float,
+    min_face_area_m2: float,
+    min_line_length_m: float,
+    line_smooth_window: int,
+    tin_spacing_m: float,
+    max_tin_points: int,
+    max_triangle_edge_m: float,
+    graph_gap_m: float,
+    station_spacing_m: float,
+    patch_along_m: float,
+    patch_cross_m: float,
+) -> None:
+    output: Path | None = None
+    try:
+        project = store.get(project_id)
+        manifest = store.manifest(project_id)
+
+        cloud = next(
+            (item for item in manifest.get("clouds", []) if item.get("id") == cloud_id),
+            None,
+        )
+        if not cloud:
+            raise KeyError(f"Nuvem não encontrada: {cloud_id}")
+
+        source = Path(cloud["source_path"]).expanduser().resolve()
+        if not source.exists():
+            raise FileNotFoundError(source)
+
+        output = project.path / "exports" / f"talude_auto_v2_{_stamp()}"
+        output.mkdir(parents=True, exist_ok=True)
+
+        classes = None
+        if selected_classes is not None:
+            normalized = tuple(sorted({int(v) for v in selected_classes}))
+            classes = normalized if normalized else None
+
+        baseline_cfg = ExtractConfig(
+            cell_size=float(cell_size),
+            slope_low_deg=float(slope_low_deg),
+            slope_high_deg=float(slope_high_deg),
+            min_face_area_m2=float(min_face_area_m2),
+            min_line_length_m=float(min_line_length_m),
+            line_smooth_window=max(3, int(line_smooth_window)),
+            use_ground_class=classes is None,
+            classification_filter=classes,
+        )
+        v2_cfg = V2Config(
+            target_tin_spacing_m=float(tin_spacing_m),
+            max_tin_points=int(max_tin_points),
+            max_triangle_edge_m=float(max_triangle_edge_m),
+            graph_gap_m=float(graph_gap_m),
+            station_spacing_m=float(station_spacing_m),
+            patch_along_m=float(patch_along_m),
+            patch_cross_m=float(patch_cross_m),
+        )
+
+        store.debug_event(
+            project_id,
+            "talude.v2_auto_started",
+            {
+                "job_id": job_id,
+                "cloud_id": cloud_id,
+                "source": str(source),
+                "selected_classes": list(classes) if classes is not None else None,
+                "baseline_config": baseline_cfg.to_dict(),
+                "v2_config": {
+                    key: getattr(v2_cfg, key)
+                    for key in v2_cfg.__dataclass_fields__
+                },
+                "output": str(output),
+            },
+            source="v2-auto-global",
+        )
+
+        jobs.update(
+            job_id,
+            status="running",
+            progress=2,
+            message="AUTO GLOBAL V2 · a iniciar descoberta de faces…",
+        )
+
+        def cancelled() -> bool:
+            return jobs.is_cancel_requested(job_id)
+
+        def progress(value: float, message: str) -> None:
+            if cancelled():
+                raise V2DetectionError(
+                    V2Reason.CANCELLED,
+                    "AUTO GLOBAL V2 cancelado pelo utilizador.",
+                )
+            jobs.update(
+                job_id,
+                status="running",
+                progress=max(1, min(99, int(round(value)))),
+                message=str(message),
+            )
+
+        report = run_auto_global_v2(
+            source,
+            output,
+            baseline_cfg,
+            v2_cfg,
+            progress=progress,
+            cancel_check=cancelled,
+        )
+
+        geojson_path = output / "talude_breaklines.geojson"
+        payload = json.loads(geojson_path.read_text(encoding="utf-8"))
+
+        lines: list[dict[str, Any]] = []
+        for feature in payload.get("features", []):
+            props = feature.get("properties") or {}
+            coords = (feature.get("geometry") or {}).get("coordinates") or []
+            if len(coords) < 2:
+                continue
+            lines.append(
+                {
+                    "line_id": props.get("line_id"),
+                    "face_id": props.get("face_id"),
+                    "type": props.get("type"),
+                    "confidence": props.get("confidence"),
+                    "quality_score": props.get("quality_score"),
+                    "length_m": props.get("length_m"),
+                    "length_2d_m": props.get("length_2d_m"),
+                    "length_3d_m": props.get("length_3d_m"),
+                    "median_rmse": props.get("median_rmse"),
+                    "source": props.get("source"),
+                    "status": props.get("status"),
+                    "vertices": coords,
+                }
+            )
+
+        state = store.state(project_id)
+        state.setdefault("talude_runs", [])
+        state["talude_runs"].append(
+            {
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "cloud_id": cloud_id,
+                "engine": "v2-global",
+                "output_dir": str(output),
+                "report": {
+                    key: value
+                    for key, value in report.items()
+                    if key not in {"lines"}
+                },
+                "line_count": len(lines),
+            }
+        )
+        store.save_state(project_id, state)
+
+        result = {
+            "project_id": project_id,
+            "cloud_id": cloud_id,
+            "engine": "v2-global",
+            "output_dir": str(output),
+            "report": report,
+            "lines": lines,
+        }
+
+        store.debug_event(
+            project_id,
+            "talude.v2_auto_completed",
+            {
+                "job_id": job_id,
+                "cloud_id": cloud_id,
+                "output": str(output),
+                "faces_detected": report.get("faces_detected"),
+                "candidate_faces": report.get("candidate_faces"),
+                "v2_success_faces": report.get("v2_success_faces"),
+                "baseline_fallback_faces": report.get("baseline_fallback_faces"),
+                "crest_lines": report.get("crest_lines"),
+                "toe_lines": report.get("toe_lines"),
+                "reason_counts": report.get("reason_counts"),
+                "elapsed_s": report.get("elapsed_s"),
+            },
+            source="v2-auto-global",
+        )
+
+        jobs.update(
+            job_id,
+            status="completed",
+            progress=100,
+            message=(
+                f'{report.get("faces_detected", 0)} faces · '
+                f'V2 {report.get("v2_success_faces", 0)} · '
+                f'fallback {report.get("baseline_fallback_faces", 0)}'
+            ),
+            result=result,
+        )
+
+    except Exception as exc:
+        cancelled = (
+            isinstance(exc, V2DetectionError)
+            and exc.reason == V2Reason.CANCELLED
+        ) or jobs.is_cancel_requested(job_id)
+
+        if cancelled:
+            try:
+                store.debug_event(
+                    project_id,
+                    "talude.v2_auto_cancelled",
+                    {
+                        "job_id": job_id,
+                        "cloud_id": cloud_id,
+                        "output": str(output) if output is not None else None,
+                    },
+                    source="v2-auto-global",
+                    level="WARNING",
+                )
+            except Exception:
+                pass
+
+            jobs.update(
+                job_id,
+                status="cancelled",
+                progress=100,
+                message="AUTO GLOBAL V2 cancelado.",
+                error=None,
+            )
+            return
+
+        try:
+            store.debug_event(
+                project_id,
+                "talude.v2_auto_failed",
+                {
+                    "job_id": job_id,
+                    "cloud_id": cloud_id,
+                    "output": str(output) if output is not None else None,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "traceback": traceback.format_exc(),
+                    "reason": (
+                        exc.reason.value
+                        if isinstance(exc, V2DetectionError)
+                        else V2Reason.INTERNAL_ERROR.value
+                    ),
+                },
+                source="v2-auto-global",
+                level="ERROR",
+            )
+        except Exception:
+            pass
+
+        jobs.update(
+            job_id,
+            status="failed",
+            progress=100,
+            message="Falha no AUTO GLOBAL V2",
+            error=f"{type(exc).__name__}: {exc}",
+        )
