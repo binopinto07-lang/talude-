@@ -25,7 +25,7 @@ def test_studio_uses_professional_cloud_viewer():
     assert "window.TaludeShell" in app
     assert "createLineObject" in app
 
-    assert "/api/talude/auto" in auto
+    assert "/api/v2/talude/auto" in auto
     assert "0xffd54a" in auto
     assert "0x38d5ff" in auto
 
