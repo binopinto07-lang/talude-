@@ -79,6 +79,10 @@
           <select id="vectorVertexSelect"></select>
           <div id="vectorVertexXYZ" class="vector-coordinate-readout">X — · Y — · Z —</div>
 
+          <div id="vectorReviewActions" class="vector-review-actions hidden">
+            <button id="vectorApproveFace" class="review-approve">✓ Aprovar face</button>
+            <button id="vectorRejectFace" class="review-reject">✕ Rejeitar face</button>
+          </div>
           <div class="vector-action-grid">
             <button id="vectorMoveVertex">Mover por clique</button>
             <button id="vectorInsertVertex">Inserir depois</button>
@@ -144,11 +148,11 @@
           <div class="performance-profile">
             <label>Perfil de processamento V2</label>
             <select id="v2PerformanceMode">
-              <option value="fast">Rápido — baseline global, sem RAW-TIN massivo</option>
-              <option value="balanced" selected>Equilibrado — RAW-TIN prioritário + cache + fallback</option>
-              <option value="precise">Preciso — RAW-TIN em todas as faces</option>
+              <option value="fast">Rápido — descoberta apenas, envia tudo para revisão</option>
+              <option value="balanced" selected>Equilibrado — PROFILE-EDGE em todas as faces + cache</option>
+              <option value="precise">Preciso — PROFILE-EDGE mais fino em todas as faces</option>
             </select>
-            <div class="hint">Para nuvens grandes use Equilibrado. Em >150 M pontos refina só as 60 faces prioritárias; as restantes mantêm a baseline. Repetições reutilizam cache.</div>
+            <div class="hint">Equilibrado valida todas as faces por perfis transversais e reutiliza cache. Só pares CRISTA/PÉ geometricamente válidos entram nas BREAKLINES; o restante fica em REVISÃO.</div>
           </div>
           <div class="talude-param-grid">
             <label>Cell size (m)<input id="cellSize" type="number" min="0" step="0.01" value="0"></label>
@@ -158,16 +162,17 @@
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
             <label>Espaçamento vértices (m)<input id="lineVertexSpacing" type="number" min="0.25" max="5" step="0.25" value="1.0"></label>
           </div>
-          <div class="hint">Baseline 1.1.7 mantém o AUTO comprovado. Com V2 RAW TIN selecionado, DETETAR CRISTA + PÉ executa AUTO GLOBAL V2: descoberta 1.1.7 → ROI RAW Ground → TIN local → refinamento por face, com fallback seguro para não perder taludes.</div>
+          <div class="hint">A baseline 1.1.7 serve apenas para descobrir as faces. A posição final é calculada por perfis transversais plano → face inclinada → plano. Resultados não validados ficam em REVISÃO e não são exportados por defeito.</div>
         </details>
       </section>
 
       <section class="card talude-results-card">
         <div class="section-title">RESULTADOS AUTOMÁTICOS</div>
         <div class="talude-stats">
-          <div><strong id="facesCount">0</strong><span>Faces</span></div>
+          <div><strong id="facesCount">0</strong><span>Aprovadas</span></div>
           <div class="crest-stat"><strong id="crestCount">0</strong><span>Cristas</span></div>
           <div class="toe-stat"><strong id="toeCount">0</strong><span>Pés</span></div>
+          <div class="review-stat"><strong id="reviewCount">0</strong><span>Revisão</span></div>
         </div>
         <div class="row">
           <button id="clearTaludeLines" disabled>Limpar</button>
