@@ -19,6 +19,8 @@
     mutationVersion: 0,
     draft: null,
     lastExportDir: null,
+    activeLayerId: "CRISTA",
+    collapsedGroups: new Set(),
   };
 
   function shell() {
@@ -189,6 +191,196 @@
     s.updateWideLineResolution();
   }
 
+  function qgisSymbolClass(layerId) {
+    const id = String(layerId || "");
+    if (id === "CRISTA") return "crest";
+    if (id === "PE_TALUDE") return "toe";
+    if (id === "FACES") return "face";
+    if (id === "DEBUG") return "debug";
+    return "debug";
+  }
+
+  function setAllVectorLayersVisible(visible) {
+    if (!editor.document) return;
+    pushUndo();
+    for (const layer of editor.document.layers || []) {
+      layer.visible = Boolean(visible);
+    }
+    markChanged(visible ? "layers_show_all" : "layers_hide_all");
+  }
+
+  function soloActiveLayer() {
+    if (!editor.document || !editor.activeLayerId) return;
+    pushUndo();
+    for (const layer of editor.document.layers || []) {
+      layer.visible = String(layer.id) === String(editor.activeLayerId);
+    }
+    markChanged("layer_solo");
+  }
+
+  function setCloudVisible(cloudId, visible) {
+    const s = shell();
+    if (!s || !s.state || !s.state.pointclouds) return;
+    const pc = s.state.pointclouds.get(cloudId);
+    if (pc) pc.visible = Boolean(visible);
+    renderLayers();
+  }
+
+  function toggleGroup(groupId) {
+    if (editor.collapsedGroups.has(groupId)) {
+      editor.collapsedGroups.delete(groupId);
+    } else {
+      editor.collapsedGroups.add(groupId);
+    }
+    renderLayers();
+  }
+
+  function appendGroup(box, groupId, title, rows) {
+    const group = document.createElement("div");
+    group.className = "qgis-group";
+
+    const header = document.createElement("div");
+    header.className = "qgis-group-header";
+    header.onclick = () => toggleGroup(groupId);
+
+    const chevron = document.createElement("span");
+    chevron.className = "qgis-group-chevron";
+    chevron.textContent = editor.collapsedGroups.has(groupId) ? "▶" : "▼";
+
+    const label = document.createElement("span");
+    label.textContent = title;
+
+    const count = document.createElement("span");
+    count.className = "qgis-group-count";
+    count.textContent = String(rows.length);
+
+    header.appendChild(chevron);
+    header.appendChild(label);
+    header.appendChild(count);
+    group.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "qgis-group-body" +
+      (editor.collapsedGroups.has(groupId) ? " collapsed" : "");
+    for (const row of rows) body.appendChild(row);
+    group.appendChild(body);
+    box.appendChild(group);
+  }
+
+  function cloudLayerRows() {
+    const s = shell();
+    const rows = [];
+    const project = s && s.state ? s.state.project : null;
+    if (!project) return rows;
+
+    for (const cloud of project.clouds || []) {
+      const row = document.createElement("div");
+      row.className = "qgis-layer-row";
+
+      const visible = document.createElement("input");
+      visible.type = "checkbox";
+      const pc = s.state.pointclouds.get(cloud.id);
+      visible.checked = pc ? pc.visible !== false : false;
+      visible.title = "Visibilidade da nuvem";
+      visible.onchange = () => setCloudVisible(cloud.id, visible.checked);
+
+      const symbol = document.createElement("span");
+      symbol.className = "qgis-symbol cloud";
+
+      const main = document.createElement("button");
+      main.className = "qgis-layer-main";
+      const pts = Number(cloud.point_count || 0).toLocaleString("pt-PT");
+      main.innerHTML =
+        '<span class="qgis-layer-name">' + escapeHtml(cloud.name || "cloud") + '</span>' +
+        '<span class="qgis-cloud-meta">' + pts + ' pts</span>';
+      main.onclick = () => {
+        const loaded = s.state.pointclouds.has(cloud.id);
+        if (!loaded && s.state.project) {
+          s.toast("Carregue a nuvem pelo projeto antes de a ativar.", 4500);
+        }
+      };
+
+      const lock = document.createElement("button");
+      lock.className = "qgis-mini-button locked";
+      lock.textContent = "🔒";
+      lock.title = "Nuvem é somente leitura";
+
+      const spare = document.createElement("button");
+      spare.className = "qgis-mini-button";
+      spare.textContent = "◎";
+      spare.title = "Enquadrar nuvem";
+      spare.onclick = () => {
+        try { s.state.viewer.fitToScreen(0.82); } catch (_) {}
+      };
+
+      row.appendChild(visible);
+      row.appendChild(symbol);
+      row.appendChild(main);
+      row.appendChild(lock);
+      row.appendChild(spare);
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function vectorLayerRow(layer, counts) {
+    const id = String(layer.id);
+    const row = document.createElement("div");
+    row.className = "qgis-layer-row" +
+      (String(editor.activeLayerId) === id ? " active" : "");
+
+    const visible = document.createElement("input");
+    visible.type = "checkbox";
+    visible.checked = layer.visible !== false;
+    visible.title = "Visibilidade";
+    visible.onchange = () => {
+      pushUndo();
+      layer.visible = visible.checked;
+      markChanged("layer_visibility");
+    };
+
+    const symbol = document.createElement("span");
+    symbol.className = "qgis-symbol " + qgisSymbolClass(id);
+
+    const main = document.createElement("button");
+    main.className = "qgis-layer-main";
+    main.innerHTML =
+      '<span class="qgis-layer-name">' + escapeHtml(layer.name || id) + '</span>' +
+      '<span class="qgis-layer-count">' + String(counts[id] || 0) + '</span>';
+    main.onclick = () => {
+      editor.activeLayerId = id;
+      const filter = byId("vectorLayerFilter");
+      if (filter) filter.value = id;
+      renderAll();
+    };
+
+    const lock = document.createElement("button");
+    lock.className = "qgis-mini-button" + (layer.locked ? " locked" : "");
+    lock.textContent = layer.locked ? "🔒" : "🔓";
+    lock.title = layer.locked ? "Desbloquear layer" : "Bloquear layer";
+    lock.onclick = () => {
+      pushUndo();
+      layer.locked = !layer.locked;
+      markChanged("layer_lock");
+    };
+
+    const solo = document.createElement("button");
+    solo.className = "qgis-mini-button";
+    solo.textContent = "S";
+    solo.title = "Mostrar apenas esta layer";
+    solo.onclick = () => {
+      editor.activeLayerId = id;
+      soloActiveLayer();
+    };
+
+    row.appendChild(visible);
+    row.appendChild(symbol);
+    row.appendChild(main);
+    row.appendChild(lock);
+    row.appendChild(solo);
+    return row;
+  }
+
   function renderLayers() {
     const box = byId("vectorLayers");
     const filter = byId("vectorLayerFilter");
@@ -198,6 +390,9 @@
     const oldFilter = filter.value;
     filter.innerHTML = '<option value="">Todas as layers</option>';
 
+    const cloudRows = cloudLayerRows();
+    if (cloudRows.length) appendGroup(box, "clouds", "NUVEM DE PONTOS", cloudRows);
+
     if (!editor.document) return;
     const counts = {};
     for (const feature of editor.document.features || []) {
@@ -205,45 +400,18 @@
       counts[key] = (counts[key] || 0) + 1;
     }
 
+    const groups = {
+      breaklines: [],
+      support: [],
+      other: [],
+    };
+
     for (const layer of editor.document.layers || []) {
       const id = String(layer.id);
-      const row = document.createElement("div");
-      row.className = "vector-layer-row";
-
-      const eye = document.createElement("input");
-      eye.type = "checkbox";
-      eye.checked = layer.visible !== false;
-      eye.title = "Visibilidade";
-      eye.onchange = () => {
-        pushUndo();
-        layer.visible = eye.checked;
-        markChanged("layer_visibility");
-      };
-
-      const name = document.createElement("button");
-      name.className = "vector-layer-name";
-      name.innerHTML =
-        "<strong>" + escapeHtml(layer.name || id) + "</strong>" +
-        "<span>" + String(counts[id] || 0) + "</span>";
-      name.onclick = () => {
-        byId("vectorLayerFilter").value = id;
-        renderFeatures();
-      };
-
-      const lock = document.createElement("button");
-      lock.className = "vector-lock-button" + (layer.locked ? " locked" : "");
-      lock.textContent = layer.locked ? "🔒" : "🔓";
-      lock.title = layer.locked ? "Desbloquear layer" : "Bloquear layer";
-      lock.onclick = () => {
-        pushUndo();
-        layer.locked = !layer.locked;
-        markChanged("layer_lock");
-      };
-
-      row.appendChild(eye);
-      row.appendChild(name);
-      row.appendChild(lock);
-      box.appendChild(row);
+      const row = vectorLayerRow(layer, counts);
+      if (id === "CRISTA" || id === "PE_TALUDE") groups.breaklines.push(row);
+      else if (id === "FACES" || id === "DEBUG") groups.support.push(row);
+      else groups.other.push(row);
 
       const option = document.createElement("option");
       option.value = id;
@@ -251,8 +419,14 @@
       filter.appendChild(option);
     }
 
+    if (groups.breaklines.length) appendGroup(box, "breaklines", "BREAKLINES", groups.breaklines);
+    if (groups.support.length) appendGroup(box, "support", "ANÁLISE / SUPORTE", groups.support);
+    if (groups.other.length) appendGroup(box, "other", "OUTRAS", groups.other);
+
     if (Array.from(filter.options).some((option) => option.value === oldFilter)) {
       filter.value = oldFilter;
+    } else if (editor.activeLayerId && Array.from(filter.options).some((option) => option.value === editor.activeLayerId)) {
+      filter.value = editor.activeLayerId;
     }
   }
 
@@ -393,6 +567,7 @@
         "/api/projects/" + encodeURIComponent(pid) + "/vector-document"
       );
       editor.document = document;
+      if (!layerById(editor.activeLayerId)) editor.activeLayerId = "CRISTA";
       editor.selectedFeatureId = null;
       editor.selectedVertexIndex = 0;
       editor.undo = [];
@@ -712,9 +887,17 @@
   function bind() {
     byId("vectorRefresh").onclick = () => loadDocument();
     byId("vectorSave").onclick = () => saveNow("manual_save");
+    if (byId("layersShowAll")) byId("layersShowAll").onclick = () => setAllVectorLayersVisible(true);
+    if (byId("layersHideAll")) byId("layersHideAll").onclick = () => setAllVectorLayersVisible(false);
+    if (byId("layersSoloActive")) byId("layersSoloActive").onclick = soloActiveLayer;
     byId("vectorUndo").onclick = undo;
     byId("vectorRedo").onclick = redo;
-    byId("vectorLayerFilter").onchange = renderFeatures;
+    byId("vectorLayerFilter").onchange = () => {
+      const value = byId("vectorLayerFilter").value;
+      if (value) editor.activeLayerId = value;
+      renderFeatures();
+      renderLayers();
+    };
     byId("vectorSearch").oninput = renderFeatures;
 
     byId("vectorVertexSelect").onchange = () => {
