@@ -23,7 +23,8 @@ from talude_v1.io import (
     save_vertices_csv,
 )
 
-from .engine import V2Config, _resample_polyline, boundary_reference_guard, extract_face_raw_tin
+from .engine import V2Config, _resample_polyline
+from .edge_profile import extract_profile_edge_pair
 from .profiling import add_stage_time, build_performance_profile, merge_stage_times
 from .reasons import V2DetectionError, V2Reason
 
@@ -465,94 +466,25 @@ def refine_face_candidate_v2(
     v2_config: V2Config,
     min_line_length_m: float,
 ) -> tuple[list[dict], dict]:
-    started = perf_counter()
-    raw = np.asarray(raw_points, dtype=np.float64)
-    if len(raw) < 100:
-        raise V2DetectionError(
-            V2Reason.LOW_GROUND_SUPPORT,
-            f"FACE_{candidate.face_id:06d}: apenas {len(raw)} pontos na ROI.",
-        )
+    """Refine one discovered face onto the real crest/toe terrain transitions.
 
-    result = extract_face_raw_tin(
-        raw,
-        candidate.seed_xyz,
-        config=v2_config,
+    The 1.1.7 pair is used only as discovery/seed geometry. Published V2 lines
+    come from the local terrain-profile edge extractor, which explicitly finds
+    the upper and lower flat<->steep transitions of the selected slope face.
+    """
+    resolution = float(
+        np.clip(float(v2_config.target_tin_spacing_m) * 0.60, 0.18, 0.28)
     )
-
-    out: list[dict] = []
-    agreement: dict[str, dict[str, float]] = {}
-    for kind, baseline_xyz in (
-        ("CREST", candidate.crest),
-        ("TOE", candidate.toe),
-    ):
-        src = result["crest"] if kind == "CREST" else result["toe"]
-        xyz = np.asarray(src["vertices"], dtype=np.float64)
-        length_2d = float(src.get("length_2d_m", src.get("length_m", 0.0)))
-        if len(xyz) < 2 or length_2d < float(min_line_length_m):
-            raise V2DetectionError(
-                V2Reason.LINE_TOO_SHORT,
-                f"FACE_{candidate.face_id:06d}: {kind} V2 demasiado curta.",
-            )
-
-        metrics = _agreement(xyz, baseline_xyz)
-        opposite_xyz = candidate.toe if kind == "CREST" else candidate.crest
-        edge_guard = boundary_reference_guard(
-            xyz,
-            baseline_xyz,
-            opposite_xyz,
-            candidate.baseline_width_median,
-        )
-        agreement[kind] = {**metrics, "edge_guard": edge_guard}
-
-        # Strong regression guard: a refined CRISTA/PÉ must remain on its own
-        # side of the face. A line that drifts towards the centre is rejected
-        # immediately and the protected 1.1.7 geometry is used as fallback.
-        if not bool(edge_guard["accepted"]):
-            raise V2DetectionError(
-                V2Reason.REFINEMENT_FAILED,
-                (
-                    f"FACE_{candidate.face_id:06d}: {kind} saiu da aresta "
-                    f"(median={edge_guard['own_median_m']:.2f} m, "
-                    f"P95={edge_guard['own_p95_m']:.2f} m, "
-                    f"side={edge_guard['side_ratio_median']:.2f})."
-                ),
-            )
-
-        out.append(
-            {
-                "face_id": int(candidate.face_id),
-                "type": kind,
-                "xyz": xyz,
-                "length_m": length_2d,
-                "length_2d_m": length_2d,
-                "length_3d_m": float(src.get("length_3d_m", length_2d)),
-                "confidence": float(src.get("quality_score", src.get("confidence", 0.0))),
-                "quality_score": float(src.get("quality_score", src.get("confidence", 0.0))),
-                "median_rmse": src.get("plane_rmse_median"),
-                "source": "V2_RAW_TIN",
-                "status": "AUTO",
-                "v2_reason": result.get("reason", V2Reason.SUCCESS.value),
-                "v2_refine_ratio": float(result.get("refine_ratio", 0.0)),
-                "v2_local_normal_coherence": float(
-                    result.get("local_normal_coherence", 0.0)
-                ),
-            }
-        )
-
-    return out, {
-        "face_id": int(candidate.face_id),
-        "status": "SUCCESS",
-        "reason": V2Reason.SUCCESS.value,
-        "roi_points": int(len(raw)),
-        "corridor_radius_m": float(candidate.corridor_radius_m),
-        "baseline_width_median": float(candidate.baseline_width_median),
-        "baseline_width_p90": float(candidate.baseline_width_p90),
-        "agreement": agreement,
-        "v2_metrics": result.get("metrics", {}),
-        "v2_timing_s": result.get("timing_s", {}),
-        "elapsed_s": float(perf_counter() - started),
-        "elapsed_ms": float((perf_counter() - started) * 1000.0),
-    }
+    lines, record = extract_profile_edge_pair(
+        np.asarray(raw_points, dtype=np.float64),
+        candidate,
+        min_line_length_m=float(min_line_length_m),
+        grid_resolution_m=resolution,
+    )
+    record["corridor_radius_m"] = float(candidate.corridor_radius_m)
+    record["baseline_width_median"] = float(candidate.baseline_width_median)
+    record["baseline_width_p90"] = float(candidate.baseline_width_p90)
+    return lines, record
 
 
 def _fallback_pair(candidate: GlobalFaceCandidate, baseline_by_face: dict[int, dict[str, dict]]) -> list[dict]:
@@ -561,6 +493,27 @@ def _fallback_pair(candidate: GlobalFaceCandidate, baseline_by_face: dict[int, d
         _baseline_line_payload(pair["CREST"], "BASELINE_1_1_7_FALLBACK"),
         _baseline_line_payload(pair["TOE"], "BASELINE_1_1_7_FALLBACK"),
     ]
+
+
+def _review_pair(
+    candidate: GlobalFaceCandidate,
+    baseline_by_face: dict[int, dict[str, dict]],
+    *,
+    reason: str,
+    source: str,
+    message: str,
+) -> list[dict]:
+    """Keep uncertain discovery geometry available for operator review only."""
+    pair = _fallback_pair(candidate, baseline_by_face)
+    for line in pair:
+        line["source"] = str(source)
+        line["status"] = "REVIEW_REQUIRED"
+        line["review_state"] = "PENDING"
+        line["review_reason"] = str(reason)
+        line["review_message"] = str(message)
+        line["quality_score"] = min(float(line.get("quality_score", 0.0) or 0.0), 0.49)
+        line["confidence"] = min(float(line.get("confidence", 0.0) or 0.0), 0.49)
+    return pair
 
 
 def _jsonable_record(record: dict) -> dict:
@@ -821,6 +774,7 @@ def run_auto_global_v2(
         )
 
     final_lines: list[dict] = []
+    review_lines: list[dict] = []
     face_records: list[dict] = []
     reason_counts: dict[str, int] = {}
     v2_success = 0
@@ -829,16 +783,25 @@ def run_auto_global_v2(
 
     fallback_started = perf_counter()
     for candidate in performance_skipped:
-        final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+        review_message = (
+            "Face não validada geometricamente pelo perfil de desempenho "
+            f"{mode.upper()}; mantida apenas para revisão."
+        )
+        review_lines.extend(
+            _review_pair(
+                candidate,
+                baseline_by_face,
+                reason="PERFORMANCE_BASELINE",
+                source="BASELINE_1_1_7_REVIEW_PERFORMANCE",
+                message=review_message,
+            )
+        )
         face_records.append(
             {
                 "face_id": int(candidate.face_id),
-                "status": "BASELINE_PERFORMANCE_FALLBACK",
+                "status": "REVIEW_REQUIRED",
                 "reason": "PERFORMANCE_BASELINE",
-                "message": (
-                    "Face mantida na baseline pelo perfil de desempenho "
-                    f"{mode.upper()}."
-                ),
+                "message": review_message,
                 "corridor_radius_m": float(candidate.corridor_radius_m),
             }
         )
@@ -974,7 +937,15 @@ def run_auto_global_v2(
                 reason = str(item.get("reason") or V2Reason.MERGE_FAILED.value)
                 message = str(item.get("message") or "Falha tiled sem detalhe.")
                 fallback_one_started = perf_counter()
-                final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+                review_lines.extend(
+                    _review_pair(
+                        candidate,
+                        baseline_by_face,
+                        reason=reason,
+                        source="BASELINE_1_1_7_REVIEW_TECHNICAL",
+                        message=message,
+                    )
+                )
                 add_stage_time(
                     stage_seconds,
                     "fallback",
@@ -984,7 +955,7 @@ def run_auto_global_v2(
                 record.update(
                     {
                         "face_id": face_id,
-                        "status": "BASELINE_FALLBACK",
+                        "status": "REVIEW_REQUIRED",
                         "reason": reason,
                         "message": message,
                         "corridor_radius_m": float(candidate.corridor_radius_m),
@@ -1047,7 +1018,15 @@ def run_auto_global_v2(
                     message = f"{type(exc).__name__}: {exc}"
 
                 fallback_one_started = perf_counter()
-                final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+                review_lines.extend(
+                    _review_pair(
+                        candidate,
+                        baseline_by_face,
+                        reason=reason,
+                        source="BASELINE_1_1_7_REVIEW_TECHNICAL",
+                        message=message,
+                    )
+                )
                 add_stage_time(
                     stage_seconds,
                     "fallback",
@@ -1056,7 +1035,7 @@ def run_auto_global_v2(
                 face_records.append(
                     {
                         "face_id": int(candidate.face_id),
-                        "status": "BASELINE_FALLBACK",
+                        "status": "REVIEW_REQUIRED",
                         "reason": reason,
                         "message": message,
                         "roi_points": int(len(points)),
@@ -1083,14 +1062,21 @@ def run_auto_global_v2(
     # Never discard an unpaired baseline result: completeness beats a silent
     # regression. These are logged separately for later diagnosis.
     for line in unpaired:
-        final_lines.append(_baseline_line_payload(line, "BASELINE_1_1_7_UNPAIRED"))
+        item = _baseline_line_payload(line, "BASELINE_1_1_7_REVIEW_UNPAIRED")
+        item["status"] = "REVIEW_REQUIRED"
+        item["review_state"] = "PENDING"
+        item["review_reason"] = "UNPAIRED_BASELINE"
+        item["review_message"] = "Linha baseline sem par CRISTA/PÉ; requer revisão."
+        item["quality_score"] = min(float(item.get("quality_score", 0.0) or 0.0), 0.49)
+        item["confidence"] = min(float(item.get("confidence", 0.0) or 0.0), 0.49)
+        review_lines.append(item)
 
     # Output vertex spacing is a modelling choice, not a new detector.
     # Re-sample every final line (including protected-baseline fallbacks) along
     # its existing geometry so the Vector Document/DXF does not contain dense
     # centimetric zig-zag vertices. The default requested by the operator is 1 m.
     output_spacing = max(0.25, min(float(v2_cfg.station_spacing_m), 5.0))
-    for line in final_lines:
+    for line in [*final_lines, *review_lines]:
         xyz = np.asarray(line.get("xyz"), dtype=np.float64)
         if len(xyz) < 2:
             continue
@@ -1111,8 +1097,15 @@ def run_auto_global_v2(
         if len(np.asarray(line["xyz"])) >= 2
         and float(line.get("length_m", 0.0)) >= cfg.min_line_length_m
     ]
+    review_lines = [
+        line
+        for line in review_lines
+        if len(np.asarray(line["xyz"])) >= 2
+        and float(line.get("length_m", 0.0)) >= cfg.min_line_length_m
+    ]
     final_lines.sort(key=lambda item: (int(item["face_id"]), str(item["type"])))
-    for line_id, line in enumerate(final_lines, start=1):
+    review_lines.sort(key=lambda item: (int(item["face_id"]), str(item["type"])))
+    for line_id, line in enumerate([*final_lines, *review_lines], start=1):
         line["line_id"] = int(line_id)
 
     _check_cancel(cancel_check)
@@ -1124,6 +1117,7 @@ def run_auto_global_v2(
     save_geojson(output / "talude_breaklines.geojson", final_lines, crs_wkt)
     save_vertices_csv(output / "talude_vertices.csv", final_lines)
     save_dxf(output / "talude_breaklines.dxf", final_lines)
+    save_geojson(output / "talude_review.geojson", review_lines, crs_wkt)
 
     with (debug_dir / "v2_faces.jsonl").open("w", encoding="utf-8") as fh:
         for record in face_records:
@@ -1131,6 +1125,7 @@ def run_auto_global_v2(
     add_stage_time(stage_seconds, "export", perf_counter() - export_started)
 
     faces_final = len({int(line["face_id"]) for line in final_lines})
+    review_faces = len({int(line["face_id"]) for line in review_lines})
     total_elapsed = float(perf_counter() - started)
     spool_stats = dict((tiled_stats or {}).get("spool") or {})
     tiled_profile = dict((tiled_stats or {}).get("profile") or {})
@@ -1193,6 +1188,11 @@ def run_auto_global_v2(
         "output_vertex_spacing_m": float(output_spacing),
         "v2_success_faces": int(v2_success),
         "baseline_fallback_faces": int(baseline_fallback),
+        "approved_faces": int(faces_final),
+        "review_faces": int(review_faces),
+        "review_line_count": int(len(review_lines)),
+        "review_crest_lines": int(sum(1 for line in review_lines if line["type"] == "CREST")),
+        "review_toe_lines": int(sum(1 for line in review_lines if line["type"] == "TOE")),
         "unpaired_baseline_lines": int(len(unpaired)),
         "crest_lines": int(sum(1 for line in final_lines if line["type"] == "CREST")),
         "toe_lines": int(sum(1 for line in final_lines if line["type"] == "TOE")),
@@ -1219,6 +1219,14 @@ def run_auto_global_v2(
                 if key not in {"xyz", "vertex_rmse"}
             }
             for line in final_lines
+        ],
+        "review_lines": [
+            {
+                key: value
+                for key, value in line.items()
+                if key not in {"xyz", "vertex_rmse"}
+            }
+            for line in review_lines
         ],
     }
 
@@ -1248,8 +1256,8 @@ def run_auto_global_v2(
         progress(
             100.0,
             (
-                f"AUTO V2 concluído · {faces_final} faces · "
-                f"V2 {v2_success} · fallback {baseline_fallback}"
+                f"AUTO V2 concluído · {faces_final} aprovadas · "
+                f"{review_faces} em revisão · V2 {v2_success}"
             ),
         )
 
