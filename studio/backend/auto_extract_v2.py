@@ -31,6 +31,7 @@ def start_auto_extract_v2(
     min_face_area_m2: float = 4.0,
     min_line_length_m: float = 2.0,
     line_smooth_window: int = 11,
+    performance_mode: str = "balanced",
     tin_spacing_m: float = 0.25,
     max_tin_points: int = 45_000,
     max_triangle_edge_m: float = 2.25,
@@ -54,6 +55,7 @@ def start_auto_extract_v2(
             min_face_area_m2,
             min_line_length_m,
             line_smooth_window,
+            performance_mode,
             tin_spacing_m,
             max_tin_points,
             max_triangle_edge_m,
@@ -81,6 +83,7 @@ def _worker_v2(
     min_face_area_m2: float,
     min_line_length_m: float,
     line_smooth_window: int,
+    performance_mode: str,
     tin_spacing_m: float,
     max_tin_points: int,
     max_triangle_edge_m: float,
@@ -113,6 +116,10 @@ def _worker_v2(
             normalized = tuple(sorted({int(v) for v in selected_classes}))
             classes = normalized if normalized else None
 
+        mode = str(performance_mode or "balanced").strip().lower()
+        if mode not in {"fast", "balanced", "precise"}:
+            mode = "balanced"
+
         baseline_cfg = ExtractConfig(
             cell_size=float(cell_size),
             slope_low_deg=float(slope_low_deg),
@@ -141,6 +148,7 @@ def _worker_v2(
                 "cloud_id": cloud_id,
                 "source": str(source),
                 "selected_classes": list(classes) if classes is not None else None,
+                "performance_mode": mode,
                 "baseline_config": baseline_cfg.to_dict(),
                 "v2_config": {
                     key: getattr(v2_cfg, key)
@@ -181,6 +189,7 @@ def _worker_v2(
             v2_cfg,
             progress=progress,
             cancel_check=cancelled,
+            performance_mode=mode,
         )
 
         geojson_path = output / "talude_breaklines.geojson"
@@ -193,6 +202,7 @@ def _worker_v2(
             source={
                 "engine": report.get("engine"),
                 "mode": "AUTO_GLOBAL_V2",
+                "performance_mode": mode,
                 "cloud_id": cloud_id,
                 "job_id": job_id,
                 "output_dir": str(output),
@@ -229,6 +239,7 @@ def _worker_v2(
                 "created_at": datetime.now().isoformat(timespec="seconds"),
                 "cloud_id": cloud_id,
                 "engine": "v2-global",
+                "performance_mode": mode,
                 "output_dir": str(output),
                 "report": {
                     key: value
@@ -247,6 +258,7 @@ def _worker_v2(
             "project_id": project_id,
             "cloud_id": cloud_id,
             "engine": "v2-global",
+            "performance_mode": mode,
             "output_dir": str(output),
             "report": report,
             "lines": lines,
@@ -263,6 +275,9 @@ def _worker_v2(
                 "output": str(output),
                 "faces_detected": report.get("faces_detected"),
                 "candidate_faces": report.get("candidate_faces"),
+                "performance_mode": mode,
+                "v2_attempted_faces": report.get("v2_attempted_faces"),
+                "performance_skipped_faces": report.get("performance_skipped_faces"),
                 "v2_success_faces": report.get("v2_success_faces"),
                 "baseline_fallback_faces": report.get("baseline_fallback_faces"),
                 "crest_lines": report.get("crest_lines"),
