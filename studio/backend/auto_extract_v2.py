@@ -197,12 +197,23 @@ def _worker_v2(
 
         geojson_path = output / "talude_breaklines.geojson"
         payload = json.loads(geojson_path.read_text(encoding="utf-8"))
+        review_path = output / "talude_review.geojson"
+        review_payload = (
+            json.loads(review_path.read_text(encoding="utf-8"))
+            if review_path.exists()
+            else {"type": "FeatureCollection", "features": []}
+        )
+        document_payload = dict(payload)
+        document_payload["features"] = [
+            *list(payload.get("features", [])),
+            *list(review_payload.get("features", [])),
+        ]
 
         vector_started = perf_counter()
         vector_bundle = write_documents_from_geojson(
             project.path,
             output,
-            payload,
+            document_payload,
             source={
                 "engine": report.get("engine"),
                 "mode": "AUTO_GLOBAL_V2",
@@ -260,6 +271,29 @@ def _worker_v2(
                 }
             )
 
+
+        review_lines: list[dict[str, Any]] = []
+        for feature in review_payload.get("features", []):
+            props = feature.get("properties") or {}
+            coords = (feature.get("geometry") or {}).get("coordinates") or []
+            if len(coords) < 2:
+                continue
+            review_lines.append(
+                {
+                    "line_id": props.get("line_id"),
+                    "face_id": props.get("face_id"),
+                    "type": props.get("type"),
+                    "confidence": props.get("confidence"),
+                    "quality_score": props.get("quality_score"),
+                    "length_m": props.get("length_m"),
+                    "source": props.get("source"),
+                    "status": props.get("status"),
+                    "review_state": props.get("review_state"),
+                    "review_reason": props.get("review_reason"),
+                    "vertices": coords,
+                }
+            )
+
         state = store.state(project_id)
         state.setdefault("talude_runs", [])
         state["talude_runs"].append(
@@ -290,6 +324,7 @@ def _worker_v2(
             "output_dir": str(output),
             "report": report,
             "lines": lines,
+            "review_lines": review_lines,
             "vector_document": vector_bundle["active_path"],
             "vector_document_summary": vector_bundle["summary"],
         }
@@ -323,9 +358,9 @@ def _worker_v2(
             status="completed",
             progress=100,
             message=(
-                f'{report.get("faces_detected", 0)} faces · '
-                f'V2 {report.get("v2_success_faces", 0)} · '
-                f'fallback {report.get("baseline_fallback_faces", 0)}'
+                f'{report.get("approved_faces", 0)} aprovadas · '
+                f'{report.get("review_faces", 0)} revisão · '
+                f'V2 {report.get("v2_success_faces", 0)}'
             ),
             result=result,
         )
