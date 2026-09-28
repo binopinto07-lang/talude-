@@ -24,6 +24,7 @@ from talude_v1.io import (
 )
 
 from .engine import V2Config, _resample_polyline, extract_face_raw_tin
+from .profiling import add_stage_time, build_performance_profile, merge_stage_times
 from .reasons import V2DetectionError, V2Reason
 
 
@@ -541,7 +542,9 @@ def refine_face_candidate_v2(
         "baseline_width_p90": float(candidate.baseline_width_p90),
         "agreement": agreement,
         "v2_metrics": result.get("metrics", {}),
+        "v2_timing_s": result.get("timing_s", {}),
         "elapsed_s": float(perf_counter() - started),
+        "elapsed_ms": float((perf_counter() - started) * 1000.0),
     }
 
 
@@ -714,6 +717,7 @@ def run_auto_global_v2(
     cancel_check: Callable[[], bool] | None = None,
     max_roi_points: int = 45_000,
     performance_mode: str = "balanced",
+    profile_run_id: str | None = None,
 ) -> dict:
     """AUTO GLOBAL V2.
 
@@ -737,6 +741,9 @@ def run_auto_global_v2(
     mode = str(performance_mode or "balanced").strip().lower()
     if mode not in {"fast", "balanced", "precise"}:
         mode = "balanced"
+
+    stage_seconds: dict[str, float] = {}
+    candidate_started = perf_counter()
 
     _check_cancel(cancel_check)
     if progress is not None:
@@ -790,6 +797,11 @@ def run_auto_global_v2(
             point_count=(int(source_info.point_count) if source_info is not None else None),
         )
     )
+    add_stage_time(
+        stage_seconds,
+        "global_candidate_detection",
+        perf_counter() - candidate_started,
+    )
 
     if progress is not None:
         progress(
@@ -808,6 +820,7 @@ def run_auto_global_v2(
     baseline_fallback = 0
     tiled_stats: dict | None = None
 
+    fallback_started = perf_counter()
     for candidate in performance_skipped:
         final_lines.extend(_fallback_pair(candidate, baseline_by_face))
         face_records.append(
@@ -823,6 +836,7 @@ def run_auto_global_v2(
             }
         )
         baseline_fallback += 1
+    add_stage_time(stage_seconds, "fallback", perf_counter() - fallback_started)
 
     if performance_skipped:
         reason_counts["PERFORMANCE_BASELINE"] = len(performance_skipped)
@@ -908,6 +922,10 @@ def run_auto_global_v2(
         )
         tiled_stats = dict(tiled_stats or {})
         tiled_stats["performance"] = performance_stats
+        merge_stage_times(
+            stage_seconds,
+            ((tiled_stats.get("profile") or {}).get("stages_s") or {}),
+        )
         spool = dict((tiled_stats or {}).get("spool") or {})
         routed_points = int(
             spool.get("cached_points_available", spool.get("spooled_points", 0))
@@ -948,7 +966,13 @@ def run_auto_global_v2(
             else:
                 reason = str(item.get("reason") or V2Reason.MERGE_FAILED.value)
                 message = str(item.get("message") or "Falha tiled sem detalhe.")
+                fallback_one_started = perf_counter()
                 final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+                add_stage_time(
+                    stage_seconds,
+                    "fallback",
+                    perf_counter() - fallback_one_started,
+                )
                 record = dict(item.get("record") or {})
                 record.update(
                     {
@@ -975,6 +999,7 @@ def run_auto_global_v2(
     else:
         # XYZ/TXT/CSV development inputs keep the in-memory path. Production
         # LAS/LAZ uses the tiled engine above.
+        ground_started = perf_counter()
         roi_points, roi_stats = _collect_roi_points_memory(
             source,
             cfg,
@@ -983,9 +1008,15 @@ def run_auto_global_v2(
             progress=progress,
             cancel_check=cancel_check,
         )
+        add_stage_time(
+            stage_seconds,
+            "ground_read_or_spool",
+            perf_counter() - ground_started,
+        )
 
         for index, (candidate, points) in enumerate(zip(refine_candidates, roi_points), start=1):
             _check_cancel(cancel_check)
+            face_started = perf_counter()
             try:
                 lines, record = refine_face_candidate_v2(
                     candidate,
@@ -1008,7 +1039,13 @@ def run_auto_global_v2(
                     reason = V2Reason.INTERNAL_ERROR.value
                     message = f"{type(exc).__name__}: {exc}"
 
+                fallback_one_started = perf_counter()
                 final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+                add_stage_time(
+                    stage_seconds,
+                    "fallback",
+                    perf_counter() - fallback_one_started,
+                )
                 face_records.append(
                     {
                         "face_id": int(candidate.face_id),
@@ -1020,6 +1057,11 @@ def run_auto_global_v2(
                     }
                 )
                 baseline_fallback += 1
+
+            face_elapsed = perf_counter() - face_started
+            add_stage_time(stage_seconds, "refinement", face_elapsed)
+            if face_records:
+                face_records[-1]["elapsed_ms"] = float(face_elapsed * 1000.0)
 
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
             if progress is not None and refine_candidates:
@@ -1070,6 +1112,7 @@ def run_auto_global_v2(
     if progress is not None:
         progress(97.0, "AUTO V2 · a exportar resultado global 3D…")
 
+    export_started = perf_counter()
     crs_wkt = roi_stats.get("crs_wkt")
     save_geojson(output / "talude_breaklines.geojson", final_lines, crs_wkt)
     save_vertices_csv(output / "talude_vertices.csv", final_lines)
@@ -1078,8 +1121,53 @@ def run_auto_global_v2(
     with (debug_dir / "v2_faces.jsonl").open("w", encoding="utf-8") as fh:
         for record in face_records:
             fh.write(json.dumps(_jsonable_record(record), ensure_ascii=False) + "\n")
+    add_stage_time(stage_seconds, "export", perf_counter() - export_started)
 
     faces_final = len({int(line["face_id"]) for line in final_lines})
+    total_elapsed = float(perf_counter() - started)
+    spool_stats = dict((tiled_stats or {}).get("spool") or {})
+    tiled_profile = dict((tiled_stats or {}).get("profile") or {})
+    profile_face_records = tiled_profile.get("slowest_faces") or face_records
+    performance_profile = build_performance_profile(
+        stage_seconds=stage_seconds,
+        tile_records=tiled_profile.get("slowest_tiles", []),
+        face_records=profile_face_records,
+        cache={
+            "baseline_hit": bool(baseline_cache_hit),
+            "ground_tile_hits": int(spool_stats.get("cache_hit_tiles", 0) or 0),
+            "ground_tile_misses": int(spool_stats.get("cache_miss_tiles", 0) or 0),
+            "ground_tile_hit_ratio": float(
+                int(spool_stats.get("cache_hit_tiles", 0) or 0)
+                / max(
+                    1,
+                    int(spool_stats.get("cache_hit_tiles", 0) or 0)
+                    + int(spool_stats.get("cache_miss_tiles", 0) or 0),
+                )
+            ),
+            "fragment_hits": int((tiled_stats or {}).get("fragment_cache_hits", 0) or 0),
+            "fragment_misses": int((tiled_stats or {}).get("fragment_cache_misses", 0) or 0),
+            "fragment_hit_ratio": float(
+                (tiled_stats or {}).get("fragment_cache_hit_ratio", 0.0) or 0.0
+            ),
+        },
+        counters={
+            "candidate_faces": int(len(candidates)),
+            "v2_attempted": int(len(refine_candidates)),
+            "v2_success": int(v2_success),
+            "fallback": int(baseline_fallback),
+            "performance_skipped": int(len(performance_skipped)),
+        },
+        total_s=total_elapsed,
+    )
+    safe_profile_id = "".join(
+        ch if ch.isalnum() or ch in "-_" else "_"
+        for ch in str(profile_run_id or "latest")
+    )[:80] or "latest"
+    performance_profile_path = debug_dir / f"performance_{safe_profile_id}.json"
+    performance_profile_path.write_text(
+        json.dumps(_jsonable_record(performance_profile), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     report = {
         "engine": "BREAKLINE_ENGINE_V2_GLOBAL_HYBRID",
         "experimental": True,
@@ -1114,7 +1202,9 @@ def run_auto_global_v2(
             for key in v2_cfg.__dataclass_fields__
         },
         "baseline_config": cfg.to_dict(),
-        "elapsed_s": float(perf_counter() - started),
+        "performance_profile": performance_profile,
+        "performance_profile_path": str(performance_profile_path),
+        "elapsed_s": total_elapsed,
         "lines": [
             {
                 key: value

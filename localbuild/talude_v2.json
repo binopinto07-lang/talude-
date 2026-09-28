@@ -238,9 +238,10 @@
     ]
   },
   "release": {},
-  "config_revision": 10,
+  "config_revision": 11,
   "required_paths": [
     "scripts/build_windows.py",
+    "src/talude_v2/profiling.py",
     "studio/viewer/vector_editor.js",
     "studio/backend/vector_export.py",
     "localbuild/talude_v2.json",
@@ -248,6 +249,6 @@
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-28_R2"
+    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-28_R3"
   }
 }

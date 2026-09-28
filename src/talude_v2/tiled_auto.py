@@ -16,6 +16,7 @@ from talude_v1.engine import _filter_stream_chunk
 from talude_v1.io import inspect_point_cloud, iter_point_chunks
 
 from .engine import V2Config, _resample_polyline
+from .profiling import add_stage_time, build_performance_profile, merge_stage_times
 from .reasons import V2DetectionError, V2Reason
 
 
@@ -658,11 +659,16 @@ def process_candidates_tiled(
     same source/config reuses completed tiles and avoids a second full LAS scan.
     """
     started = perf_counter()
+    stage_seconds: dict[str, float] = {}
+    tile_profile_records: list[dict] = []
+    face_profile: dict[int, dict] = {}
+
     info = inspect_point_cloud(source)
     tile_size = max(float(v2_cfg.tile_size_m), 10.0)
     halo = max(float(v2_cfg.tile_halo_m), 0.0)
     x0, y0 = float(info.mins[0]), float(info.mins[1])
 
+    tile_generation_started = perf_counter()
     jobs, by_tile, (nx, ny) = _build_tile_jobs(candidates, info, v2_cfg)
     candidate_tile_ids = set(by_tile)
     needed_tiles = _source_tiles_needed(
@@ -671,6 +677,11 @@ def process_candidates_tiled(
         ny=ny,
         tile_size_m=tile_size,
         halo_m=halo,
+    )
+    add_stage_time(
+        stage_seconds,
+        "tile_generation",
+        perf_counter() - tile_generation_started,
     )
 
     spool_dir, cache_identity = _persistent_spool_dir(
@@ -709,6 +720,7 @@ def process_candidates_tiled(
     }
 
     try:
+        spool_started = perf_counter()
         if missing_tiles:
             spool_stats = _spool_tiles(
                 source,
@@ -746,6 +758,11 @@ def process_candidates_tiled(
                         f"{len(cached_tiles)}/{len(needed_tiles)} tiles"
                     ),
                 )
+        add_stage_time(
+            stage_seconds,
+            "ground_read_or_spool",
+            perf_counter() - spool_started,
+        )
 
         cached_points = _cached_point_count(spool_dir, set(needed_tiles))
         spool_stats.update(
@@ -767,6 +784,8 @@ def process_candidates_tiled(
         # Load one tile+halo once, then run all face fragments that touch it.
         for tile_index, tile_id in enumerate(sorted(by_tile), start=1):
             _check_cancel(cancel_check)
+            tile_started = perf_counter()
+            read_started = perf_counter()
             tile_points = _load_tile_halo(
                 tile_id,
                 spool_dir=spool_dir,
@@ -777,17 +796,43 @@ def process_candidates_tiled(
                 tile_size_m=tile_size,
                 halo_m=halo,
             )
+            read_ms = float((perf_counter() - read_started) * 1000.0)
+            add_stage_time(stage_seconds, "tile_ground_query", read_ms / 1000.0)
+            xmin, ymin, xmax, ymax = _tile_bounds(
+                tile_id,
+                nx=nx,
+                x0=x0,
+                y0=y0,
+                tile_size_m=tile_size,
+            )
+            tile_profile = {
+                "tile_id": int(tile_id),
+                "bbox": [float(xmin), float(ymin), float(xmax), float(ymax)],
+                "ground_points": int(len(tile_points)),
+                "read_ms": read_ms,
+                "tin_ms": 0.0,
+                "refine_ms": 0.0,
+                "stitch_ms": 0.0,
+                "cache_hits": 0,
+                "cache_misses": 0,
+                "faces": int(len({int(job.face_id) for job in by_tile[tile_id]})),
+                "jobs": int(len(by_tile[tile_id])),
+            }
 
             for job in by_tile[tile_id]:
                 _check_cancel(cancel_check)
                 candidate = candidates[job.candidate_index]
+                job_started = perf_counter()
                 cache_path = _fragment_cache_path(
                     spool_dir,
                     candidate,
                     v2_cfg,
                     tile_id,
                 )
+                cache_started = perf_counter()
                 cached = _load_fragment_cache(cache_path)
+                cache_lookup_ms = float((perf_counter() - cache_started) * 1000.0)
+                refine_ms = 0.0
 
                 if cached is not None:
                     cached_fragments = []
@@ -817,8 +862,11 @@ def process_candidates_tiled(
                         }
                     )
                     fragment_cache_hits += 1
+                    tile_profile["cache_hits"] += 1
                 else:
                     fragment_cache_misses += 1
+                    tile_profile["cache_misses"] += 1
+                    refine_started = perf_counter()
                     local_points = _bounded_candidate_points(
                         tile_points,
                         candidate,
@@ -911,6 +959,11 @@ def process_candidates_tiled(
                                 produced_fragments,
                                 record,
                             )
+                        v2_timing = dict(face_record.get("v2_timing_s", {}) or {})
+                        merge_stage_times(stage_seconds, v2_timing)
+                        tile_profile["tin_ms"] += float(
+                            v2_timing.get("tin_build", 0.0) or 0.0
+                        ) * 1000.0
                     except Exception as exc:
                         record.update(
                             {
@@ -923,6 +976,38 @@ def process_candidates_tiled(
                                 "message": str(exc),
                             }
                         )
+                    refine_ms = float((perf_counter() - refine_started) * 1000.0)
+
+                job_elapsed_ms = float((perf_counter() - job_started) * 1000.0)
+                record["cache_lookup_ms"] = cache_lookup_ms
+                record["refine_ms"] = refine_ms
+                record["elapsed_ms"] = job_elapsed_ms
+                tile_profile["refine_ms"] += refine_ms
+
+                face_row = face_profile.setdefault(
+                    int(candidate.face_id),
+                    {
+                        "face_id": int(candidate.face_id),
+                        "source": "V2_TILED",
+                        "v2_attempted": True,
+                        "v2_success": False,
+                        "fallback_reason": None,
+                        "tile_jobs": 0,
+                        "points": 0,
+                        "tin_points": 0,
+                        "refine_ms": 0.0,
+                        "stitch_ms": 0.0,
+                        "cache_hits": 0,
+                        "cache_misses": 0,
+                    },
+                )
+                face_row["tile_jobs"] += 1
+                face_row["points"] += int(record.get("roi_points", 0) or 0)
+                metrics = dict(record.get("v2_metrics", {}) or {})
+                face_row["tin_points"] += int(metrics.get("tin_points", 0) or 0)
+                face_row["refine_ms"] += refine_ms
+                face_row["cache_hits"] += 1 if cached is not None else 0
+                face_row["cache_misses"] += 0 if cached is not None else 1
 
                 tile_records.append(record)
                 done += 1
@@ -936,6 +1021,13 @@ def process_candidates_tiled(
                         ),
                     )
 
+            tile_profile["cache_hit"] = bool(
+                tile_profile["cache_hits"] == tile_profile["jobs"]
+                and tile_profile["jobs"] > 0
+            )
+            tile_profile["elapsed_ms"] = float((perf_counter() - tile_started) * 1000.0)
+            tile_profile_records.append(tile_profile)
+
         results: dict[int, dict] = {}
         for candidate in candidates:
             _check_cancel(cancel_check)
@@ -944,6 +1036,7 @@ def process_candidates_tiled(
             stitch_meta: dict[str, dict] = {}
             failure: Exception | None = None
 
+            stitch_started = perf_counter()
             for kind, reference in (
                 ("CREST", candidate.crest),
                 ("TOE", candidate.toe),
@@ -987,6 +1080,48 @@ def process_candidates_tiled(
                 except Exception as exc:
                     failure = exc
                     break
+
+            stitch_ms = float((perf_counter() - stitch_started) * 1000.0)
+            add_stage_time(stage_seconds, "stitching", stitch_ms / 1000.0)
+            face_row = face_profile.setdefault(
+                face_id,
+                {
+                    "face_id": face_id,
+                    "source": "V2_TILED",
+                    "v2_attempted": True,
+                    "v2_success": False,
+                    "fallback_reason": None,
+                    "tile_jobs": 0,
+                    "points": 0,
+                    "tin_points": 0,
+                    "refine_ms": 0.0,
+                    "stitch_ms": 0.0,
+                    "cache_hits": 0,
+                    "cache_misses": 0,
+                },
+            )
+            face_row["stitch_ms"] = stitch_ms
+            face_row["elapsed_ms"] = float(face_row["refine_ms"] + stitch_ms)
+            face_row["status"] = (
+                "SUCCESS"
+                if failure is None and len(pair_lines) == 2
+                else "FAILED"
+            )
+            face_row["reason"] = (
+                V2Reason.SUCCESS.value
+                if failure is None and len(pair_lines) == 2
+                else (
+                    failure.reason.value
+                    if isinstance(failure, V2DetectionError)
+                    else V2Reason.MERGE_FAILED.value
+                )
+            )
+            face_row["v2_success"] = bool(
+                failure is None and len(pair_lines) == 2
+            )
+            face_row["fallback_reason"] = (
+                None if face_row["v2_success"] else face_row["reason"]
+            )
 
             if failure is None and len(pair_lines) == 2:
                 results[face_id] = {
@@ -1039,6 +1174,32 @@ def process_candidates_tiled(
                 fh.write(json.dumps(record, ensure_ascii=False) + "\n")
 
         success_faces = sum(1 for item in results.values() if item["status"] == "SUCCESS")
+        performance_profile = build_performance_profile(
+            stage_seconds=stage_seconds,
+            tile_records=tile_profile_records,
+            face_records=face_profile.values(),
+            cache={
+                "ground_tile_hits": int(len(cached_tiles)),
+                "ground_tile_misses": int(len(missing_tiles)),
+                "ground_tile_hit_ratio": float(
+                    len(cached_tiles) / max(1, len(cached_tiles) + len(missing_tiles))
+                ),
+                "fragment_hits": int(fragment_cache_hits),
+                "fragment_misses": int(fragment_cache_misses),
+                "fragment_hit_ratio": float(
+                    fragment_cache_hits
+                    / max(1, fragment_cache_hits + fragment_cache_misses)
+                ),
+            },
+            counters={
+                "candidate_tiles": int(len(candidate_tile_ids)),
+                "tile_jobs": int(len(jobs)),
+                "faces": int(len(candidates)),
+                "successful_faces": int(success_faces),
+                "failed_faces": int(len(results) - success_faces),
+            },
+            total_s=float(perf_counter() - started),
+        )
         return results, {
             "mode": "TILED_HALO_STITCH",
             "tile_size_m": tile_size,
@@ -1056,6 +1217,7 @@ def process_candidates_tiled(
             "fragment_cache_hit_ratio": float(
                 fragment_cache_hits / max(1, fragment_cache_hits + fragment_cache_misses)
             ),
+            "profile": performance_profile,
             "elapsed_s": float(perf_counter() - started),
         }
     finally:

@@ -5,6 +5,7 @@ import threading
 import traceback
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from talude_v1.config import ExtractConfig
@@ -182,6 +183,7 @@ def _worker_v2(
                 message=str(message),
             )
 
+        job_started = perf_counter()
         report = run_auto_global_v2(
             source,
             output,
@@ -190,11 +192,13 @@ def _worker_v2(
             progress=progress,
             cancel_check=cancelled,
             performance_mode=mode,
+            profile_run_id=job_id,
         )
 
         geojson_path = output / "talude_breaklines.geojson"
         payload = json.loads(geojson_path.read_text(encoding="utf-8"))
 
+        vector_started = perf_counter()
         vector_bundle = write_documents_from_geojson(
             project.path,
             output,
@@ -207,6 +211,30 @@ def _worker_v2(
                 "job_id": job_id,
                 "output_dir": str(output),
             },
+        )
+        vector_elapsed = float(perf_counter() - vector_started)
+        performance_profile = dict(report.get("performance_profile") or {})
+        profile_stages = dict(performance_profile.get("stages_s") or {})
+        profile_stages["vector_document"] = float(
+            profile_stages.get("vector_document", 0.0) + vector_elapsed
+        )
+        performance_profile["stages_s"] = profile_stages
+        performance_profile["total_s"] = float(perf_counter() - job_started)
+        report["performance_profile"] = performance_profile
+        report["elapsed_s"] = float(performance_profile["total_s"])
+
+        profile_path = Path(
+            report.get("performance_profile_path")
+            or (output / "debug" / f"performance_{job_id}.json")
+        )
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        profile_path.write_text(
+            json.dumps(performance_profile, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        (output / "talude_report.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
 
         lines: list[dict[str, Any]] = []

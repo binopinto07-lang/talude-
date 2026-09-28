@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from time import perf_counter
 
 import numpy as np
 from scipy.spatial import Delaunay, QhullError, cKDTree
@@ -930,6 +931,9 @@ def extract_face_raw_tin(
     if seed.shape != (3,):
         raise V2DetectionError(V2Reason.INTERNAL_ERROR, "Seed XYZ inválido.")
 
+    timing_s: dict[str, float] = {}
+
+    stage_started = perf_counter()
     tin_points, effective_spacing = _xy_voxel_median(
         raw,
         cfg.target_tin_spacing_m,
@@ -950,9 +954,15 @@ def extract_face_raw_tin(
         ) from exc
 
     geom = _triangle_geometry(tin_points, tri.simplices)
+    timing_s["tin_build"] = float(perf_counter() - stage_started)
+
+    stage_started = perf_counter()
     seed_id = _seed_triangle(geom, seed, cfg)
     selected = _grow_face(tri, geom, seed_id, cfg)
     local_coherence = _local_face_coherence(tri, geom, selected)
+    timing_s["face_detection"] = float(perf_counter() - stage_started)
+
+    stage_started = perf_counter()
     candidates = _boundary_candidates(
         tin_points,
         tri,
@@ -960,7 +970,9 @@ def extract_face_raw_tin(
         selected,
         cfg,
     )
+    timing_s["crest_toe_classification"] = float(perf_counter() - stage_started)
 
+    stage_started = perf_counter()
     preliminary: dict[str, np.ndarray] = {}
     topology: dict[str, dict[str, int]] = {}
     for kind in ("CREST", "TOE"):
@@ -979,7 +991,9 @@ def extract_face_raw_tin(
             candidates[kind],
             cfg,
         )
+    timing_s["boundary_extraction"] = float(perf_counter() - stage_started)
 
+    stage_started = perf_counter()
     crest, crest_refine = _refine_by_surface_intersection(
         preliminary["CREST"],
         raw,
@@ -999,6 +1013,7 @@ def extract_face_raw_tin(
 
     crest = _resample_polyline(crest, cfg.station_spacing_m)
     toe = _resample_polyline(toe, cfg.station_spacing_m)
+    timing_s["refinement"] = float(perf_counter() - stage_started)
 
     face_ids = np.flatnonzero(selected)
     face_slope = float(np.median(geom["slope"][face_ids]))
@@ -1082,6 +1097,7 @@ def extract_face_raw_tin(
         "toe_candidate_edges": int(len(candidates["TOE"])),
         "station_spacing_m": float(cfg.station_spacing_m),
         "refine_ratio": refine_ratio,
+        "timing_s": timing_s,
         **local_coherence,
         "metrics": {
             "raw_points": int(len(raw)),
