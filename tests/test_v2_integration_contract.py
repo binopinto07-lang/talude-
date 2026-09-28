@@ -11,7 +11,7 @@ def test_v2_api_is_isolated_from_baseline_and_has_global_auto():
     assert "start_auto_extract_v2" in server
     assert "extract_terrain_face_from_points" in server
     assert "extract_face_raw_tin" in server
-    assert 'APP_VERSION = "2.4.0-profile-edge-review"' in server
+    assert 'APP_VERSION = "2.4.1-profile-edge-global"' in server
 
 
 def test_v2_viewer_can_switch_global_and_clicked_engines():
@@ -38,8 +38,9 @@ def test_v2_global_auto_has_progress_cancel_and_regression_fallback():
     html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
 
     assert "run_auto_global_v2" in engine
-    assert "BASELINE_1_1_7_FALLBACK" in engine
     assert "_collect_roi_points_stream" in engine
+    assert "STREAM_FACE_GLOBAL" in engine
+    assert '"review_geometry": False' in engine
     assert "_PriorityReservoir" in engine
     assert "extract_profile_edge_pair" in engine
     assert "talude_review.geojson" in engine
@@ -71,13 +72,12 @@ def test_v2_phases_3_to_5_are_wired_end_to_end():
     auto_v2 = Path("studio/backend/auto_extract_v2.py").read_text(encoding="utf-8")
     server = Path("studio/backend/server.py").read_text(encoding="utf-8")
 
-    # Phase 3
-    assert "process_candidates_tiled" in global_engine
-    assert "TILED_HALO_STITCH" in tiled
-    assert "_spool_tiles" in tiled
-    assert "_load_tile_halo" in tiled
+    # Phase 3 — active production path no longer stitches per-tile line fragments.
+    assert "_collect_roi_points_stream" in global_engine
+    assert "STREAM_FACE_GLOBAL" in global_engine
+    assert "process_candidates_tiled(" not in global_engine
+    assert "_spool_tiles" in tiled  # legacy/diagnostic implementation remains isolated.
     assert "stitch_fragments" in tiled
-    assert "v2_tiles.jsonl" in tiled
     assert "tile_size_m" in engine
     assert "tile_halo_m" in engine
 
