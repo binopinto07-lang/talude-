@@ -398,6 +398,8 @@ def _ordered_candidate_path(
     candidate: np.ndarray,
     seed_cell: tuple[float, float],
     resolution: float,
+    *,
+    max_seed_distance_m: float = 4.0,
 ) -> np.ndarray:
     coords, adjacency = _candidate_graph(candidate, radius=2)
     if len(coords) < 5:
@@ -420,7 +422,7 @@ def _ordered_candidate_path(
             best_distance = d
             best_comp = comp
 
-    if best_comp is None or best_distance > 4.0:
+    if best_comp is None or best_distance > float(max_seed_distance_m):
         raise ValueError("Não foi encontrada a aresta pedida junto ao clique.")
 
     allowed = set(best_comp)
@@ -880,6 +882,7 @@ def extract_terrain_face_edge(
     profile: str = "ridge",
     grid_resolution: float = 0.20,
     face_seed_xyz=None,
+    edge_seed_max_distance_m: float = 4.0,
 ) -> TerrainFaceResult:
     """Extract crest/toe from the boundaries of a steep terrain face.
 
@@ -987,6 +990,7 @@ def extract_terrain_face_edge(
         candidate,
         edge_seed_cell,
         resolution,
+        max_seed_distance_m=max(1.0, float(edge_seed_max_distance_m)),
     )
 
     rough = np.empty((len(path_cells), 3), dtype=np.float64)
