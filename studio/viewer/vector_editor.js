@@ -830,6 +830,9 @@
       item.revision = Number(item.revision || 1) + 1;
       item.updated_at = new Date().toISOString();
     }
+    editor.activeLayerId = String(feature.layer_id || "CRISTA");
+    const filter = byId("vectorLayerFilter");
+    if (filter) filter.value = "";
     markChanged("review_approve_face");
     const s = shell();
     if (s) s.toast("Face aprovada · CRISTA/PÉ passam para BREAKLINES.", 5500);
@@ -852,6 +855,9 @@
       item.revision = Number(item.revision || 1) + 1;
       item.updated_at = new Date().toISOString();
     }
+    editor.activeLayerId = "FACES_REJEITADAS";
+    const filter = byId("vectorLayerFilter");
+    if (filter) filter.value = "FACES_REJEITADAS";
     markChanged("review_reject_face");
     const s = shell();
     if (s) s.toast("Face rejeitada · excluída das BREAKLINES e exportação normal.", 6500);
