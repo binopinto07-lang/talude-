@@ -109,7 +109,7 @@ def test_orbit_pan_click_vs_drag_and_cad_views_are_wired():
     assert "controls.panDelta.x" in viewer
     assert "if (moved <= 5)" in viewer
     assert 'id="panModeButton"' in html
-    assert "PAN: direito / meio / botão PAN" in html
+    assert "PAN: direito / meio / Shift+esquerdo" in html
     assert ".pan-button.active" in css
     assert "#potree_render_area.pan-mode" in css
 
