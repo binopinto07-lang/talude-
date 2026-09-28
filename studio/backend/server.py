@@ -523,12 +523,89 @@ def terrain_face_v2(req: V2TerrainFaceRequest) -> dict[str, Any]:
         )
         return result
     except Exception as exc:
+        reason = (
+            exc.reason.value
+            if isinstance(exc, V2DetectionError)
+            else V2Reason.INTERNAL_ERROR.value
+        )
+
+        # A local click must remain useful even when the experimental RAW-TIN
+        # rejects a sparse/small face. For expected geometry rejections, reuse
+        # the exact same local points through the proven baseline detector.
+        # CANCELLED/INTERNAL errors are not hidden by this fallback.
+        soft_rejections = {
+            V2Reason.NO_GROUND,
+            V2Reason.LOW_GROUND_SUPPORT,
+            V2Reason.INVALID_TIN,
+            V2Reason.NO_FACE,
+            V2Reason.FACE_TOO_SMALL,
+            V2Reason.FACE_TOO_SHORT,
+            V2Reason.LOW_SLOPE,
+            V2Reason.LOW_CONTINUITY,
+            V2Reason.BOUNDARY_NOT_FOUND,
+            V2Reason.CREST_NOT_FOUND,
+            V2Reason.TOE_NOT_FOUND,
+            V2Reason.LINE_TOO_SHORT,
+            V2Reason.REFINEMENT_FAILED,
+            V2Reason.MERGE_FAILED,
+        }
+
+        if isinstance(exc, V2DetectionError) and exc.reason in soft_rejections:
+            try:
+                fallback = extract_terrain_face_from_points(
+                    req.points,
+                    req.seed,
+                    profile=req.profile,
+                    classifications=req.classifications,
+                    selected_classes=req.selected_classes,
+                    grid_resolution=req.grid_resolution,
+                    slope_low_deg=req.slope_low_deg,
+                    slope_high_deg=req.slope_high_deg,
+                    min_face_area_m2=req.min_face_area_m2,
+                    min_line_length_m=req.min_line_length_m,
+                    line_smooth_window=req.line_smooth_window,
+                )
+                fallback = dict(fallback)
+                fallback["detector"] = "V2_LOCAL_FALLBACK_1_1_7"
+                fallback["v2_status"] = "FALLBACK"
+                fallback["v2_reason"] = reason
+                fallback["v2_error"] = str(exc)
+
+                store.debug_event(
+                    req.project_id,
+                    "v2_raw_tin.local_fallback",
+                    {
+                        "cloud_id": req.cloud_id,
+                        "seed": req.seed,
+                        "input_points": len(req.points),
+                        "reason": reason,
+                        "fallback_detector": fallback.get("detector"),
+                        "crest_vertices": len((fallback.get("crest") or {}).get("vertices", [])),
+                        "toe_vertices": len((fallback.get("toe") or {}).get("vertices", [])),
+                    },
+                    source="v2_raw_tin",
+                    level="WARNING",
+                )
+                return fallback
+            except Exception as fallback_exc:
+                try:
+                    store.debug_event(
+                        req.project_id,
+                        "v2_raw_tin.local_fallback_failed",
+                        {
+                            "cloud_id": req.cloud_id,
+                            "seed": req.seed,
+                            "v2_reason": reason,
+                            "v2_error": str(exc),
+                            "fallback_error": str(fallback_exc),
+                        },
+                        source="v2_raw_tin",
+                        level="ERROR",
+                    )
+                except Exception:
+                    pass
+
         try:
-            reason = (
-                exc.reason.value
-                if isinstance(exc, V2DetectionError)
-                else V2Reason.INTERNAL_ERROR.value
-            )
             store.debug_event(
                 req.project_id,
                 "v2_raw_tin.backend_failed",
