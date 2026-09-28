@@ -23,7 +23,10 @@ from talude_v2.vector_document import (
 
 
 def _reference_pair(length: float = 120.0) -> tuple[np.ndarray, np.ndarray]:
-    y = np.linspace(0.0, length, 121)
+    # Synthetic stations are 1 m apart so slice indices used by stitching
+    # tests represent metres consistently for every requested reference length.
+    count = max(2, int(round(float(length))) + 1)
+    y = np.linspace(0.0, length, count)
     crest = np.column_stack((np.full_like(y, 10.0), y, np.full_like(y, 10.0)))
     toe = np.column_stack((np.full_like(y, 15.0), y, np.full_like(y, 5.0)))
     return crest, toe
