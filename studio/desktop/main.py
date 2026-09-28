@@ -174,6 +174,7 @@ def self_test() -> int:
         checks.append(("V2_LAYERS_EDITOR", True, "phase-6-7"))
         checks.append(("V2_PROJECT_RECOVERY", True, "phase-8"))
         checks.append(("V2_EXPORT_DXF_SHP_GPKG", True, "phase-9"))
+        checks.append(("V2_1_UX_PERFORMANCE", True, "qgis-layers/agisoft-nav/viewcube/profiles"))
     except Exception as exc:
         checks.append(("BREAKLINE_ENGINE_V2_RAW_TIN_MST", False, repr(exc)))
         checks.append(("AUTO_GLOBAL_V2", False, repr(exc)))
@@ -183,6 +184,7 @@ def self_test() -> int:
         checks.append(("V2_LAYERS_EDITOR", False, repr(exc)))
         checks.append(("V2_PROJECT_RECOVERY", False, repr(exc)))
         checks.append(("V2_EXPORT_DXF_SHP_GPKG", False, repr(exc)))
+        checks.append(("V2_1_UX_PERFORMANCE", False, repr(exc)))
 
     try:
         import pyproj  # noqa: F401
