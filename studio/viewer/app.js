@@ -31,7 +31,7 @@
     viewer: null,
     pointclouds: new Map(),
     featureMode: "guided",
-    geometryEngine: "baseline",
+    geometryEngine: "v2",
     traceArmed: false,
     currentSeed: null,
     seedMarker: null,
