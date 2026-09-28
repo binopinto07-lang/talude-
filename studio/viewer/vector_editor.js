@@ -815,9 +815,7 @@
   function approveSelectedFace() {
     const feature = selectedFeature();
     if (!feature || !editor.document) return;
-    const items = reviewFaceFeatures(feature).filter((item) =>
-      String(item.layer_id) !== "FACES_REJEITADAS"
-    );
+    const items = reviewFaceFeatures(feature);
     if (!items.length) return;
 
     pushUndo();
