@@ -116,9 +116,14 @@ def test_failed_faces_do_not_publish_baseline_review_geometry():
 
 def test_face_and_edge_seeds_are_decoupled():
     source = Path("core/terrain_face.py").read_text(encoding="utf-8")
+    edge = Path("src/talude_v2/edge_profile.py").read_text(encoding="utf-8")
     assert "face_seed_xyz=None" in source
     assert "face_seed_cell" in source
     assert "edge_seed_cell" in source
+    assert "edge_seed_max_distance_m" in source
+    assert "_extract_face_centered_edges" in edge
+    assert "_component_lines(" not in edge
+    assert "detect_faces(" not in edge
 
 
 def test_windows_builder_packages_profile_edge_engine():
