@@ -26,8 +26,16 @@
   }
 
   function numberValue(id, fallback) {
-    const value = Number(byId(id).value);
+    const control = byId(id);
+    if (!control) return fallback;
+    const value = Number(control.value);
     return Number.isFinite(value) ? value : fallback;
+  }
+
+  function v2PerformanceMode() {
+    const control = byId("v2PerformanceMode");
+    const value = control ? String(control.value || "balanced") : "balanced";
+    return ["fast", "balanced", "precise"].includes(value) ? value : "balanced";
   }
 
   function classesForEngine() {
@@ -167,7 +175,7 @@
       report.engine === "BREAKLINE_ENGINE_V2_GLOBAL_HYBRID";
     if (isV2) {
       s.setStatus(
-        "AUTO V2 concluído · " +
+        "AUTO V2 " + String(report.performance_mode || "balanced").toUpperCase() + " · " +
         String(report.faces_detected || 0) + " faces · " +
         "V2 " + String(report.v2_success_faces || 0) + " · " +
         "fallback " + String(report.baseline_fallback_faces || 0) + " · " +
@@ -253,7 +261,7 @@
     const useV2 = s.state.geometryEngine === "v2";
     s.setStatus(
       useV2
-        ? "AUTO GLOBAL V2 · descoberta de faces → ROI RAW Ground → TIN…"
+        ? "AUTO GLOBAL V2 · a preparar perfil de processamento…"
         : "AUTO TALUDE baseline · a iniciar FACE_DETECTOR…"
     );
 
@@ -266,19 +274,28 @@
       slope_high_deg: numberValue("slopeHigh", 0),
       min_face_area_m2: numberValue("minArea", 4),
       min_line_length_m: numberValue("minLength", 2),
-      line_smooth_window: numberValue("lineSmooth", 11)
+      // The baseline smoothing parameter stays frozen for regression safety.
+      // Final V2 vertex spacing is controlled independently below.
+      line_smooth_window: 11
     };
 
     if (useV2) {
+      const performanceMode = v2PerformanceMode();
+      const vertexSpacing = Math.max(0.25, Math.min(5.0, numberValue("lineVertexSpacing", 1.0)));
       Object.assign(payload, {
-        tin_spacing_m: 0.25,
-        max_tin_points: 45000,
+        performance_mode: performanceMode,
+        tin_spacing_m: performanceMode === "precise" ? 0.25 : 0.35,
+        max_tin_points: performanceMode === "precise" ? 45000 : 32000,
         max_triangle_edge_m: 2.25,
         graph_gap_m: 1.50,
-        station_spacing_m: 1.00,
+        station_spacing_m: vertexSpacing,
         patch_along_m: 2.50,
         patch_cross_m: 1.80
       });
+      s.setStatus(
+        "AUTO GLOBAL V2 · perfil " + performanceMode.toUpperCase() +
+        " · descoberta → refinamento seletivo → fallback seguro…"
+      );
     }
 
     const endpoint = useV2 ? "/api/v2/talude/auto" : "/api/talude/auto";
