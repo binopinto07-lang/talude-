@@ -21,7 +21,7 @@ from talude_v1.io import (
     save_vertices_csv,
 )
 
-from .engine import V2Config, extract_face_raw_tin
+from .engine import V2Config, _resample_polyline, extract_face_raw_tin
 from .reasons import V2DetectionError, V2Reason
 
 
@@ -964,6 +964,26 @@ def run_auto_global_v2(
     for line in unpaired:
         final_lines.append(_baseline_line_payload(line, "BASELINE_1_1_7_UNPAIRED"))
 
+    # Output vertex spacing is a modelling choice, not a new detector.
+    # Re-sample every final line (including protected-baseline fallbacks) along
+    # its existing geometry so the Vector Document/DXF does not contain dense
+    # centimetric zig-zag vertices. The default requested by the operator is 1 m.
+    output_spacing = max(0.25, min(float(v2_cfg.station_spacing_m), 5.0))
+    for line in final_lines:
+        xyz = np.asarray(line.get("xyz"), dtype=np.float64)
+        if len(xyz) < 2:
+            continue
+        xyz = _resample_polyline(xyz, output_spacing)
+        line["xyz"] = xyz
+        line["length_2d_m"] = float(_line_length_2d(xyz))
+        line["length_m"] = float(line["length_2d_m"])
+        line["length_3d_m"] = float(
+            np.linalg.norm(np.diff(xyz, axis=0), axis=1).sum()
+            if len(xyz) >= 2
+            else 0.0
+        )
+        line["vertex_spacing_m"] = float(output_spacing)
+
     final_lines = [
         line
         for line in final_lines
@@ -1001,6 +1021,7 @@ def run_auto_global_v2(
         "v2_attempted_faces": int(len(refine_candidates)),
         "performance_skipped_faces": int(len(performance_skipped)),
         "performance": performance_stats,
+        "output_vertex_spacing_m": float(output_spacing),
         "v2_success_faces": int(v2_success),
         "baseline_fallback_faces": int(baseline_fallback),
         "unpaired_baseline_lines": int(len(unpaired)),
