@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -572,6 +574,58 @@ def _jsonable_record(record: dict) -> dict:
     return out
 
 
+def _baseline_cache_dir(
+    source: Path,
+    output: Path,
+    cfg: ExtractConfig,
+) -> Path:
+    stat = source.stat()
+    payload = {
+        "source": str(source.resolve()),
+        "size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+        "baseline_sha": BASELINE_SHA,
+        "config": cfg.to_dict(),
+    }
+    digest = hashlib.sha1(
+        json.dumps(payload, sort_keys=True, ensure_ascii=True).encode("utf-8")
+    ).hexdigest()[:20]
+    # output = <project>/exports/<run>
+    try:
+        project_root = output.parents[1]
+    except IndexError:
+        project_root = output.parent
+    return project_root / "cache" / "v1_baseline" / digest
+
+
+def _load_baseline_cache(cache_dir: Path, baseline_dir: Path) -> dict | None:
+    geo = cache_dir / "talude_breaklines.geojson"
+    report = cache_dir / "talude_report.json"
+    if not geo.exists() or not report.exists():
+        return None
+    try:
+        payload = json.loads(report.read_text(encoding="utf-8"))
+        baseline_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(geo, baseline_dir / geo.name)
+        shutil.copy2(report, baseline_dir / report.name)
+        return payload
+    except Exception:
+        return None
+
+
+def _save_baseline_cache(cache_dir: Path, baseline_dir: Path) -> None:
+    geo = baseline_dir / "talude_breaklines.geojson"
+    report = baseline_dir / "talude_report.json"
+    if not geo.exists() or not report.exists():
+        return
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    for source_file in (geo, report):
+        target = cache_dir / source_file.name
+        temp = cache_dir / (source_file.name + ".tmp")
+        shutil.copy2(source_file, temp)
+        temp.replace(target)
+
+
 def _performance_candidate_score(candidate: GlobalFaceCandidate) -> tuple[float, float, int]:
     """Rank faces for selective V2 refinement without changing baseline geometry.
 
@@ -692,13 +746,24 @@ def run_auto_global_v2(
                 "AUTO V2 · descoberta global · " + str(message),
             )
 
-    baseline_report = extract_v1(
-        source,
-        baseline_dir,
-        cfg,
-        progress=baseline_progress,
-    )
-    _check_cancel(cancel_check)
+    baseline_cache = _baseline_cache_dir(source, output, cfg)
+    baseline_report = _load_baseline_cache(baseline_cache, baseline_dir)
+    baseline_cache_hit = baseline_report is not None
+
+    if baseline_report is None:
+        baseline_report = extract_v1(
+            source,
+            baseline_dir,
+            cfg,
+            progress=baseline_progress,
+        )
+        _check_cancel(cancel_check)
+        _save_baseline_cache(baseline_cache, baseline_dir)
+    elif progress is not None:
+        progress(
+            39.0,
+            "AUTO V2 · cache HIT · descoberta baseline reutilizada",
+        )
 
     baseline_lines = _load_baseline_lines(baseline_dir / "talude_breaklines.geojson")
     candidates, unpaired = _build_face_candidates(
@@ -1019,6 +1084,8 @@ def run_auto_global_v2(
         "input": str(source),
         "faces_detected": int(faces_final),
         "baseline_faces_detected": int(baseline_report.get("faces_detected", 0)),
+        "baseline_cache_hit": bool(baseline_cache_hit),
+        "baseline_cache_dir": str(baseline_cache),
         "candidate_faces": int(len(candidates)),
         "performance_mode": mode,
         "v2_attempted_faces": int(len(refine_candidates)),
