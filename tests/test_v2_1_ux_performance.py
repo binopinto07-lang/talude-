@@ -60,6 +60,14 @@ def test_qgis_layer_tree_and_cad_view_cube_contract():
     assert "ANÁLISE / SUPORTE" in js
     assert "setAllVectorLayersVisible" in js
     assert "soloActiveLayer" in js
+    assert 'id="vectorApproveFace"' in html
+    assert 'id="vectorRejectFace"' in html
+    assert 'id="reviewCount"' in html
+    assert "CRISTA_REVIEW" in js
+    assert "PE_TALUDE_REVIEW" in js
+    assert "FACES_REJEITADAS" in js
+    assert "approveSelectedFace" in js
+    assert "rejectSelectedFace" in js
 
     assert 'navigationProfile: "agisoft"' in app
     assert "onViewerDoubleClick" in app
@@ -91,12 +99,15 @@ def test_v2_performance_profile_is_wired_end_to_end():
     assert "performance_mode=mode" in worker
     assert "_partition_candidates_for_performance" in engine
     assert "FAST_BASELINE_ONLY" in engine
-    assert "PERFORMANCE_BASELINE" in engine
     assert '"v2_attempted_faces"' in engine
     assert '"performance_skipped_faces"' in engine
     assert "_baseline_cache_dir" in engine
     assert "baseline_cache_hit" in engine
+    assert "ALL_PROFILE_EDGE" in engine
+    assert "review_lines" in engine
+    assert "talude_review.geojson" in engine
     assert "_persistent_spool_dir" in tiled
+    assert "v2_fragment_cache_v2_profile_edge" in tiled
     assert "cache_hit_tiles" in tiled
     assert "manifest.json" in tiled
 
@@ -114,18 +125,17 @@ def test_fast_profile_never_sends_faces_to_raw_tin():
     assert stats["selection"] == "BASELINE_ONLY"
 
 
-def test_balanced_large_cloud_caps_expensive_refinement_but_keeps_every_face_accounted():
+def test_balanced_large_cloud_validates_every_face_with_profile_edge():
     candidates = [_candidate(i, length=30.0 + (i % 10)) for i in range(1, 564)]
     attempted, skipped, stats = _partition_candidates_for_performance(
         candidates,
         mode="balanced",
         point_count=241_149_524,
     )
-    assert len(attempted) == 60
-    assert len(skipped) == 503
-    assert len(attempted) + len(skipped) == 563
-    assert stats["attempt_limit"] == 60
-    assert stats["selection"] == "COHERENCE_PRIORITY"
+    assert len(attempted) == 563
+    assert skipped == []
+    assert stats["attempt_limit"] == 563
+    assert stats["selection"] == "ALL_PROFILE_EDGE"
 
 
 def test_precise_profile_keeps_current_all_face_behaviour():
