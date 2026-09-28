@@ -27,7 +27,7 @@ from .vector_export import export_vector_document
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
-APP_VERSION = "2.0.0-exp9-vector-editor"
+APP_VERSION = "2.1.0-ux-performance"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -115,6 +115,7 @@ class AutoExtractRequest(BaseModel):
 
 
 class V2AutoExtractRequest(AutoExtractRequest):
+    performance_mode: str = "balanced"
     tin_spacing_m: float = Field(default=0.25, ge=0.08, le=2.0)
     max_tin_points: int = Field(default=45000, ge=2000, le=120000)
     max_triangle_edge_m: float = Field(default=2.25, ge=0.25, le=10.0)
@@ -582,6 +583,7 @@ def talude_auto_v2(req: V2AutoExtractRequest) -> dict[str, str]:
             min_face_area_m2=req.min_face_area_m2,
             min_line_length_m=req.min_line_length_m,
             line_smooth_window=req.line_smooth_window,
+            performance_mode=req.performance_mode,
             tin_spacing_m=req.tin_spacing_m,
             max_tin_points=req.max_tin_points,
             max_triangle_edge_m=req.max_triangle_edge_m,
