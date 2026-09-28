@@ -5,8 +5,16 @@ from time import perf_counter
 from typing import Any
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from core.terrain_face import extract_terrain_face_edge
+from talude_v1.config import ExtractConfig
+from talude_v1.engine import (
+    _component_lines,
+    detect_faces,
+    rasterize_mean,
+    refine_lines,
+)
 
 from .reasons import V2DetectionError, V2Reason
 
@@ -80,6 +88,141 @@ def _turn_p95_deg(xyz: np.ndarray) -> float:
     dots = np.sum(a[:-1] * a[1:], axis=1)
     angles = np.degrees(np.arccos(np.clip(dots, -1.0, 1.0)))
     return float(np.percentile(angles, 95.0)) if len(angles) else 0.0
+
+
+
+def _discover_local_face_pair(
+    raw: np.ndarray,
+    candidate,
+    *,
+    resolution: float,
+    min_line_length_m: float,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    """Discover the steep face from its interior and derive both local edges.
+
+    The global baseline is deliberately excluded from this positioning step.
+    It may discover the existence/extent of a face, but the actual crest/toe
+    seeds come from the local slope component around candidate.seed_xyz.
+    """
+    cfg = ExtractConfig(
+        cell_size=float(resolution),
+        slope_low_deg=0.0,
+        slope_high_deg=0.0,
+        min_face_area_m2=4.0,
+        min_line_length_m=max(1.0, float(min_line_length_m)),
+        line_smooth_window=7,
+        use_ground_class=False,
+        classification_filter=None,
+    )
+    grid = rasterize_mean(raw[:, :3], float(resolution))
+    det = detect_faces(grid, cfg)
+    approx = _component_lines(
+        grid,
+        det,
+        cfg,
+        seed_xy=(float(candidate.seed_xyz[0]), float(candidate.seed_xyz[1])),
+    )
+    refined = refine_lines(approx, raw[:, :3], grid.cell, cfg)
+    by_type = {str(line.get("type", "")).upper(): line for line in refined}
+    if "CREST" not in by_type or "TOE" not in by_type:
+        raise V2DetectionError(
+            V2Reason.BOUNDARY_NOT_FOUND,
+            f"FACE_{int(candidate.face_id):06d}: face local não produziu CRISTA + PÉ.",
+        )
+    crest = np.asarray(by_type["CREST"]["xyz"], dtype=np.float64)
+    toe = np.asarray(by_type["TOE"]["xyz"], dtype=np.float64)
+    if len(crest) < 2 or len(toe) < 2:
+        raise V2DetectionError(
+            V2Reason.BOUNDARY_NOT_FOUND,
+            f"FACE_{int(candidate.face_id):06d}: limites locais demasiado curtos.",
+        )
+    return crest, toe, {
+        "grid_resolution_m": float(grid.cell),
+        "slope_low_deg": float(det.get("slope_low", 0.0)),
+        "slope_high_deg": float(det.get("slope_high", 0.0)),
+        "selected_face_label": int(det.get("selected_face_label", 0)),
+        "seed_to_face_distance_m": float(
+            det.get("selected_face_seed_distance_m", 0.0)
+        ),
+    }
+
+
+def _reference_agreement(xyz: np.ndarray, reference: np.ndarray) -> dict[str, float]:
+    pts = np.asarray(xyz, dtype=np.float64)
+    ref = np.asarray(reference, dtype=np.float64)
+    if len(pts) < 2 or len(ref) < 2:
+        return {"median_m": float("inf"), "p95_m": float("inf")}
+    tree = cKDTree(ref[:, :2])
+    dist, _ = tree.query(pts[:, :2], k=1)
+    return {
+        "median_m": float(np.median(dist)),
+        "p95_m": float(np.percentile(dist, 95.0)),
+    }
+
+
+def _local_reference_tangent(reference: np.ndarray, point_xy: np.ndarray) -> np.ndarray | None:
+    ref = np.asarray(reference, dtype=np.float64)
+    if len(ref) < 2:
+        return None
+    idx = int(np.argmin(np.linalg.norm(ref[:, :2] - point_xy[:2], axis=1)))
+    a = max(0, idx - 1)
+    b = min(len(ref) - 1, idx + 1)
+    if b == a:
+        return None
+    tangent = ref[b, :2] - ref[a, :2]
+    norm = float(np.linalg.norm(tangent))
+    if norm <= 1e-9:
+        return None
+    return tangent / norm
+
+
+def _trim_endpoint_hooks(xyz: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """Remove short perpendicular hooks created where the face mask closes.
+
+    Only endpoints may be removed; the body of the detected edge is untouched.
+    This targets the visible 90-degree/diagonal tails at terrace ends without
+    smoothing a genuine curved crest.
+    """
+    pts = np.asarray(xyz, dtype=np.float64).copy()
+    ref = np.asarray(reference, dtype=np.float64)
+    if len(pts) < 4 or len(ref) < 2:
+        return pts
+
+    max_drops = max(1, min(3, int(math.floor(len(pts) * 0.25))))
+
+    def bad_segment(a: np.ndarray, b: np.ndarray) -> bool:
+        seg = b[:2] - a[:2]
+        length = float(np.linalg.norm(seg))
+        if length <= 1e-9:
+            return True
+        tangent = _local_reference_tangent(ref, 0.5 * (a[:2] + b[:2]))
+        if tangent is None:
+            return False
+        direction = seg / length
+        alignment = abs(float(np.dot(direction, tangent)))
+        return alignment < math.cos(math.radians(58.0))
+
+    dropped = 0
+    while len(pts) >= 4 and dropped < max_drops and bad_segment(pts[0], pts[1]):
+        pts = pts[1:].copy()
+        dropped += 1
+
+    dropped = 0
+    while len(pts) >= 4 and dropped < max_drops and bad_segment(pts[-2], pts[-1]):
+        pts = pts[:-1].copy()
+        dropped += 1
+    return pts
+
+
+def _pair_width_median(crest: np.ndarray, toe: np.ndarray) -> float:
+    count = max(10, min(160, int(max(_line_length_2d(crest), _line_length_2d(toe))) + 1))
+    a = _resample_count(crest, count)
+    b = _resample_count(toe, count)
+    direct = float(np.linalg.norm(a[0, :2] - b[0, :2]) + np.linalg.norm(a[-1, :2] - b[-1, :2]))
+    reverse = float(np.linalg.norm(a[0, :2] - b[-1, :2]) + np.linalg.norm(a[-1, :2] - b[0, :2]))
+    if reverse < direct:
+        b = b[::-1].copy()
+    return float(np.median(np.linalg.norm(a[:, :2] - b[:, :2], axis=1)))
 
 
 def validate_edge_pair(
@@ -217,9 +360,24 @@ def extract_profile_edge_pair(
             f"FACE_{int(candidate.face_id):06d}: poucos pontos Ground para perfil geométrico.",
         )
 
-    crest_seed = _nearest_reference_seed(candidate.crest, candidate.seed_xyz)
-    toe_seed = _nearest_reference_seed(candidate.toe, candidate.seed_xyz)
     resolution = float(np.clip(grid_resolution_m, 0.16, 0.30))
+    try:
+        local_crest, local_toe, local_face = _discover_local_face_pair(
+            raw,
+            candidate,
+            resolution=resolution,
+            min_line_length_m=min_line_length_m,
+        )
+    except V2DetectionError:
+        raise
+    except Exception as exc:
+        raise V2DetectionError(
+            V2Reason.NO_FACE,
+            f"FACE_{int(candidate.face_id):06d}: descoberta local da face falhou: {exc}",
+        ) from exc
+
+    crest_seed = _nearest_reference_seed(local_crest, candidate.seed_xyz)
+    toe_seed = _nearest_reference_seed(local_toe, candidate.seed_xyz)
 
     try:
         crest_result = extract_terrain_face_edge(
@@ -227,6 +385,7 @@ def extract_profile_edge_pair(
             crest_seed,
             profile="ridge",
             grid_resolution=resolution,
+            face_seed_xyz=np.asarray(candidate.seed_xyz, dtype=np.float64),
         )
     except Exception as exc:
         raise V2DetectionError(
@@ -240,6 +399,7 @@ def extract_profile_edge_pair(
             toe_seed,
             profile="toe",
             grid_resolution=resolution,
+            face_seed_xyz=np.asarray(candidate.seed_xyz, dtype=np.float64),
         )
     except Exception as exc:
         raise V2DetectionError(
@@ -249,17 +409,38 @@ def extract_profile_edge_pair(
 
     crest = _orient_like_reference(
         np.asarray(crest_result.vertices, dtype=np.float64),
-        np.asarray(candidate.crest, dtype=np.float64),
+        local_crest,
     )
     toe = _orient_like_reference(
         np.asarray(toe_result.vertices, dtype=np.float64),
-        np.asarray(candidate.toe, dtype=np.float64),
+        local_toe,
     )
+    crest = _trim_endpoint_hooks(crest, local_crest)
+    toe = _trim_endpoint_hooks(toe, local_toe)
+
+    local_width = _pair_width_median(local_crest, local_toe)
+    crest_agreement = _reference_agreement(crest, local_crest)
+    toe_agreement = _reference_agreement(toe, local_toe)
+    agreement_limit_p95 = max(1.8, min(4.0, local_width * 0.45))
+    if (
+        crest_agreement["median_m"] > 1.0
+        or toe_agreement["median_m"] > 1.0
+        or crest_agreement["p95_m"] > agreement_limit_p95
+        or toe_agreement["p95_m"] > agreement_limit_p95
+    ):
+        raise V2DetectionError(
+            V2Reason.REFINEMENT_FAILED,
+            (
+                f"FACE_{int(candidate.face_id):06d}: edge-lock divergiu da face local "
+                f"(crista P95={crest_agreement['p95_m']:.2f} m; "
+                f"pé P95={toe_agreement['p95_m']:.2f} m)."
+            ),
+        )
 
     geometry = validate_edge_pair(
         crest,
         toe,
-        expected_width_m=float(candidate.baseline_width_median),
+        expected_width_m=float(local_width),
         min_line_length_m=float(min_line_length_m),
     )
     if not bool(geometry.get("accepted")):
@@ -321,6 +502,10 @@ def extract_profile_edge_pair(
         "detector": "PROFILE_EDGE_FLAT_FACE_FLAT",
         "roi_points": int(len(raw)),
         "geometry": geometry,
+        "local_face": local_face,
+        "local_width_median_m": float(local_width),
+        "crest_agreement": crest_agreement,
+        "toe_agreement": toe_agreement,
         "crest": {
             "confidence": float(crest_result.confidence),
             "snap_ratio": float(crest_result.snap_ratio),
@@ -339,6 +524,9 @@ def extract_profile_edge_pair(
             "profile_edge_quality": quality,
             "width_median_m": geometry.get("width_median_m"),
             "positive_relief_ratio": geometry.get("positive_relief_ratio"),
+            "local_width_median_m": float(local_width),
+            "crest_agreement_p95_m": crest_agreement.get("p95_m"),
+            "toe_agreement_p95_m": toe_agreement.get("p95_m"),
         },
         "v2_timing_s": {"refinement": elapsed},
         "elapsed_s": elapsed,
