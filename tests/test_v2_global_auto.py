@@ -122,6 +122,40 @@ def test_auto_global_face_refinement_uses_profile_edges_and_returns_pair():
     assert record["geometry"]["accepted"] is True
 
 
+def test_profile_edge_ignores_shifted_baseline_position():
+    raw = _synthetic_bench()
+    crest, toe = _baseline_pair()
+    shifted_crest = crest + np.array([1.25, 0.0, -1.25])
+    shifted_toe = toe + np.array([1.25, 0.0, 0.0])
+    candidate = _normalize_face_pair(
+        9,
+        shifted_crest,
+        shifted_toe,
+        corridor_margin_m=4.0,
+    )
+
+    lines, record = refine_face_candidate_v2(
+        candidate,
+        raw,
+        v2_config=V2Config(
+            target_tin_spacing_m=0.25,
+            max_tin_points=45000,
+            station_spacing_m=1.0,
+            graph_gap_m=1.0,
+        ),
+        min_line_length_m=2.0,
+    )
+
+    by_type = {line["type"]: np.asarray(line["xyz"]) for line in lines}
+    crest_x = float(np.median(by_type["CREST"][:, 0]))
+    toe_x = float(np.median(by_type["TOE"][:, 0]))
+    assert abs(crest_x - 10.0) < 0.9
+    assert abs(toe_x - 15.0) < 0.9
+    assert abs(crest_x - 11.25) > 0.5
+    assert abs(toe_x - 16.25) > 0.5
+    assert record["local_face"]["seed_to_face_distance_m"] >= 0.0
+
+
 def test_edge_guard_accepts_real_edge_and_rejects_face_centre():
     crest, toe = _baseline_pair()
 
