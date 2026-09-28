@@ -840,14 +840,17 @@ def run_auto_global_v2(
         tiled_stats = dict(tiled_stats or {})
         tiled_stats["performance"] = performance_stats
         spool = dict((tiled_stats or {}).get("spool") or {})
+        routed_points = int(
+            spool.get("cached_points_available", spool.get("spooled_points", 0))
+        )
         roi_stats = {
             "mode": "TILED_HALO_STITCH",
             "points_total": int(info.point_count),
-            "points_selected": int(spool.get("selected_seen", 0)),
-            "points_routed_with_overlap": int(spool.get("spooled_points", 0)),
+            "points_selected": int(spool.get("selected_seen", routed_points)),
+            "points_routed_with_overlap": routed_points,
             "roi_max_points_per_face": int(v2_cfg.max_tin_points),
-            "roi_seen_total": int(spool.get("spooled_points", 0)),
-            "roi_kept_total": int(spool.get("spooled_points", 0)),
+            "roi_seen_total": routed_points,
+            "roi_kept_total": routed_points,
             "spatial_index_cells": int((tiled_stats or {}).get("candidate_tiles", 0)),
             "spatial_tile_size_m": float(v2_cfg.tile_size_m),
             "crs_wkt": info.crs_wkt,
