@@ -43,6 +43,82 @@
         </div>
       </section>
 
+      <section class="card vector-editor-card qgis-layer-card">
+        <div class="section-title qgis-title-row">
+          <span>CAMADAS</span>
+          <span class="qgis-title-actions">QGIS STYLE</span>
+        </div>
+
+        <div class="qgis-layer-toolbar" title="Controlo de camadas">
+          <button id="layersShowAll" title="Mostrar todas">👁</button>
+          <button id="layersHideAll" title="Ocultar todas">◉</button>
+          <button id="layersSoloActive" title="Só layer ativa">S</button>
+          <button id="vectorRefresh" title="Atualizar árvore">↻</button>
+          <button id="vectorSave" title="Guardar">💾</button>
+          <button id="vectorUndo" title="Undo">↶</button>
+          <button id="vectorRedo" title="Redo">↷</button>
+        </div>
+
+        <div id="vectorStatus" class="hint qgis-status">Sem Vector Document carregado.</div>
+        <div id="vectorLayers" class="vector-layer-list qgis-layer-tree"></div>
+
+        <details class="vector-editor-details" open>
+          <summary>EDITOR 3D</summary>
+        <label>Features</label>
+        <div class="vector-filter-row">
+          <select id="vectorLayerFilter">
+            <option value="">Todas as layers</option>
+          </select>
+          <input id="vectorSearch" type="text" placeholder="Face / ID…" />
+        </div>
+        <div id="vectorFeatures" class="vector-feature-list"></div>
+
+        <div id="vectorEditBox" class="vector-edit-box hidden">
+          <div class="vector-selected-title" id="vectorSelectedTitle">Feature</div>
+          <label>Vértice</label>
+          <select id="vectorVertexSelect"></select>
+          <div id="vectorVertexXYZ" class="vector-coordinate-readout">X — · Y — · Z —</div>
+
+          <div class="vector-action-grid">
+            <button id="vectorMoveVertex">Mover por clique</button>
+            <button id="vectorInsertVertex">Inserir depois</button>
+            <button id="vectorDeleteVertex">Apagar vértice</button>
+            <button id="vectorDeleteLine" class="danger-soft">Apagar linha</button>
+          </div>
+        </div>
+
+        <div class="vector-new-line">
+          <select id="vectorNewType">
+            <option value="CREST">Nova CRISTA</option>
+            <option value="TOE">Novo PÉ</option>
+          </select>
+          <button id="vectorNewLine">Iniciar linha</button>
+        </div>
+        <div id="vectorDraftActions" class="vector-toolbar hidden">
+          <button id="vectorFinishLine" class="primary">Concluir</button>
+          <button id="vectorCancelLine">Cancelar</button>
+        </div>
+
+        </details>
+
+        <details class="vector-project-tools">
+          <summary>Projeto / recuperação / exportação</summary>
+          <div class="vector-toolbar">
+            <button id="vectorRecover">Recuperar anterior</button>
+          </div>
+          <div class="vector-export-form">
+            <label><input id="exportDxf" type="checkbox" checked /> DXF 3D</label>
+            <label><input id="exportShp" type="checkbox" checked /> SHP 3D</label>
+            <label><input id="exportGpkg" type="checkbox" checked /> GPKG</label>
+            <label><input id="exportGeojson" type="checkbox" /> GeoJSON</label>
+            <label><input id="exportVisibleOnly" type="checkbox" /> Só visíveis</label>
+            <label><input id="exportFilteredLayer" type="checkbox" /> Só layer filtrada</label>
+            <label><input id="exportSelectedOnly" type="checkbox" /> Só selecionada</label>
+          </div>
+          <button id="vectorExport" class="primary wide">EXPORTAR VETORES 3D</button>
+        </details>
+      </section>
+
       <section class="card">
         <div class="section-title">CLASSIFICAÇÕES</div>
         <div class="class-actions">
@@ -149,87 +225,12 @@
         <div id="taludeFeatureList" class="layer-list talude-feature-list"></div>
       </section>
 
-      <section class="card vector-editor-card qgis-layer-card">
-        <div class="section-title qgis-title-row">
-          <span>CAMADAS</span>
-          <span class="qgis-title-actions">QGIS STYLE</span>
-        </div>
-
-        <div class="qgis-layer-toolbar" title="Controlo de camadas">
-          <button id="layersShowAll" title="Mostrar todas">👁</button>
-          <button id="layersHideAll" title="Ocultar todas">◉</button>
-          <button id="layersSoloActive" title="Só layer ativa">S</button>
-          <button id="vectorRefresh" title="Atualizar árvore">↻</button>
-          <button id="vectorSave" title="Guardar">💾</button>
-          <button id="vectorUndo" title="Undo">↶</button>
-          <button id="vectorRedo" title="Redo">↷</button>
-        </div>
-
-        <div id="vectorStatus" class="hint qgis-status">Sem Vector Document carregado.</div>
-        <div id="vectorLayers" class="vector-layer-list qgis-layer-tree"></div>
-
-        <details class="vector-editor-details" open>
-          <summary>EDITOR 3D</summary>
-        <label>Features</label>
-        <div class="vector-filter-row">
-          <select id="vectorLayerFilter">
-            <option value="">Todas as layers</option>
-          </select>
-          <input id="vectorSearch" type="text" placeholder="Face / ID…" />
-        </div>
-        <div id="vectorFeatures" class="vector-feature-list"></div>
-
-        <div id="vectorEditBox" class="vector-edit-box hidden">
-          <div class="vector-selected-title" id="vectorSelectedTitle">Feature</div>
-          <label>Vértice</label>
-          <select id="vectorVertexSelect"></select>
-          <div id="vectorVertexXYZ" class="vector-coordinate-readout">X — · Y — · Z —</div>
-
-          <div class="vector-action-grid">
-            <button id="vectorMoveVertex">Mover por clique</button>
-            <button id="vectorInsertVertex">Inserir depois</button>
-            <button id="vectorDeleteVertex">Apagar vértice</button>
-            <button id="vectorDeleteLine" class="danger-soft">Apagar linha</button>
-          </div>
-        </div>
-
-        <div class="vector-new-line">
-          <select id="vectorNewType">
-            <option value="CREST">Nova CRISTA</option>
-            <option value="TOE">Novo PÉ</option>
-          </select>
-          <button id="vectorNewLine">Iniciar linha</button>
-        </div>
-        <div id="vectorDraftActions" class="vector-toolbar hidden">
-          <button id="vectorFinishLine" class="primary">Concluir</button>
-          <button id="vectorCancelLine">Cancelar</button>
-        </div>
-
-        </details>
-
-        <details class="vector-project-tools">
-          <summary>Projeto / recuperação / exportação</summary>
-          <div class="vector-toolbar">
-            <button id="vectorRecover">Recuperar anterior</button>
-          </div>
-          <div class="vector-export-form">
-            <label><input id="exportDxf" type="checkbox" checked /> DXF 3D</label>
-            <label><input id="exportShp" type="checkbox" checked /> SHP 3D</label>
-            <label><input id="exportGpkg" type="checkbox" checked /> GPKG</label>
-            <label><input id="exportGeojson" type="checkbox" /> GeoJSON</label>
-            <label><input id="exportVisibleOnly" type="checkbox" /> Só visíveis</label>
-            <label><input id="exportFilteredLayer" type="checkbox" /> Só layer filtrada</label>
-            <label><input id="exportSelectedOnly" type="checkbox" /> Só selecionada</label>
-          </div>
-          <button id="vectorExport" class="primary wide">EXPORTAR VETORES 3D</button>
-        </details>
-      </section>
-
       <div id="cloudList" class="hidden"></div>
       <div id="featureList" class="hidden"></div>
 
       <footer id="status">Baseline 1.1.7 protegida · V2.1 UX/Performance.</footer>
     </aside>
+    <div id="sidebarResizeHandle" class="sidebar-resize-handle" title="Arrastar para redimensionar painel"></div>
 
     <main class="viewport-shell">
       <div class="topbar">
@@ -249,6 +250,7 @@
           <button data-standard-view="iso">ISO</button>
           <button id="navProfileButton" class="nav-profile-button active" title="Alternar navegação">AGISOFT</button>
           <button id="panModeButton" class="pan-button">PAN</button>
+          <button id="orthoModeButton" title="Alternar Perspetiva / Ortográfica">PERSP</button>
         </div>
         <div class="nav-help" title="Navegação 3D">
           <span>Orbit: arrastar esquerdo</span>
@@ -261,6 +263,16 @@
 
       <div id="potree_render_area"></div>
       <div id="potree_sidebar_container" class="potree_container"></div>
+
+      <div id="viewAxisWidget" class="view-axis-widget" aria-label="Eixos WCS">
+        <span class="axis-z">Z</span>
+        <span class="axis-y">Y</span>
+        <span class="axis-x">X</span>
+        <i class="axis-line axis-line-x"></i>
+        <i class="axis-line axis-line-y"></i>
+        <i class="axis-line axis-line-z"></i>
+        <b>WCS</b>
+      </div>
 
       <div id="viewCubeWidget" class="view-cube-widget" aria-label="Cubo de vistas CAD">
         <div class="view-cube-scene">
