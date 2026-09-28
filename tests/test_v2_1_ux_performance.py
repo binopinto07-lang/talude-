@@ -108,10 +108,10 @@ def test_v2_performance_profile_is_wired_end_to_end():
     assert "ALL_PROFILE_EDGE" in engine
     assert "review_lines" in engine
     assert "talude_review.geojson" in engine
-    assert "_persistent_spool_dir" in tiled
-    assert "v2_fragment_cache_v2_profile_edge" in tiled
-    assert "cache_hit_tiles" in tiled
-    assert "manifest.json" in tiled
+    assert "_collect_roi_points_stream" in engine
+    assert "STREAM_FACE_GLOBAL" in engine
+    assert "process_candidates_tiled(" not in engine
+    assert "_persistent_spool_dir" in tiled  # retained only for legacy diagnostics
 
 
 def test_fast_profile_never_sends_faces_to_raw_tin():
