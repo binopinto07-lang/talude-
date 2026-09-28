@@ -593,7 +593,7 @@ def _performance_candidate_score(candidate: GlobalFaceCandidate) -> tuple[float,
     """Rank faces for selective V2 refinement without changing baseline geometry.
 
     Lower score is better. The score favours coherent, moderate-width faces
-    where RAW-TIN has the highest chance of improving the baseline rather than
+    where PROFILE-EDGE has the highest chance of improving the baseline rather than
     wasting minutes on geometrically ambiguous faces that would later fallback.
     """
     crest_len = _line_length_2d(np.asarray(candidate.crest, dtype=np.float64))
@@ -639,30 +639,18 @@ def _partition_candidates_for_performance(
             "selection": "ALL_FACES",
         }
 
-    # BALANCED is deliberately conservative on very large surveys.
-    # Every skipped face remains present through the proven 1.1.7 fallback;
-    # RAW-TIN is reserved for the highest-priority faces instead of making a
-    # 200M+ point project wait close to an hour for hundreds of local solves.
+    # BALANCED now uses the lightweight terrain-profile edge detector rather
+    # than hundreds of expensive local Delaunay solves. Process every
+    # discovered face so quality is not sacrificed merely to satisfy a runtime
+    # cap. Ground tiles and per-face fragments remain cached.
     points = int(point_count or 0)
-    if points >= 150_000_000:
-        limit = 60
-    elif points >= 75_000_000:
-        limit = 90
-    elif points >= 30_000_000:
-        limit = 140
-    else:
-        limit = 220
-
-    ranked = sorted(candidates, key=_performance_candidate_score)
-    attempted = ranked[:limit]
-    attempted_ids = {int(item.face_id) for item in attempted}
-    skipped = [item for item in candidates if int(item.face_id) not in attempted_ids]
-    return attempted, skipped, {
+    attempted = list(candidates)
+    return attempted, [], {
         "mode": normalized,
-        "attempt_limit": int(limit),
+        "attempt_limit": int(len(attempted)),
         "attempted_faces": len(attempted),
-        "skipped_faces": len(skipped),
-        "selection": "COHERENCE_PRIORITY",
+        "skipped_faces": 0,
+        "selection": "ALL_PROFILE_EDGE",
         "point_count": points,
     }
 
@@ -682,9 +670,9 @@ def run_auto_global_v2(
     """AUTO GLOBAL V2.
 
     Discovery remains the proven 1.1.7 detector. Every discovered face receives
-    an automatic RAW-Ground corridor, local TIN V2 refinement and a regression
-    guard. When V2 cannot safely improve a face, the baseline pair is preserved
-    instead of losing that talude.
+    an automatic RAW-Ground corridor and local terrain-profile edge extraction.
+    Only geometrically validated crest/toe pairs are published as breaklines;
+    uncertain discovery geometry is preserved separately for operator review.
     """
     started = perf_counter()
     source = Path(input_path).expanduser().resolve()
@@ -768,7 +756,7 @@ def run_auto_global_v2(
             39.5,
             (
                 f"AUTO V2 {mode.upper()} · {len(candidates)} faces · "
-                f"{len(refine_candidates)} para RAW-TIN · "
+                f"{len(refine_candidates)} para PROFILE-EDGE · "
                 f"{len(performance_skipped)} baseline seguro"
             ),
         )
@@ -869,13 +857,13 @@ def run_auto_global_v2(
                 96.0,
                 (
                     f"AUTO V2 FAST · {len(candidates)} faces baseline prontas · "
-                    "sem segunda passagem RAW-TIN"
+                    "sem segunda passagem PROFILE-EDGE"
                 ),
             )
 
     elif source.suffix.lower() in {".las", ".laz"}:
         # Phase 3: large clouds are processed as core tiles + halo. Ground is
-        # streamed once to temporary tile spools, local RAW-TIN fragments are
+        # streamed once to temporary tile spools, local PROFILE-EDGE fragments are
         # solved independently, then deduplicated/stiched per baseline face.
         from .tiled_auto import process_candidates_tiled
 
