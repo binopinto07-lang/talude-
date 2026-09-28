@@ -269,12 +269,11 @@
     }
 
     clearAutoLines();
-    const useV2 = s.state.geometryEngine === "v2";
-    s.setStatus(
-      useV2
-        ? "AUTO GLOBAL V2 · a preparar perfil de processamento…"
-        : "AUTO TALUDE baseline · a iniciar FACE_DETECTOR…"
-    );
+    // The primary AUTO button is always the validated V2 profile-edge engine.
+    // Baseline/V2 selection in Advanced Tools applies only to clicked/manual
+    // diagnostics and can never silently downgrade the global AUTO run.
+    const useV2 = true;
+    s.setStatus("AUTO GLOBAL V2 · a preparar PROFILE-EDGE…");
 
     const payload = {
       project_id: project.id,
@@ -309,7 +308,7 @@
       );
     }
 
-    const endpoint = useV2 ? "/api/v2/talude/auto" : "/api/talude/auto";
+    const endpoint = "/api/v2/talude/auto";
     const response = await s.api(endpoint, {
       method: "POST",
       body: JSON.stringify(payload)
