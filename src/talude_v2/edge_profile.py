@@ -177,40 +177,77 @@ def _local_reference_tangent(reference: np.ndarray, point_xy: np.ndarray) -> np.
 
 
 def _trim_endpoint_hooks(xyz: np.ndarray, reference: np.ndarray) -> np.ndarray:
-    """Remove short perpendicular hooks created where the face mask closes.
+    """Remove lateral face-closure tails from the start/end of a breakline.
 
-    Only endpoints may be removed; the body of the detected edge is untouched.
-    This targets the visible 90-degree/diagonal tails at terrace ends without
-    smoothing a genuine curved crest.
+    Terrace masks naturally close around their ends. Those closing segments can
+    look like a diagonal/90-degree hook attached to an otherwise good crest or
+    toe. Only endpoint vertices are removed; the interior geometry is never
+    smoothed or shifted.
     """
     pts = np.asarray(xyz, dtype=np.float64).copy()
     ref = np.asarray(reference, dtype=np.float64)
-    if len(pts) < 4 or len(ref) < 2:
+    if len(pts) < 4:
         return pts
 
-    max_drops = max(1, min(3, int(math.floor(len(pts) * 0.25))))
+    max_drops = max(1, min(4, int(math.ceil(len(pts) * 0.34))))
 
-    def bad_segment(a: np.ndarray, b: np.ndarray) -> bool:
-        seg = b[:2] - a[:2]
-        length = float(np.linalg.norm(seg))
-        if length <= 1e-9:
-            return True
-        tangent = _local_reference_tangent(ref, 0.5 * (a[:2] + b[:2]))
-        if tangent is None:
+    def unit(a: np.ndarray, b: np.ndarray) -> np.ndarray | None:
+        vec = np.asarray(b[:2] - a[:2], dtype=np.float64)
+        norm = float(np.linalg.norm(vec))
+        if norm <= 1e-9:
+            return None
+        return vec / norm
+
+    def turn_bad_start(current: np.ndarray) -> bool:
+        if len(current) < 4:
             return False
-        direction = seg / length
-        alignment = abs(float(np.dot(direction, tangent)))
-        return alignment < math.cos(math.radians(58.0))
+        first = unit(current[0], current[1])
+        body = unit(current[1], current[min(3, len(current) - 1)])
+        if first is None:
+            return True
+        if body is not None:
+            alignment = abs(float(np.dot(first, body)))
+            if alignment < math.cos(math.radians(52.0)):
+                return True
+        tangent = _local_reference_tangent(
+            ref,
+            0.5 * (current[0, :2] + current[1, :2]),
+        )
+        return (
+            tangent is not None
+            and abs(float(np.dot(first, tangent))) < math.cos(math.radians(58.0))
+        )
+
+    def turn_bad_end(current: np.ndarray) -> bool:
+        if len(current) < 4:
+            return False
+        last = unit(current[-2], current[-1])
+        body = unit(current[max(0, len(current) - 4)], current[-2])
+        if last is None:
+            return True
+        if body is not None:
+            alignment = abs(float(np.dot(last, body)))
+            if alignment < math.cos(math.radians(52.0)):
+                return True
+        tangent = _local_reference_tangent(
+            ref,
+            0.5 * (current[-2, :2] + current[-1, :2]),
+        )
+        return (
+            tangent is not None
+            and abs(float(np.dot(last, tangent))) < math.cos(math.radians(58.0))
+        )
 
     dropped = 0
-    while len(pts) >= 4 and dropped < max_drops and bad_segment(pts[0], pts[1]):
+    while len(pts) >= 4 and dropped < max_drops and turn_bad_start(pts):
         pts = pts[1:].copy()
         dropped += 1
 
     dropped = 0
-    while len(pts) >= 4 and dropped < max_drops and bad_segment(pts[-2], pts[-1]):
+    while len(pts) >= 4 and dropped < max_drops and turn_bad_end(pts):
         pts = pts[:-1].copy()
         dropped += 1
+
     return pts
 
 
