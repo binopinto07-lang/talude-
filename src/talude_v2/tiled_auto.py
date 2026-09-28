@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
 from time import perf_counter
@@ -577,9 +576,9 @@ def process_candidates_tiled(
 ) -> tuple[dict[int, dict], dict]:
     """Phase 3: process all global candidates as tile+halo fragments.
 
-    The source cloud is streamed once into temporary core tiles. Halo is
-    reconstructed by loading neighbouring core tiles, so each raw point is
-    stored once while every tile still sees enough context for a stable TIN.
+    The source cloud is streamed into persistent, fingerprinted Ground core
+    tiles. Halo is reconstructed from neighbouring core tiles. Re-running the
+    same source/config reuses completed tiles and avoids a second full LAS scan.
     """
     started = perf_counter()
     info = inspect_point_cloud(source)
