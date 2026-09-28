@@ -676,15 +676,19 @@ def _partition_candidates_for_performance(
             "selection": "ALL_FACES",
         }
 
+    # BALANCED is deliberately conservative on very large surveys.
+    # Every skipped face remains present through the proven 1.1.7 fallback;
+    # RAW-TIN is reserved for the highest-priority faces instead of making a
+    # 200M+ point project wait close to an hour for hundreds of local solves.
     points = int(point_count or 0)
     if points >= 150_000_000:
-        limit = 120
+        limit = 60
     elif points >= 75_000_000:
-        limit = 160
+        limit = 90
     elif points >= 30_000_000:
-        limit = 220
+        limit = 140
     else:
-        limit = 300
+        limit = 220
 
     ranked = sorted(candidates, key=_performance_candidate_score)
     attempted = ranked[:limit]
