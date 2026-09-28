@@ -115,10 +115,10 @@ def test_balanced_large_cloud_caps_expensive_refinement_but_keeps_every_face_acc
         mode="balanced",
         point_count=241_149_524,
     )
-    assert len(attempted) == 120
-    assert len(skipped) == 443
+    assert len(attempted) == 60
+    assert len(skipped) == 503
     assert len(attempted) + len(skipped) == 563
-    assert stats["attempt_limit"] == 120
+    assert stats["attempt_limit"] == 60
     assert stats["selection"] == "COHERENCE_PRIORITY"
 
 
