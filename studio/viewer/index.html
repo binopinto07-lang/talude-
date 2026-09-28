@@ -19,7 +19,7 @@
         <div class="brand-mark">TL</div>
         <div>
           <div class="brand-title">TALUDE STUDIO</div>
-          <div class="brand-subtitle">V2.2 · QGIS Layers + Agisoft Nav + Cache</div>
+          <div class="brand-subtitle">Projeto · Camadas · Deteção · Edição 3D</div>
         </div>
       </header>
 
@@ -46,7 +46,7 @@
       <section class="card vector-editor-card qgis-layer-card">
         <div class="section-title qgis-title-row">
           <span>CAMADAS</span>
-          <span class="qgis-title-actions">QGIS STYLE</span>
+          <span class="qgis-title-actions">CAMADAS DO PROJETO</span>
         </div>
 
         <div class="qgis-layer-toolbar" title="Controlo de camadas">
@@ -62,7 +62,7 @@
         <div id="vectorStatus" class="hint qgis-status">Sem Vector Document carregado.</div>
         <div id="vectorLayers" class="vector-layer-list qgis-layer-tree"></div>
 
-        <details class="vector-editor-details" open>
+        <details class="vector-editor-details">
           <summary>EDITOR 3D</summary>
         <label>Features</label>
         <div class="vector-filter-row">
@@ -119,56 +119,7 @@
         </details>
       </section>
 
-      <section class="card">
-        <div class="section-title">CLASSIFICAÇÕES</div>
-        <div class="class-actions">
-          <button id="classAll" class="active">Todas</button>
-          <button id="classGround">Só Solo</button>
-          <button id="classNone">Nenhuma</button>
-        </div>
-        <div id="classificationList" class="classification-list"></div>
-        <label class="engine-filter-row">
-          <input id="engineUseVisibleClasses" type="checkbox" checked />
-          <span>Usar classes visíveis no motor</span>
-        </label>
-      </section>
 
-      <section class="card">
-        <div class="section-title">FEATURE LINES</div>
-        <div class="segmented" id="featureMode">
-          <button data-mode="guided" class="active">Assistido</button>
-          <button data-mode="single">Manual</button>
-          <button data-mode="multiple">Múltiplo</button>
-        </div>
-
-        <label>Motor da face</label>
-        <div class="segmented engine-selector" id="geometryEngine">
-          <button data-engine="baseline" class="active">Baseline 1.1.7</button>
-          <button data-engine="v2">V2 RAW TIN</button>
-        </div>
-
-        <label>Deteção</label>
-        <select id="profile">
-          <option value="face">Face de talude — CRISTA + PÉ</option>
-        </select>
-
-        <button id="traceButton" class="primary wide" disabled>Picar face automática</button>
-
-        <div id="traceActions" class="trace-actions hidden">
-          <button id="acceptTrace" class="accept">Aceitar linha</button>
-          <button id="rejectTrace">Rejeitar</button>
-        </div>
-
-        <div id="traceHint" class="hint">
-          Baseline = geometria 1.1.7. V2 = pontos RAW → Delaunay TIN → region growing → boundary → Kruskal MST → interseção local de superfícies a cada ~1 m.
-        </div>
-
-        <div class="legend">
-          <span><i class="swatch candidate"></i>Baseline</span>
-          <span><i class="swatch v2-crest"></i>V2 crista</span>
-          <span><i class="swatch v2-toe"></i>V2 pé</span>
-        </div>
-      </section>
 
 
       <section class="card auto-talude-card">
@@ -225,10 +176,69 @@
         <div id="taludeFeatureList" class="layer-list talude-feature-list"></div>
       </section>
 
+      <details class="advanced-workflow">
+        <summary>
+          <span>FERRAMENTAS AVANÇADAS</span>
+          <small>Classificações · deteção assistida/manual</small>
+        </summary>
+        <div class="advanced-workflow-body">
+      <section class="card">
+        <div class="section-title">CLASSIFICAÇÕES</div>
+        <div class="class-actions">
+          <button id="classAll" class="active">Todas</button>
+          <button id="classGround">Só Solo</button>
+          <button id="classNone">Nenhuma</button>
+        </div>
+        <div id="classificationList" class="classification-list"></div>
+        <label class="engine-filter-row">
+          <input id="engineUseVisibleClasses" type="checkbox" checked />
+          <span>Usar classes visíveis no motor</span>
+        </label>
+      </section>
+
+      <section class="card">
+        <div class="section-title">FEATURE LINES</div>
+        <div class="segmented" id="featureMode">
+          <button data-mode="guided" class="active">Assistido</button>
+          <button data-mode="single">Manual</button>
+          <button data-mode="multiple">Múltiplo</button>
+        </div>
+
+        <label>Motor da face</label>
+        <div class="segmented engine-selector" id="geometryEngine">
+          <button data-engine="baseline" class="active">Baseline 1.1.7</button>
+          <button data-engine="v2">V2 RAW TIN</button>
+        </div>
+
+        <label>Deteção</label>
+        <select id="profile">
+          <option value="face">Face de talude — CRISTA + PÉ</option>
+        </select>
+
+        <button id="traceButton" class="primary wide" disabled>Picar face automática</button>
+
+        <div id="traceActions" class="trace-actions hidden">
+          <button id="acceptTrace" class="accept">Aceitar linha</button>
+          <button id="rejectTrace">Rejeitar</button>
+        </div>
+
+        <div id="traceHint" class="hint">
+          Baseline = geometria 1.1.7. V2 = pontos RAW → Delaunay TIN → region growing → boundary → Kruskal MST → interseção local de superfícies a cada ~1 m.
+        </div>
+
+        <div class="legend">
+          <span><i class="swatch candidate"></i>Baseline</span>
+          <span><i class="swatch v2-crest"></i>V2 crista</span>
+          <span><i class="swatch v2-toe"></i>V2 pé</span>
+        </div>
+      </section>
+        </div>
+      </details>
+
       <div id="cloudList" class="hidden"></div>
       <div id="featureList" class="hidden"></div>
 
-      <footer id="status">Baseline 1.1.7 protegida · V2.2 UX/Performance/Cache.</footer>
+      <footer id="status">Baseline protegida · V2 com validação de aresta.</footer>
     </aside>
     <div id="sidebarResizeHandle" class="sidebar-resize-handle" title="Arrastar para redimensionar painel"></div>
 
