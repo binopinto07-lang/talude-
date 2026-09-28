@@ -277,3 +277,25 @@ Agora usa `%LOCALAPPDATA%\LBM\TaludeStudioBuild`, com preflight de imports e
 assets antes de empacotar.
 
 Detalhes: `docs/V2_PHASES_6_9.md`.
+
+
+## V2.1 — Layers, navegação e performance
+
+A branch experimental inclui agora uma entrega focada no trabalho diário:
+
+- árvore de camadas agrupada inspirada no QGIS;
+- NUVEM / BREAKLINES / ANÁLISE;
+- visibilidade, lock e solo;
+- navegação AGISOFT por defeito;
+- orbit com esquerdo, pan com direito/meio/Shift+esquerdo;
+- duplo clique para pivot/foco;
+- ViewCube CAD TOP/BOTTOM/FRONT/BACK/LEFT/RIGHT/ISO;
+- perfis AUTO V2 Rápido / Equilibrado / Preciso;
+- fallback automático da face clicada V2 para a baseline;
+- espaçamento final dos vértices configurável, default 1 m.
+
+O perfil Equilibrado limita o RAW-TIN caro em clouds muito grandes e mantém as
+restantes faces na baseline protegida, em vez de voltar a executar todas as
+faces durante mais de uma hora.
+
+Detalhes: `docs/V2_1_UX_PERFORMANCE.md`.
