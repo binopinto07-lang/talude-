@@ -772,17 +772,8 @@ def run_auto_global_v2(
     fallback_started = perf_counter()
     for candidate in performance_skipped:
         review_message = (
-            "Face não validada geometricamente pelo perfil de desempenho "
-            f"{mode.upper()}; mantida apenas para revisão."
-        )
-        review_lines.extend(
-            _review_pair(
-                candidate,
-                baseline_by_face,
-                reason="PERFORMANCE_BASELINE",
-                source="BASELINE_1_1_7_REVIEW_PERFORMANCE",
-                message=review_message,
-            )
+            "Face não validada pelo perfil de desempenho "
+            f"{mode.upper()}; sem geometria publicada."
         )
         face_records.append(
             {
@@ -791,6 +782,7 @@ def run_auto_global_v2(
                 "reason": "PERFORMANCE_BASELINE",
                 "message": review_message,
                 "corridor_radius_m": float(candidate.corridor_radius_m),
+                "review_geometry": False,
             }
         )
         baseline_fallback += 1
@@ -862,105 +854,96 @@ def run_auto_global_v2(
             )
 
     elif source.suffix.lower() in {".las", ".laz"}:
-        # Phase 3: large clouds are processed as core tiles + halo. Ground is
-        # streamed once to temporary tile spools, local PROFILE-EDGE fragments are
-        # solved independently, then deduplicated/stiched per baseline face.
-        from .tiled_auto import process_candidates_tiled
-
-        info = source_info or inspect_point_cloud(source)
-        tiled_results, tiled_stats = process_candidates_tiled(
+        # V2.4.1: one streamed LAS pass routes Ground points directly to each
+        # discovered face corridor. Each face is solved once as a continuous
+        # geometry. This removes tile fragment stitching, which was the dominant
+        # failure mode (MERGE_FAILED) and produced broken/hooked breaklines.
+        ground_started = perf_counter()
+        roi_points, roi_stats = _collect_roi_points_stream(
             source,
             cfg,
             refine_candidates,
-            v2_cfg,
-            output_debug_dir=debug_dir,
-            min_line_length_m=cfg.min_line_length_m,
+            max_roi_points=max_roi_points,
             progress=progress,
             cancel_check=cancel_check,
         )
-        tiled_stats = dict(tiled_stats or {})
-        tiled_stats["performance"] = performance_stats
-        merge_stage_times(
+        roi_stats["mode"] = "STREAM_FACE_GLOBAL"
+        add_stage_time(
             stage_seconds,
-            ((tiled_stats.get("profile") or {}).get("stages_s") or {}),
+            "ground_read_or_spool",
+            perf_counter() - ground_started,
         )
-        spool = dict((tiled_stats or {}).get("spool") or {})
-        routed_points = int(
-            spool.get("cached_points_available", spool.get("spooled_points", 0))
-        )
-        roi_stats = {
-            "mode": "TILED_HALO_STITCH",
-            "points_total": int(info.point_count),
-            "points_selected": int(spool.get("selected_seen", routed_points)),
-            "points_routed_with_overlap": routed_points,
-            "roi_max_points_per_face": int(v2_cfg.max_tin_points),
-            "roi_seen_total": routed_points,
-            "roi_kept_total": routed_points,
-            "spatial_index_cells": int((tiled_stats or {}).get("candidate_tiles", 0)),
-            "spatial_tile_size_m": float(v2_cfg.tile_size_m),
-            "crs_wkt": info.crs_wkt,
+        tiled_stats = {
+            "mode": "STREAM_FACE_GLOBAL",
+            "performance": performance_stats,
+            "candidate_faces": int(len(refine_candidates)),
+            "successful_faces": 0,
+            "failed_faces": 0,
+            "spool": {
+                "cache_enabled": False,
+                "cached_points_available": int(roi_stats.get("roi_kept_total", 0)),
+                "selected_seen": int(roi_stats.get("points_selected", 0)),
+            },
         }
 
-        for index, candidate in enumerate(refine_candidates, start=1):
+        for index, (candidate, points) in enumerate(
+            zip(refine_candidates, roi_points),
+            start=1,
+        ):
             _check_cancel(cancel_check)
-            face_id = int(candidate.face_id)
-            item = tiled_results.get(face_id) or {
-                "status": "FAILED",
-                "reason": V2Reason.MERGE_FAILED.value,
-                "message": "Sem resultado tiled para esta face.",
-                "lines": [],
-                "record": {
-                    "face_id": face_id,
-                    "status": "FAILED",
-                    "reason": V2Reason.MERGE_FAILED.value,
-                },
-            }
-
-            if item.get("status") == "SUCCESS" and len(item.get("lines") or []) == 2:
-                final_lines.extend(item["lines"])
-                face_records.append(item.get("record") or {})
+            face_started = perf_counter()
+            try:
+                lines, record = refine_face_candidate_v2(
+                    candidate,
+                    points,
+                    v2_config=v2_cfg,
+                    min_line_length_m=cfg.min_line_length_m,
+                )
+                final_lines.extend(lines)
+                face_records.append(record)
                 v2_success += 1
                 reason = V2Reason.SUCCESS.value
-            else:
-                reason = str(item.get("reason") or V2Reason.MERGE_FAILED.value)
-                message = str(item.get("message") or "Falha tiled sem detalhe.")
-                fallback_one_started = perf_counter()
-                review_lines.extend(
-                    _review_pair(
-                        candidate,
-                        baseline_by_face,
-                        reason=reason,
-                        source="BASELINE_1_1_7_REVIEW_TECHNICAL",
-                        message=message,
-                    )
-                )
-                add_stage_time(
-                    stage_seconds,
-                    "fallback",
-                    perf_counter() - fallback_one_started,
-                )
-                record = dict(item.get("record") or {})
-                record.update(
+            except Exception as exc:
+                if isinstance(exc, V2DetectionError) and exc.reason == V2Reason.CANCELLED:
+                    raise
+
+                if isinstance(exc, V2DetectionError):
+                    reason = exc.reason.value
+                    message = exc.message
+                else:
+                    reason = V2Reason.INTERNAL_ERROR.value
+                    message = f"{type(exc).__name__}: {exc}"
+
+                face_records.append(
                     {
-                        "face_id": face_id,
+                        "face_id": int(candidate.face_id),
                         "status": "REVIEW_REQUIRED",
                         "reason": reason,
                         "message": message,
+                        "roi_points": int(len(points)),
                         "corridor_radius_m": float(candidate.corridor_radius_m),
+                        "review_geometry": False,
                     }
                 )
-                face_records.append(record)
                 baseline_fallback += 1
+
+            face_elapsed = perf_counter() - face_started
+            add_stage_time(stage_seconds, "refinement", face_elapsed)
+            if face_records:
+                face_records[-1]["elapsed_ms"] = float(face_elapsed * 1000.0)
 
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
             if progress is not None and refine_candidates:
                 progress(
-                    88.0 + 8.0 * index / len(refine_candidates),
+                    67.0 + 29.0 * index / len(refine_candidates),
                     (
-                        f"AUTO V2 TILED · validar faces {index}/{len(candidates)} · "
-                        f"V2 {v2_success} · fallback {baseline_fallback}"
+                        f"AUTO V2 PROFILE-EDGE · faces {index}/{len(refine_candidates)} · "
+                        f"aprovadas {v2_success} · revisão {baseline_fallback}"
                     ),
                 )
+
+        tiled_stats["successful_faces"] = int(v2_success)
+        tiled_stats["failed_faces"] = int(baseline_fallback)
 
     else:
         # XYZ/TXT/CSV development inputs keep the in-memory path. Production
@@ -1006,15 +989,6 @@ def run_auto_global_v2(
                     message = f"{type(exc).__name__}: {exc}"
 
                 fallback_one_started = perf_counter()
-                review_lines.extend(
-                    _review_pair(
-                        candidate,
-                        baseline_by_face,
-                        reason=reason,
-                        source="BASELINE_1_1_7_REVIEW_TECHNICAL",
-                        message=message,
-                    )
-                )
                 add_stage_time(
                     stage_seconds,
                     "fallback",
@@ -1028,6 +1002,7 @@ def run_auto_global_v2(
                         "message": message,
                         "roi_points": int(len(points)),
                         "corridor_radius_m": float(candidate.corridor_radius_m),
+                        "review_geometry": False,
                     }
                 )
                 baseline_fallback += 1
@@ -1047,17 +1022,19 @@ def run_auto_global_v2(
                     ),
                 )
 
-    # Never discard an unpaired baseline result: completeness beats a silent
-    # regression. These are logged separately for later diagnosis.
+    # Baseline-only/unpaired geometry is diagnostic evidence, not a published
+    # breakline. Keep the face IDs in review metadata but never draw those old
+    # lines over the cloud as if they were candidate crest/toe geometry.
     for line in unpaired:
-        item = _baseline_line_payload(line, "BASELINE_1_1_7_REVIEW_UNPAIRED")
-        item["status"] = "REVIEW_REQUIRED"
-        item["review_state"] = "PENDING"
-        item["review_reason"] = "UNPAIRED_BASELINE"
-        item["review_message"] = "Linha baseline sem par CRISTA/PÉ; requer revisão."
-        item["quality_score"] = min(float(item.get("quality_score", 0.0) or 0.0), 0.49)
-        item["confidence"] = min(float(item.get("confidence", 0.0) or 0.0), 0.49)
-        review_lines.append(item)
+        face_records.append(
+            {
+                "face_id": int(line["face_id"]),
+                "status": "REVIEW_REQUIRED",
+                "reason": "UNPAIRED_BASELINE",
+                "message": "Linha baseline sem par CRISTA/PÉ; sem geometria publicada.",
+                "review_geometry": False,
+            }
+        )
 
     # Output vertex spacing is a modelling choice, not a new detector.
     # Re-sample every final line (including protected-baseline fallbacks) along
@@ -1113,7 +1090,14 @@ def run_auto_global_v2(
     add_stage_time(stage_seconds, "export", perf_counter() - export_started)
 
     faces_final = len({int(line["face_id"]) for line in final_lines})
-    review_faces = len({int(line["face_id"]) for line in review_lines})
+    review_faces = len(
+        {
+            int(record["face_id"])
+            for record in face_records
+            if str(record.get("status", "")).upper() == "REVIEW_REQUIRED"
+            and record.get("face_id") is not None
+        }
+    )
     total_elapsed = float(perf_counter() - started)
     spool_stats = dict((tiled_stats or {}).get("spool") or {})
     tiled_profile = dict((tiled_stats or {}).get("profile") or {})
