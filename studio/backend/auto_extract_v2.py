@@ -306,7 +306,7 @@ def _worker_v2(
                 "report": {
                     key: value
                     for key, value in report.items()
-                    if key not in {"lines"}
+                    if key not in {"lines", "review_lines"}
                 },
                 "line_count": len(lines),
                 "vector_document": vector_bundle["run_path"],
@@ -337,6 +337,9 @@ def _worker_v2(
                 "cloud_id": cloud_id,
                 "output": str(output),
                 "faces_detected": report.get("faces_detected"),
+                "approved_faces": report.get("approved_faces"),
+                "review_faces": report.get("review_faces"),
+                "review_line_count": report.get("review_line_count"),
                 "candidate_faces": report.get("candidate_faces"),
                 "performance_mode": mode,
                 "v2_attempted_faces": report.get("v2_attempted_faces"),
