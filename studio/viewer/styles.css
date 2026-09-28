@@ -243,12 +243,13 @@ footer { color: #8092a8; font-size: 10px; padding: 3px; }
   width:100%; min-height:30px; margin-top:3px; padding:0 7px;
   border:1px solid #2c3a4c; background:#1a2532; color:#dfe9f6; border-radius:6px;
 }
-.talude-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px; }
+.talude-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:8px; }
 .talude-stats > div { text-align:center; padding:7px 5px; background:#111a25; border:1px solid #233244; border-radius:7px; }
 .talude-stats strong { display:block; font-size:18px; color:#eef5ff; }
 .talude-stats span { display:block; color:#8fa0b5; font-size:9.5px; }
 .talude-stats .crest-stat strong { color:#ffd54a; }
 .talude-stats .toe-stat strong { color:#38d5ff; }
+.talude-stats .review-stat strong { color:#ff9b54; }
 .talude-feature-list { margin-top:8px; max-height:132px; overflow:auto; }
 .talude-line-row { display:grid; grid-template-columns:10px 1fr auto; gap:7px; align-items:center; }
 .talude-dot { width:8px; height:8px; border-radius:50%; }
@@ -549,6 +550,21 @@ footer { color: #8092a8; font-size: 10px; padding: 3px; }
 }
 .qgis-symbol.crest { background:#f3c300; }
 .qgis-symbol.toe { background:#1dc8ed; }
+.qgis-symbol.crest-review {
+  background:#ff8a3d;
+  height:0;
+  border-top:3px dashed #ff8a3d;
+}
+.qgis-symbol.toe-review {
+  background:#9b7bff;
+  height:0;
+  border-top:3px dashed #9b7bff;
+}
+.qgis-symbol.rejected {
+  background:#8f98a3;
+  height:0;
+  border-top:3px dashed #8f98a3;
+}
 .qgis-symbol.face { background:#59c956; height:8px; opacity:.55; }
 .qgis-symbol.debug { background:#bd62e7; border-top:1px dashed #633078; }
 .qgis-symbol.cloud {
@@ -912,4 +928,40 @@ body.resizing-sidebar * {
   max-width: 340px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+
+/* V2.4 — revisão geométrica segura */
+.vector-review-actions {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+  margin:0 0 8px;
+  padding:7px;
+  border:1px solid #4a3a2d;
+  border-radius:6px;
+  background:#17130f;
+}
+.vector-review-actions button {
+  min-height:32px;
+  font-size:10.5px;
+  font-weight:750;
+}
+.review-approve {
+  background:#173c2d;
+  border-color:#2f865e;
+  color:#d9ffeb;
+}
+.review-approve:hover:not(:disabled) {
+  background:#20533e;
+  border-color:#45ae7d;
+}
+.review-reject {
+  background:#402426;
+  border-color:#82484d;
+  color:#ffe4e5;
+}
+.review-reject:hover:not(:disabled) {
+  background:#5a2d31;
+  border-color:#a95c64;
 }
