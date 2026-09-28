@@ -279,3 +279,20 @@ O build Windows passa por short path em
 `%LOCALAPPDATA%\LBM\TaludeStudioBuild` e possui `builder-preflight`.
 
 Ver `docs/V2_PHASES_6_9.md`.
+
+
+## V2.1 — UX / Performance — 2026-09-28
+
+Novo bloco sem alterar `baseline-1.1.7-refine`:
+
+- painel QGIS-like de layers;
+- navegação Agisoft-like;
+- ViewCube CAD;
+- FAST / BALANCED / PRECISE;
+- BALANCED usa seleção por coerência e limite dependente da dimensão da cloud;
+- FAST não executa a segunda passagem RAW-TIN;
+- PRECISE preserva a execução tiled integral;
+- linhas finais V2 são reamostradas no espaçamento escolhido pelo operador;
+- clicked-face RAW-TIN faz fallback local para baseline quando rejeita a face.
+
+Ver `docs/V2_1_UX_PERFORMANCE.md`.
