@@ -19,7 +19,7 @@
         <div class="brand-mark">TL</div>
         <div>
           <div class="brand-title">TALUDE STUDIO</div>
-          <div class="brand-subtitle">V2.1 · Layers + Navegação + Performance</div>
+          <div class="brand-subtitle">V2.2 · QGIS Layers + Agisoft Nav + Cache</div>
         </div>
       </header>
 
@@ -194,10 +194,10 @@
             <label>Perfil de processamento V2</label>
             <select id="v2PerformanceMode">
               <option value="fast">Rápido — baseline global, sem RAW-TIN massivo</option>
-              <option value="balanced" selected>Equilibrado — RAW-TIN seletivo + fallback</option>
+              <option value="balanced" selected>Equilibrado — RAW-TIN prioritário + cache + fallback</option>
               <option value="precise">Preciso — RAW-TIN em todas as faces</option>
             </select>
-            <div class="hint">Para nuvens grandes use Equilibrado. Preciso mantém o processamento integral por tiles.</div>
+            <div class="hint">Para nuvens grandes use Equilibrado. Em >150 M pontos refina só as 60 faces prioritárias; as restantes mantêm a baseline. Repetições reutilizam cache.</div>
           </div>
           <div class="talude-param-grid">
             <label>Cell size (m)<input id="cellSize" type="number" min="0" step="0.01" value="0"></label>
@@ -228,7 +228,7 @@
       <div id="cloudList" class="hidden"></div>
       <div id="featureList" class="hidden"></div>
 
-      <footer id="status">Baseline 1.1.7 protegida · V2.1 UX/Performance.</footer>
+      <footer id="status">Baseline 1.1.7 protegida · V2.2 UX/Performance/Cache.</footer>
     </aside>
     <div id="sidebarResizeHandle" class="sidebar-resize-handle" title="Arrastar para redimensionar painel"></div>
 
