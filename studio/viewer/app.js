@@ -58,6 +58,10 @@
     panPointer: null,
     editorPickArmed: false,
     editorPickContext: null,
+    navigationProfile: "agisoft",
+    viewCubeLastYaw: null,
+    viewCubeLastPitch: null,
+    navPivotMarker: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -353,19 +357,18 @@
     viewer.setPointBudget(7500000);
     viewer.setBackground("black");
 
-    // Navegação CAD simples:
-    // - arrastar com botão esquerdo = rodar/orbitar
-    // - botão direito = deslocar
+    // Navegação V2.1 inspirada no Agisoft:
+    // - arrastar esquerdo = orbit
+    // - direito / meio / Shift+esquerdo = pan
     // - roda = zoom
-    // EarthControls é ótimo para navegação geográfica, mas para inspecionar
-    // taludes em 3D o OrbitControls é muito mais previsível.
+    // - duplo clique = novo pivot/foco na nuvem
     if (viewer.orbitControls) {
       viewer.setControls(viewer.orbitControls);
       if ("rotationSpeed" in viewer.orbitControls) {
-        viewer.orbitControls.rotationSpeed = 6.0;
+        viewer.orbitControls.rotationSpeed = 4.2;
       }
       if ("fadeFactor" in viewer.orbitControls) {
-        viewer.orbitControls.fadeFactor = 18.0;
+        viewer.orbitControls.fadeFactor = 12.0;
       }
     } else {
       viewer.setControls(viewer.earthControls);
@@ -405,7 +408,14 @@
     viewer.renderer.domElement.addEventListener("mousemove", onViewerNavMouseMove, true);
     viewer.renderer.domElement.addEventListener("mouseup", onViewerNavMouseUp, true);
     viewer.renderer.domElement.addEventListener("mouseleave", onViewerNavMouseUp, true);
-    viewer.addEventListener("update", updateWideLineResolution);
+    viewer.renderer.domElement.addEventListener("dblclick", onViewerDoubleClick, true);
+    viewer.renderer.domElement.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+    }, true);
+    viewer.addEventListener("update", () => {
+      updateWideLineResolution();
+      updateViewCubeOrientation();
+    });
     setStatus("Potree pronto · Talude V2 EXP · AUTO 1.1.2 + face clicada");
   }
 
@@ -3455,11 +3465,135 @@
     debugLog("viewer.pan_mode", { enabled: state.panMode });
   }
 
+  function setNavigationProfile(profile) {
+    state.navigationProfile = profile === "cad" ? "cad" : "agisoft";
+    const button = byId("navProfileButton");
+    if (button) {
+      button.textContent = state.navigationProfile === "agisoft" ? "AGISOFT" : "CAD";
+      button.classList.toggle("active", state.navigationProfile === "agisoft");
+    }
+
+    const controls = state.viewer && state.viewer.orbitControls;
+    if (controls) {
+      if ("rotationSpeed" in controls) {
+        controls.rotationSpeed = state.navigationProfile === "agisoft" ? 4.2 : 6.0;
+      }
+      if ("fadeFactor" in controls) {
+        controls.fadeFactor = state.navigationProfile === "agisoft" ? 12.0 : 18.0;
+      }
+    }
+    debugLog("viewer.navigation_profile", { profile: state.navigationProfile });
+  }
+
+  function pointCloudIntersectionFromEvent(event) {
+    if (!state.viewer) return null;
+    try {
+      const rect = state.viewer.renderer.domElement.getBoundingClientRect();
+      state.viewer.inputHandler.mouse.set(
+        event.clientX - rect.left,
+        event.clientY - rect.top
+      );
+      return Potree.Utils.getMousePointCloudIntersection(
+        state.viewer.inputHandler.mouse,
+        state.viewer.scene.getActiveCamera(),
+        state.viewer,
+        state.viewer.scene.pointclouds
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function onViewerDoubleClick(event) {
+    if (!state.viewer || state.editorPickArmed || state.traceArmed) return;
+    const hit = pointCloudIntersectionFromEvent(event);
+    if (!hit || !hit.location) return;
+
+    const view = state.viewer.scene && state.viewer.scene.view;
+    if (!view) return;
+
+    try {
+      if (typeof view.lookAt === "function") {
+        view.lookAt(hit.location);
+      } else {
+        const camera = state.viewer.scene.getActiveCamera();
+        if (camera) {
+          const direction = new THREE.Vector3();
+          camera.getWorldDirection(direction);
+          const distance = Math.max(4.0, camera.position.distanceTo(hit.location));
+          view.position.copy(hit.location.clone().addScaledVector(direction, -distance));
+        }
+      }
+      drawPivotMarker(hit.location);
+      debugLog("viewer.pivot_changed", {
+        xyz: [hit.location.x, hit.location.y, hit.location.z],
+        navigation_profile: state.navigationProfile
+      });
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    } catch (_) {}
+  }
+
+  function drawPivotMarker(position) {
+    if (!state.featureOverlayScene) return;
+    if (state.navPivotMarker) {
+      try {
+        state.featureOverlayScene.remove(state.navPivotMarker);
+        state.navPivotMarker.geometry.dispose();
+        state.navPivotMarker.material.dispose();
+      } catch (_) {}
+    }
+    const geometry = new THREE.RingGeometry(0.20, 0.30, 24);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x65d5ff,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.9
+    });
+    const marker = new THREE.Mesh(geometry, material);
+    marker.position.copy(position);
+    marker.renderOrder = 10080;
+    state.featureOverlayScene.add(marker);
+    state.navPivotMarker = marker;
+    window.setTimeout(() => {
+      if (state.navPivotMarker === marker && state.featureOverlayScene) {
+        state.featureOverlayScene.remove(marker);
+        try {
+          marker.geometry.dispose();
+          marker.material.dispose();
+        } catch (_) {}
+        state.navPivotMarker = null;
+      }
+    }, 1400);
+  }
+
+  function updateViewCubeOrientation() {
+    const cube = byId("viewCube");
+    const view = state.viewer && state.viewer.scene && state.viewer.scene.view;
+    if (!cube || !view) return;
+
+    const yaw = Number(view.yaw || 0);
+    const pitch = Number(view.pitch || 0);
+    if (
+      state.viewCubeLastYaw !== null &&
+      Math.abs(yaw - state.viewCubeLastYaw) < 0.002 &&
+      Math.abs(pitch - state.viewCubeLastPitch) < 0.002
+    ) return;
+
+    state.viewCubeLastYaw = yaw;
+    state.viewCubeLastPitch = pitch;
+    cube.style.setProperty("--cube-yaw", (-yaw * 180 / Math.PI - 35).toFixed(2) + "deg");
+    cube.style.setProperty("--cube-pitch", (pitch * 180 / Math.PI - 5).toFixed(2) + "deg");
+  }
+
   function onViewerNavMouseDown(event) {
     if (!state.viewer) return;
 
     const explicitPan =
       event.button === 1 ||
+      event.button === 2 ||
+      (event.button === 0 && event.shiftKey) ||
       (event.button === 0 && state.panMode);
 
     if (explicitPan) {
@@ -3587,6 +3721,7 @@
     const viewer = state.viewer;
     const methods = {
       top: "setTopView",
+      bottom: "setBottomView",
       front: "setFrontView",
       back: "setBackView",
       left: "setLeftView",
@@ -3602,6 +3737,7 @@
 
       const fallback = {
         top: { yaw: 0.0, pitch: -Math.PI / 2 + 0.001 },
+        bottom: { yaw: 0.0, pitch: Math.PI / 2 - 0.001 },
         front: { yaw: 0.0, pitch: 0.0 },
         back: { yaw: Math.PI, pitch: 0.0 },
         left: { yaw: -Math.PI / 2, pitch: 0.0 },
@@ -3726,6 +3862,43 @@
         if (view === "iso") setIsoView();
         else setStandardView(view);
       };
+    });
+
+    document.querySelectorAll("[data-cube-view]").forEach((button) => {
+      button.onclick = () => {
+        const view = button.dataset.cubeView;
+        if (view === "iso") setIsoView();
+        else setStandardView(view);
+      };
+    });
+
+    if (byId("navProfileButton")) {
+      byId("navProfileButton").onclick = () => {
+        setNavigationProfile(
+          state.navigationProfile === "agisoft" ? "cad" : "agisoft"
+        );
+      };
+      setNavigationProfile("agisoft");
+    }
+
+    window.addEventListener("keydown", (event) => {
+      if (event.target && ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) return;
+      const key = String(event.key || "").toLowerCase();
+      if (key === "f") {
+        try { state.viewer.fitToScreen(0.82); } catch (_) {}
+      } else if (event.altKey && key === "1") {
+        setStandardView("top");
+      } else if (event.altKey && key === "2") {
+        setStandardView("front");
+      } else if (event.altKey && key === "3") {
+        setStandardView("back");
+      } else if (event.altKey && key === "4") {
+        setStandardView("left");
+      } else if (event.altKey && key === "5") {
+        setStandardView("right");
+      } else if (event.altKey && key === "6") {
+        setIsoView();
+      }
     });
 
     if (byId("panModeButton")) {
@@ -3905,6 +4078,9 @@
     setClassificationPreset,
     updateWideLineResolution,
     armEditorPick,
-    cancelEditorPick
+    cancelEditorPick,
+    setNavigationProfile,
+    setStandardView,
+    setIsoView
   };
 })();
