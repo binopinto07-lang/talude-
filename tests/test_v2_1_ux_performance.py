@@ -49,6 +49,12 @@ def test_qgis_layer_tree_and_cad_view_cube_contract():
     assert ".qgis-layer-tree" in css
     assert ".qgis-group-header" in css
     assert ".view-cube-widget" in css
+    assert 'class="advanced-workflow"' in html
+    assert "FERRAMENTAS AVANÇADAS" in html
+    assert '<details class="vector-editor-details">' in html
+    assert '<details class="vector-editor-details" open>' not in html
+    assert ".advanced-workflow" in css
+    assert ".standard-views button[data-standard-view]" in css
     assert "NUVEM DE PONTOS" in js
     assert "BREAKLINES" in js
     assert "ANÁLISE / SUPORTE" in js
