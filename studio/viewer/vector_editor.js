@@ -114,6 +114,9 @@
     const layer = String(feature.layer_id || "");
     if (layer === "CRISTA") return 0xffd54a;
     if (layer === "PE_TALUDE") return 0x38d5ff;
+    if (layer === "CRISTA_REVIEW") return 0xff8a3d;
+    if (layer === "PE_TALUDE_REVIEW") return 0x9b7bff;
+    if (layer === "FACES_REJEITADAS") return 0x8f98a3;
     if (layer === "FACES") return 0x7cff4f;
     return 0xaebed0;
   }
@@ -176,10 +179,14 @@
       if (geometry.type !== "LineString" || coords.length < 2) continue;
 
       const selected = String(feature.id) === String(editor.selectedFeatureId);
+      const layerId = String(feature.layer_id || "");
+      const reviewLayer = layerId === "CRISTA_REVIEW" ||
+        layerId === "PE_TALUDE_REVIEW" ||
+        layerId === "FACES_REJEITADAS";
       const object = s.createLineObject(coords, {
         color: featureColor(feature),
-        widthPx: selected ? 5.0 : 3.0,
-        dashed: false,
+        widthPx: selected ? 5.0 : reviewLayer ? 2.6 : 3.0,
+        dashed: reviewLayer,
       });
       object.visible = featureVisible(feature);
       s.addFeatureOverlayObject(object);
@@ -195,6 +202,9 @@
     const id = String(layerId || "");
     if (id === "CRISTA") return "crest";
     if (id === "PE_TALUDE") return "toe";
+    if (id === "CRISTA_REVIEW") return "crest-review";
+    if (id === "PE_TALUDE_REVIEW") return "toe-review";
+    if (id === "FACES_REJEITADAS") return "rejected";
     if (id === "FACES") return "face";
     if (id === "DEBUG") return "debug";
     return "debug";
@@ -402,6 +412,7 @@
 
     const groups = {
       breaklines: [],
+      review: [],
       support: [],
       other: [],
     };
@@ -410,6 +421,11 @@
       const id = String(layer.id);
       const row = vectorLayerRow(layer, counts);
       if (id === "CRISTA" || id === "PE_TALUDE") groups.breaklines.push(row);
+      else if (
+        id === "CRISTA_REVIEW" ||
+        id === "PE_TALUDE_REVIEW" ||
+        id === "FACES_REJEITADAS"
+      ) groups.review.push(row);
       else if (id === "FACES" || id === "DEBUG") groups.support.push(row);
       else groups.other.push(row);
 
@@ -419,7 +435,8 @@
       filter.appendChild(option);
     }
 
-    if (groups.breaklines.length) appendGroup(box, "breaklines", "BREAKLINES", groups.breaklines);
+    if (groups.breaklines.length) appendGroup(box, "breaklines", "BREAKLINES APROVADAS", groups.breaklines);
+    if (groups.review.length) appendGroup(box, "review", "REVISÃO", groups.review);
     if (groups.support.length) appendGroup(box, "support", "ANÁLISE / SUPORTE", groups.support);
     if (groups.other.length) appendGroup(box, "other", "OUTRAS", groups.other);
 
@@ -463,10 +480,18 @@
         ? "CRISTA"
         : feature.layer_id === "PE_TALUDE"
           ? "PÉ"
-          : feature.layer_id;
+          : feature.layer_id === "CRISTA_REVIEW"
+            ? "CRISTA · REVISÃO"
+            : feature.layer_id === "PE_TALUDE_REVIEW"
+              ? "PÉ · REVISÃO"
+              : feature.layer_id === "FACES_REJEITADAS"
+                ? "REJEITADA"
+                : feature.layer_id;
+      const reviewState = String(props.review_state || props.status || "");
       row.innerHTML =
         "<strong>" + escapeHtml(label) + "</strong>" +
         "<span>Face " + escapeHtml(props.face_id == null ? "—" : props.face_id) +
+        (reviewState ? " · " + escapeHtml(reviewState) : "") +
         " · " + escapeHtml(String(feature.id).slice(0, 18)) + "</span>";
       row.onclick = () => {
         editor.selectedFeatureId = String(feature.id);
@@ -525,6 +550,19 @@
       const control = byId(id);
       if (control) control.disabled = locked;
     });
+
+    const reviewActions = byId("vectorReviewActions");
+    const reviewLayer = ["CRISTA_REVIEW", "PE_TALUDE_REVIEW", "FACES_REJEITADAS"].includes(
+      String(feature.layer_id || "")
+    );
+    if (reviewActions) reviewActions.classList.toggle("hidden", !reviewLayer);
+    if (byId("vectorApproveFace")) {
+      byId("vectorApproveFace").disabled = !reviewLayer;
+    }
+    if (byId("vectorRejectFace")) {
+      byId("vectorRejectFace").disabled = !reviewLayer ||
+        String(feature.layer_id) === "FACES_REJEITADAS";
+    }
   }
 
   function renderToolbarState() {
@@ -543,9 +581,17 @@
     renderToolbarState();
 
     if (editor.document) {
+      const features = editor.document.features || [];
+      const approved = features.filter((item) =>
+        ["CRISTA", "PE_TALUDE"].includes(String(item.layer_id || ""))
+      ).length;
+      const review = features.filter((item) =>
+        ["CRISTA_REVIEW", "PE_TALUDE_REVIEW"].includes(String(item.layer_id || ""))
+      ).length;
       status(
         "Rev. " + String(editor.document.revision || 1) +
-        " · " + String((editor.document.features || []).length) + " features" +
+        " · aprovadas " + String(approved) +
+        " · revisão " + String(review) +
         (editor.dirty ? " · alterações por guardar" : " · guardado")
       );
     }
@@ -723,7 +769,8 @@
       properties: {
         type,
         source: "MANUAL",
-        status: "EDITED",
+        status: "APPROVED_MANUAL",
+        review_state: "APPROVED_MANUAL",
         confidence: 1.0,
       },
       visible: true,
@@ -750,6 +797,66 @@
     if (s) s.cancelEditorPick();
     byId("vectorDraftActions").classList.add("hidden");
     renderAll();
+  }
+
+  function reviewFaceFeatures(feature) {
+    if (!editor.document || !feature) return [];
+    const faceId = (feature.properties || {}).face_id;
+    if (faceId == null) return [feature];
+    return (editor.document.features || []).filter((item) => {
+      const props = item.properties || {};
+      return String(props.face_id) === String(faceId) &&
+        ["CRISTA_REVIEW", "PE_TALUDE_REVIEW", "FACES_REJEITADAS"].includes(
+          String(item.layer_id || "")
+        );
+    });
+  }
+
+  function approveSelectedFace() {
+    const feature = selectedFeature();
+    if (!feature || !editor.document) return;
+    const items = reviewFaceFeatures(feature).filter((item) =>
+      String(item.layer_id) !== "FACES_REJEITADAS"
+    );
+    if (!items.length) return;
+
+    pushUndo();
+    for (const item of items) {
+      const props = item.properties = item.properties || {};
+      const kind = String(props.type || "").toUpperCase();
+      item.layer_id = kind === "CREST" ? "CRISTA" : "PE_TALUDE";
+      props.review_state = "APPROVED";
+      props.status = "APPROVED";
+      props.reviewed_at = new Date().toISOString();
+      item.visible = true;
+      item.revision = Number(item.revision || 1) + 1;
+      item.updated_at = new Date().toISOString();
+    }
+    markChanged("review_approve_face");
+    const s = shell();
+    if (s) s.toast("Face aprovada · CRISTA/PÉ passam para BREAKLINES.", 5500);
+  }
+
+  function rejectSelectedFace() {
+    const feature = selectedFeature();
+    if (!feature || !editor.document) return;
+    const items = reviewFaceFeatures(feature);
+    if (!items.length) return;
+
+    pushUndo();
+    for (const item of items) {
+      const props = item.properties = item.properties || {};
+      item.layer_id = "FACES_REJEITADAS";
+      props.review_state = "REJECTED";
+      props.status = "REJECTED";
+      props.reviewed_at = new Date().toISOString();
+      item.visible = true;
+      item.revision = Number(item.revision || 1) + 1;
+      item.updated_at = new Date().toISOString();
+    }
+    markChanged("review_reject_face");
+    const s = shell();
+    if (s) s.toast("Face rejeitada · excluída das BREAKLINES e exportação normal.", 6500);
   }
 
   function deleteVertex() {
@@ -929,6 +1036,8 @@
 
     byId("vectorDeleteVertex").onclick = deleteVertex;
     byId("vectorDeleteLine").onclick = deleteLine;
+    if (byId("vectorApproveFace")) byId("vectorApproveFace").onclick = approveSelectedFace;
+    if (byId("vectorRejectFace")) byId("vectorRejectFace").onclick = rejectSelectedFace;
     byId("vectorNewLine").onclick = startNewLine;
     byId("vectorFinishLine").onclick = finishDraft;
     byId("vectorCancelLine").onclick = cancelDraft;
