@@ -203,6 +203,83 @@ def _persistent_spool_dir(
     return cache_dir, payload
 
 
+def _fragment_cache_identity(candidate, cfg: V2Config, tile_id: int) -> str:
+    payload = {
+        "tile_id": int(tile_id),
+        "face_id": int(candidate.face_id),
+        "seed": [round(float(v), 4) for v in np.asarray(candidate.seed_xyz).reshape(-1)[:3]],
+        "crest": np.asarray(candidate.crest, dtype=np.float64).round(4).tolist(),
+        "toe": np.asarray(candidate.toe, dtype=np.float64).round(4).tolist(),
+        "cfg": {
+            "target_tin_spacing_m": float(cfg.target_tin_spacing_m),
+            "max_tin_points": int(cfg.max_tin_points),
+            "max_triangle_edge_m": float(cfg.max_triangle_edge_m),
+            "graph_gap_m": float(cfg.graph_gap_m),
+            "station_spacing_m": float(cfg.station_spacing_m),
+            "patch_along_m": float(cfg.patch_along_m),
+            "patch_cross_m": float(cfg.patch_cross_m),
+            "tile_size_m": float(cfg.tile_size_m),
+            "tile_halo_m": float(cfg.tile_halo_m),
+            "tile_min_fragment_m": float(cfg.tile_min_fragment_m),
+            "tile_stitch_gap_m": float(cfg.tile_stitch_gap_m),
+            "min_face_slope_deg": float(cfg.min_face_slope_deg),
+            "boundary_side_cos_min": float(cfg.boundary_side_cos_min),
+            "max_local_normal_change_deg": float(cfg.max_local_normal_change_deg),
+        },
+        "schema": "v2_fragment_cache_v1",
+    }
+    return hashlib.sha1(
+        json.dumps(payload, sort_keys=True, ensure_ascii=True).encode("utf-8")
+    ).hexdigest()[:24]
+
+
+def _fragment_cache_path(
+    spool_dir: Path,
+    candidate,
+    cfg: V2Config,
+    tile_id: int,
+) -> Path:
+    root = spool_dir / "fragment_results"
+    root.mkdir(parents=True, exist_ok=True)
+    digest = _fragment_cache_identity(candidate, cfg, tile_id)
+    return root / f"face_{int(candidate.face_id):06d}_tile_{int(tile_id):08d}_{digest}.json"
+
+
+def _load_fragment_cache(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("schema") != "v2_fragment_cache_v1":
+            return None
+        fragments = payload.get("fragments")
+        if not isinstance(fragments, list):
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+def _save_fragment_cache(path: Path, fragments: list[dict], record: dict) -> None:
+    serializable = []
+    for fragment in fragments:
+        item = dict(fragment)
+        item["xyz"] = np.asarray(item.get("xyz", []), dtype=np.float64).tolist()
+        serializable.append(item)
+
+    payload = {
+        "schema": "v2_fragment_cache_v1",
+        "fragments": serializable,
+        "record": dict(record),
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    tmp.replace(path)
+
+
 def _load_spool_manifest(spool_dir: Path) -> dict:
     path = spool_dir / "manifest.json"
     if not path.exists():
