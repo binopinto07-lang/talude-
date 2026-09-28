@@ -66,7 +66,8 @@ def test_v2_profiling_is_wired_without_replacing_geometry_engine():
         assert f'timing_s["{key}"]' in engine
 
     assert "BASELINE_SHA" in global_auto
-    assert "extract_face_raw_tin" in global_auto
+    assert "extract_profile_edge_pair" in global_auto
+    assert "src/talude_v2/edge_profile.py" in localbuild["required_paths"]
     assert "performance_profile_path" in global_auto
     assert 'f"performance_{safe_profile_id}.json"' in global_auto
     assert '"slowest_tiles"' in Path(
