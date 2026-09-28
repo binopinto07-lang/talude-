@@ -119,3 +119,14 @@ def test_v2_phases_6_to_9_are_wired_end_to_end():
     assert "vectorDeleteVertex" in js
     assert "vectorDeleteLine" in js
     assert "TaludeStudioBuild" in build
+
+
+def test_v2_local_click_has_safe_baseline_fallback():
+    server = Path("studio/backend/server.py").read_text(encoding="utf-8")
+
+    assert "soft_rejections" in server
+    assert "V2Reason.FACE_TOO_SMALL" in server
+    assert "V2Reason.LOW_GROUND_SUPPORT" in server
+    assert "V2_LOCAL_FALLBACK_1_1_7" in server
+    assert "v2_raw_tin.local_fallback" in server
+    assert "extract_terrain_face_from_points" in server
