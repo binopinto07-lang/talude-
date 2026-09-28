@@ -3533,32 +3533,35 @@
       event.clientY - start.y
     );
 
-    if (moved <= 5 && state.editorPickArmed && state.viewer) {
-      const hit = Potree.Utils.getMousePointCloudIntersection(
-        state.viewer.inputHandler.mouse,
-        state.viewer.scene.getActiveCamera(),
-        state.viewer,
-        state.viewer.scene.pointclouds
-      );
-      if (hit) {
-        const context = state.editorPickContext || {};
-        state.editorPickArmed = false;
-        state.editorPickContext = null;
-        window.dispatchEvent(new CustomEvent("talude:editor-pick", {
-          detail: {
-            xyz: [hit.location.x, hit.location.y, hit.location.z],
-            context: context
-          }
-        }));
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        return;
+    // Clique curto (<5 px) é sempre tratado aqui; arrastar continua OrbitControls.
+    // O editor vetorial tem prioridade quando está armado, sem alterar a UX CAD.
+    if (moved <= 5) {
+      if (state.editorPickArmed && state.viewer) {
+        const hit = Potree.Utils.getMousePointCloudIntersection(
+          state.viewer.inputHandler.mouse,
+          state.viewer.scene.getActiveCamera(),
+          state.viewer,
+          state.viewer.scene.pointclouds
+        );
+        if (hit) {
+          const context = state.editorPickContext || {};
+          state.editorPickArmed = false;
+          state.editorPickContext = null;
+          window.dispatchEvent(new CustomEvent("talude:editor-pick", {
+            detail: {
+              xyz: [hit.location.x, hit.location.y, hit.location.z],
+              context: context
+            }
+          }));
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
       }
-    }
 
-    // Clique curto = selecionar a face. Arrastar = OrbitControls.
-    if (moved <= 5 && state.traceArmed) {
-      onViewerPickClick(event);
+      if (state.traceArmed) {
+        onViewerPickClick(event);
+      }
     }
   }
 
