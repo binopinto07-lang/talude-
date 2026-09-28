@@ -62,6 +62,8 @@
     viewCubeLastYaw: null,
     viewCubeLastPitch: null,
     navPivotMarker: null,
+    cameraProjection: "perspective",
+    sidebarResizePointer: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -3509,6 +3511,103 @@
     debugLog("viewer.pan_mode", { enabled: state.panMode });
   }
 
+  function bindSidebarResize() {
+    const handle = byId("sidebarResizeHandle");
+    if (!handle) return;
+
+    const readWidth = () => {
+      const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue("--sidebar-width")
+        .trim();
+      const value = parseFloat(raw);
+      return Number.isFinite(value) ? value : 330;
+    };
+
+    const stop = (event) => {
+      if (!state.sidebarResizePointer) return;
+      if (
+        event &&
+        event.pointerId !== undefined &&
+        state.sidebarResizePointer.pointerId !== event.pointerId
+      ) return;
+
+      state.sidebarResizePointer = null;
+      handle.classList.remove("dragging");
+      document.body.classList.remove("resizing-sidebar");
+      try { handle.releasePointerCapture(event.pointerId); } catch (_) {}
+    };
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      state.sidebarResizePointer = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidth: readWidth(),
+      };
+      handle.setPointerCapture(event.pointerId);
+      handle.classList.add("dragging");
+      document.body.classList.add("resizing-sidebar");
+      event.preventDefault();
+    });
+
+    handle.addEventListener("pointermove", (event) => {
+      const drag = state.sidebarResizePointer;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const width = Math.max(
+        280,
+        Math.min(560, drag.startWidth + event.clientX - drag.startX)
+      );
+      document.documentElement.style.setProperty(
+        "--sidebar-width",
+        width.toFixed(0) + "px"
+      );
+      updateWideLineResolution();
+      event.preventDefault();
+    });
+
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+    handle.addEventListener("dblclick", () => {
+      document.documentElement.style.setProperty("--sidebar-width", "330px");
+      updateWideLineResolution();
+    });
+  }
+
+
+  function setCameraProjectionMode(mode) {
+    if (!state.viewer) return;
+    const next = mode === "orthographic" ? "orthographic" : "perspective";
+    state.cameraProjection = next;
+
+    try {
+      if (
+        typeof state.viewer.setCameraMode === "function" &&
+        typeof Potree !== "undefined" &&
+        Potree.CameraMode
+      ) {
+        state.viewer.setCameraMode(
+          next === "orthographic"
+            ? Potree.CameraMode.ORTHOGRAPHIC
+            : Potree.CameraMode.PERSPECTIVE
+        );
+      } else if (state.viewer.scene && Potree.CameraMode) {
+        state.viewer.scene.cameraMode =
+          next === "orthographic"
+            ? Potree.CameraMode.ORTHOGRAPHIC
+            : Potree.CameraMode.PERSPECTIVE;
+      }
+    } catch (_) {}
+
+    const button = byId("orthoModeButton");
+    if (button) {
+      button.textContent = next === "orthographic" ? "ORTO" : "PERSP";
+      button.classList.toggle("active", next === "orthographic");
+    }
+
+    debugLog("viewer.camera_projection", { mode: next });
+  }
+
+
   function setNavigationProfile(profile) {
     state.navigationProfile = profile === "cad" ? "cad" : "agisoft";
     const button = byId("navProfileButton");
@@ -3900,6 +3999,7 @@
 
 
   function bindUi() {
+    bindSidebarResize();
     document.querySelectorAll("[data-standard-view]").forEach((button) => {
       button.onclick = () => {
         const view = button.dataset.standardView;
@@ -3930,23 +4030,40 @@
       const key = String(event.key || "").toLowerCase();
       if (key === "f") {
         try { state.viewer.fitToScreen(0.82); } catch (_) {}
-      } else if (event.altKey && key === "1") {
+      } else if ((event.altKey && key === "1") || event.code === "Numpad7") {
         setStandardView("top");
-      } else if (event.altKey && key === "2") {
+      } else if ((event.altKey && key === "2") || event.code === "Numpad1") {
         setStandardView("front");
       } else if (event.altKey && key === "3") {
         setStandardView("back");
-      } else if (event.altKey && key === "4") {
+      } else if ((event.altKey && key === "4") || event.code === "Numpad3") {
         setStandardView("left");
       } else if (event.altKey && key === "5") {
         setStandardView("right");
-      } else if (event.altKey && key === "6") {
+      } else if ((event.altKey && key === "6") || event.code === "Numpad5") {
         setIsoView();
+      } else if (key === "o") {
+        setCameraProjectionMode(
+          state.cameraProjection === "orthographic"
+            ? "perspective"
+            : "orthographic"
+        );
       }
     });
 
     if (byId("panModeButton")) {
       byId("panModeButton").onclick = () => setPanMode(!state.panMode);
+    }
+
+    if (byId("orthoModeButton")) {
+      byId("orthoModeButton").onclick = () => {
+        setCameraProjectionMode(
+          state.cameraProjection === "orthographic"
+            ? "perspective"
+            : "orthographic"
+        );
+      };
+      setCameraProjectionMode("perspective");
     }
 
     byId("newProject").onclick = () => {
@@ -4125,6 +4242,7 @@
     cancelEditorPick,
     setNavigationProfile,
     setStandardView,
-    setIsoView
+    setIsoView,
+    setCameraProjectionMode
   };
 })();
