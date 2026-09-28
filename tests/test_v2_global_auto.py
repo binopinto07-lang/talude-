@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from talude_v2 import V2Config
+from talude_v2.engine import boundary_reference_guard
 from talude_v2.global_auto import (
     _PriorityReservoir,
     _build_face_candidates,
@@ -110,3 +111,46 @@ def test_auto_global_face_refinement_uses_raw_tin_and_returns_pair():
     assert {line["type"] for line in lines} == {"CREST", "TOE"}
     assert all(line["source"] == "V2_RAW_TIN" for line in lines)
     assert all(line["length_m"] > 10.0 for line in lines)
+
+
+def test_edge_guard_accepts_real_edge_and_rejects_face_centre():
+    crest, toe = _baseline_pair()
+
+    near_crest = crest.copy()
+    near_crest[:, 0] += 0.35
+    good = boundary_reference_guard(
+        near_crest,
+        crest,
+        toe,
+        face_width_m=5.0,
+    )
+    assert good["accepted"] is True
+    assert good["own_median_m"] < 0.5
+
+    middle = crest.copy()
+    middle[:, 0] = 12.5
+    middle[:, 2] = 7.5
+    bad = boundary_reference_guard(
+        middle,
+        crest,
+        toe,
+        face_width_m=5.0,
+    )
+    assert bad["accepted"] is False
+    assert bad["side_ratio_median"] > 0.45
+
+
+def test_edge_guard_keeps_crest_and_toe_on_their_own_side():
+    crest, toe = _baseline_pair()
+    wrong_for_crest = toe.copy()
+    wrong_for_crest[:, 0] -= 0.25
+
+    result = boundary_reference_guard(
+        wrong_for_crest,
+        crest,
+        toe,
+        face_width_m=5.0,
+    )
+
+    assert result["accepted"] is False
+    assert result["own_median_m"] > 4.0
