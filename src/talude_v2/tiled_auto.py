@@ -761,6 +761,8 @@ def process_candidates_tiled(
 
         total_jobs = max(1, len(jobs))
         done = 0
+        fragment_cache_hits = 0
+        fragment_cache_misses = 0
 
         # Load one tile+halo once, then run all face fragments that touch it.
         for tile_index, tile_id in enumerate(sorted(by_tile), start=1):
@@ -779,101 +781,148 @@ def process_candidates_tiled(
             for job in by_tile[tile_id]:
                 _check_cancel(cancel_check)
                 candidate = candidates[job.candidate_index]
-                local_points = _bounded_candidate_points(
-                    tile_points,
+                cache_path = _fragment_cache_path(
+                    spool_dir,
                     candidate,
-                    max_points=max(int(v2_cfg.max_tin_points * 1.35), v2_cfg.max_tin_points),
-                    seed=v2_cfg.random_seed + job.tile_id * 31 + candidate.face_id * 7919,
+                    v2_cfg,
+                    tile_id,
                 )
-                record = {
-                    "tile_id": int(tile_id),
-                    "ix": int(job.ix),
-                    "iy": int(job.iy),
-                    "face_id": int(candidate.face_id),
-                    "seed": list(job.seed_xyz),
-                    "tile_points": int(len(tile_points)),
-                    "roi_points": int(len(local_points)),
-                }
+                cached = _load_fragment_cache(cache_path)
 
-                try:
-                    if len(local_points) < 100:
-                        raise V2DetectionError(
-                            V2Reason.LOW_GROUND_SUPPORT,
-                            f"Tile {tile_id}: poucos pontos Ground na ROI.",
+                if cached is not None:
+                    cached_fragments = []
+                    for item in cached.get("fragments", []):
+                        fragment = dict(item)
+                        fragment["xyz"] = np.asarray(
+                            fragment.get("xyz", []),
+                            dtype=np.float64,
                         )
+                        if len(fragment["xyz"]) < 2:
+                            continue
+                        cached_fragments.append(fragment)
+                        fragments[int(candidate.face_id)][fragment["type"]].append(fragment)
 
-                    # Lazy import avoids a module cycle: global_auto imports this
-                    # orchestration only at execution time.
-                    from .global_auto import refine_face_candidate_v2
-
-                    local_candidate = replace(
+                    record = dict(cached.get("record") or {})
+                    record.update(
+                        {
+                            "tile_id": int(tile_id),
+                            "ix": int(job.ix),
+                            "iy": int(job.iy),
+                            "face_id": int(candidate.face_id),
+                            "seed": list(job.seed_xyz),
+                            "status": "CACHE_HIT",
+                            "reason": V2Reason.SUCCESS.value,
+                            "kept_fragments": int(len(cached_fragments)),
+                            "fragment_cache": True,
+                        }
+                    )
+                    fragment_cache_hits += 1
+                else:
+                    fragment_cache_misses += 1
+                    local_points = _bounded_candidate_points(
+                        tile_points,
                         candidate,
-                        seed_xyz=np.asarray(job.seed_xyz, dtype=np.float64),
+                        max_points=max(int(v2_cfg.max_tin_points * 1.35), v2_cfg.max_tin_points),
+                        seed=v2_cfg.random_seed + job.tile_id * 31 + candidate.face_id * 7919,
                     )
-                    lines, face_record = refine_face_candidate_v2(
-                        local_candidate,
-                        local_points,
-                        v2_config=v2_cfg,
-                        min_line_length_m=max(
-                            float(v2_cfg.tile_min_fragment_m),
-                            min(float(min_line_length_m), 2.0),
-                        ),
-                    )
+                    record = {
+                        "tile_id": int(tile_id),
+                        "ix": int(job.ix),
+                        "iy": int(job.iy),
+                        "face_id": int(candidate.face_id),
+                        "seed": list(job.seed_xyz),
+                        "tile_points": int(len(tile_points)),
+                        "roi_points": int(len(local_points)),
+                        "fragment_cache": False,
+                    }
 
-                    margin = min(max(0.35, halo * 0.20), 2.0)
-                    kept = 0
-                    for line in lines:
-                        clipped = _clip_line_to_core(
-                            np.asarray(line["xyz"], dtype=np.float64),
-                            tile_id,
-                            nx=nx,
-                            x0=x0,
-                            y0=y0,
-                            tile_size_m=tile_size,
-                            margin_m=margin,
+                    produced_fragments: list[dict] = []
+                    try:
+                        if len(local_points) < 100:
+                            raise V2DetectionError(
+                                V2Reason.LOW_GROUND_SUPPORT,
+                                f"Tile {tile_id}: poucos pontos Ground na ROI.",
+                            )
+
+                        # Lazy import avoids a module cycle: global_auto imports this
+                        # orchestration only at execution time.
+                        from .global_auto import refine_face_candidate_v2
+
+                        local_candidate = replace(
+                            candidate,
+                            seed_xyz=np.asarray(job.seed_xyz, dtype=np.float64),
                         )
-                        if len(clipped) < 2:
-                            continue
-
-                        length = float(
-                            np.linalg.norm(np.diff(clipped[:, :2], axis=0), axis=1).sum()
+                        lines, face_record = refine_face_candidate_v2(
+                            local_candidate,
+                            local_points,
+                            v2_config=v2_cfg,
+                            min_line_length_m=max(
+                                float(v2_cfg.tile_min_fragment_m),
+                                min(float(min_line_length_m), 2.0),
+                            ),
                         )
-                        if length < float(v2_cfg.tile_min_fragment_m):
-                            continue
 
-                        fragment = dict(line)
-                        fragment["xyz"] = clipped
-                        fragment["length_m"] = length
-                        fragment["length_2d_m"] = length
-                        fragment["source"] = "V2_RAW_TIN_TILE"
-                        fragment["tile_id"] = int(tile_id)
-                        fragments[int(candidate.face_id)][line["type"]].append(fragment)
-                        kept += 1
+                        margin = min(max(0.35, halo * 0.20), 2.0)
+                        kept = 0
+                        for line in lines:
+                            clipped = _clip_line_to_core(
+                                np.asarray(line["xyz"], dtype=np.float64),
+                                tile_id,
+                                nx=nx,
+                                x0=x0,
+                                y0=y0,
+                                tile_size_m=tile_size,
+                                margin_m=margin,
+                            )
+                            if len(clipped) < 2:
+                                continue
 
-                    record.update(
-                        {
-                            "status": "SUCCESS" if kept else "NO_CORE_FRAGMENT",
-                            "reason": (
-                                V2Reason.SUCCESS.value
-                                if kept
-                                else V2Reason.MERGE_FAILED.value
-                            ),
-                            "kept_fragments": int(kept),
-                            "v2_metrics": face_record.get("v2_metrics", {}),
-                        }
-                    )
-                except Exception as exc:
-                    record.update(
-                        {
-                            "status": "FAILED",
-                            "reason": (
-                                exc.reason.value
-                                if isinstance(exc, V2DetectionError)
-                                else V2Reason.INTERNAL_ERROR.value
-                            ),
-                            "message": str(exc),
-                        }
-                    )
+                            length = float(
+                                np.linalg.norm(np.diff(clipped[:, :2], axis=0), axis=1).sum()
+                            )
+                            if length < float(v2_cfg.tile_min_fragment_m):
+                                continue
+
+                            fragment = dict(line)
+                            fragment["xyz"] = clipped
+                            fragment["length_m"] = length
+                            fragment["length_2d_m"] = length
+                            fragment["source"] = "V2_RAW_TIN_TILE"
+                            fragment["tile_id"] = int(tile_id)
+                            fragments[int(candidate.face_id)][line["type"]].append(fragment)
+                            produced_fragments.append(fragment)
+                            kept += 1
+
+                        record.update(
+                            {
+                                "status": "SUCCESS" if kept else "NO_CORE_FRAGMENT",
+                                "reason": (
+                                    V2Reason.SUCCESS.value
+                                    if kept
+                                    else V2Reason.MERGE_FAILED.value
+                                ),
+                                "kept_fragments": int(kept),
+                                "v2_metrics": face_record.get("v2_metrics", {}),
+                            }
+                        )
+                        if kept:
+                            _save_fragment_cache(
+                                cache_path,
+                                produced_fragments,
+                                record,
+                            )
+                    except Exception as exc:
+                        record.update(
+                            {
+                                "status": "FAILED",
+                                "reason": (
+                                    exc.reason.value
+                                    if isinstance(exc, V2DetectionError)
+                                    else V2Reason.INTERNAL_ERROR.value
+                                ),
+                                "message": str(exc),
+                            }
+                        )
 
                 tile_records.append(record)
                 done += 1
@@ -882,7 +931,8 @@ def process_candidates_tiled(
                         62.0 + 26.0 * done / total_jobs,
                         (
                             f"AUTO V2 TILED · fragmentos {done}/{total_jobs} · "
-                            f"tile {tile_index}/{len(by_tile)}"
+                            f"tile {tile_index}/{len(by_tile)} · "
+                            f"cache {fragment_cache_hits} hit"
                         ),
                     )
 
@@ -1001,6 +1051,11 @@ def process_candidates_tiled(
             "successful_faces": int(success_faces),
             "failed_faces": int(len(results) - success_faces),
             "spool": spool_stats,
+            "fragment_cache_hits": int(fragment_cache_hits),
+            "fragment_cache_misses": int(fragment_cache_misses),
+            "fragment_cache_hit_ratio": float(
+                fragment_cache_hits / max(1, fragment_cache_hits + fragment_cache_misses)
+            ),
             "elapsed_s": float(perf_counter() - started),
         }
     finally:
