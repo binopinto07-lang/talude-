@@ -1,6 +1,6 @@
 {
   "id": "talude_v2",
-  "name": "Talude Studio V2 — Fases 6–9 · Editor + Export",
+  "name": "Talude Studio V2.1 — Layers + Navigation + Performance",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
@@ -238,7 +238,7 @@
     ]
   },
   "release": {},
-  "config_revision": 9,
+  "config_revision": 10,
   "required_paths": [
     "scripts/build_windows.py",
     "studio/viewer/vector_editor.js",
@@ -248,6 +248,6 @@
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-28_R1"
+    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-28_R2"
   }
 }
