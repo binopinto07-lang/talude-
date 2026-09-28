@@ -11,7 +11,7 @@ from talude_v2.engine import (
     _robust_plane,
     _support_aware_smooth,
 )
-from talude_v2.global_auto import _normalize_face_pair
+from talude_v2.global_auto import _normalize_face_pair, _partition_candidates_for_performance
 from talude_v2.tiled_auto import _build_tile_jobs, stitch_fragments
 from talude_v2.vector_document import (
     SCHEMA,
@@ -180,3 +180,35 @@ def test_phase5_vector_document_wraps_engine_lines_and_roundtrips(tmp_path):
     assert loaded["document_id"] == document["document_id"]
     assert len(loaded["features"]) == 2
     assert loaded["features"][0]["geometry"]["coordinates"][0][2] == pytest.approx(10.0)
+
+
+def test_large_cloud_balanced_mode_limits_raw_tin_work():
+    crest, toe = _reference_pair(30.0)
+    candidates = [
+        _normalize_face_pair(i + 1, crest + [i * 25.0, 0.0, 0.0], toe + [i * 25.0, 0.0, 0.0], corridor_margin_m=3.0)
+        for i in range(180)
+    ]
+
+    attempted, skipped, stats = _partition_candidates_for_performance(
+        candidates,
+        mode="balanced",
+        point_count=241_149_524,
+    )
+
+    assert stats["attempt_limit"] == 60
+    assert len(attempted) == 60
+    assert len(skipped) == 120
+    assert stats["selection"] == "COHERENCE_PRIORITY"
+
+
+def test_tiled_engine_has_persistent_ground_and_fragment_caches():
+    source = Path("src/talude_v2/tiled_auto.py").read_text(encoding="utf-8")
+
+    assert "_persistent_spool_dir" in source
+    assert "_load_spool_manifest" in source
+    assert "_fragment_cache_path" in source
+    assert "_load_fragment_cache" in source
+    assert "_save_fragment_cache" in source
+    assert "fragment_cache_hits" in source
+    assert "fragment_cache_misses" in source
+    assert "fragment_cache_hit_ratio" in source
