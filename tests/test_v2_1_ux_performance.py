@@ -69,6 +69,7 @@ def test_v2_performance_profile_is_wired_end_to_end():
     server = Path("studio/backend/server.py").read_text(encoding="utf-8")
     worker = Path("studio/backend/auto_extract_v2.py").read_text(encoding="utf-8")
     engine = Path("src/talude_v2/global_auto.py").read_text(encoding="utf-8")
+    tiled = Path("src/talude_v2/tiled_auto.py").read_text(encoding="utf-8")
 
     assert 'id="v2PerformanceMode"' in html
     assert 'value="fast"' in html
@@ -87,6 +88,11 @@ def test_v2_performance_profile_is_wired_end_to_end():
     assert "PERFORMANCE_BASELINE" in engine
     assert '"v2_attempted_faces"' in engine
     assert '"performance_skipped_faces"' in engine
+    assert "_baseline_cache_dir" in engine
+    assert "baseline_cache_hit" in engine
+    assert "_persistent_spool_dir" in tiled
+    assert "cache_hit_tiles" in tiled
+    assert "manifest.json" in tiled
 
 
 def test_fast_profile_never_sends_faces_to_raw_tin():
@@ -133,3 +139,10 @@ def test_clicked_v2_has_protected_baseline_fallback():
     assert "terrain_face.v2_fallback_started" in app
     assert 'api("/api/feature-lines/terrain-face"' in app
     assert "result.v2_fallback = true" in app
+
+
+def test_v2_final_lines_are_resampled_to_operator_spacing():
+    engine = Path("src/talude_v2/global_auto.py").read_text(encoding="utf-8")
+    assert "_resample_polyline(xyz, output_spacing)" in engine
+    assert '"vertex_spacing_m"' in engine
+    assert '"output_vertex_spacing_m"' in engine
