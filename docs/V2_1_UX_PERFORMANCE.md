@@ -191,3 +191,36 @@ Esta entrega não altera:
 - short-path Windows builder.
 
 Não adiciona novas dependências ao executável.
+
+
+## Cache persistente
+
+Foram acrescentados dois caches com invalidação por origem/configuração.
+
+### Baseline discovery
+
+`<project>/cache/v1_baseline/<fingerprint>/`
+
+A fingerprint inclui:
+
+- path da nuvem;
+- tamanho;
+- mtime;
+- SHA da baseline protegida;
+- configuração do detector.
+
+Uma segunda execução com os mesmos dados reutiliza o GeoJSON/report da descoberta
+em vez de repetir a primeira passagem integral.
+
+### Ground tile spool
+
+`<project>/cache/v2_ground_tiles/<fingerprint>/`
+
+Os tiles Ground float64 deixam de ser eliminados no final da execução.
+
+O manifest guarda explicitamente quais os tiles que concluíram uma passagem
+integral. Se uma execução for interrompida, um tile parcial não é aceite como
+cache válido; é apagado e reconstruído.
+
+Isto permite que uma repetição do BALANCED/PRECISE reutilize os tiles completos
+sem voltar a varrer toda a nuvem LAS apenas para reconstruir o spool.
