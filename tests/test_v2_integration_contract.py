@@ -22,7 +22,7 @@ def test_v2_viewer_can_switch_global_and_clicked_engines():
     assert 'id="geometryEngine"' in html
     assert 'data-engine="baseline"' in html
     assert 'data-engine="v2"' in html
-    assert 'geometryEngine: "baseline"' in app
+    assert 'geometryEngine: "v2"' in app
     assert '"/api/v2/feature-lines/terrain-face"' in app
     assert '"/api/feature-lines/terrain-face"' in app
     assert '"/api/v2/talude/auto"' in auto
