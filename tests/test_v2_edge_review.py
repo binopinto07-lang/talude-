@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from studio.backend.vector_export import select_features
-from talude_v2.edge_profile import validate_edge_pair
+from talude_v2.edge_profile import _trim_endpoint_hooks, validate_edge_pair
 from talude_v2.vector_document import create_vector_document
 
 
@@ -77,6 +77,34 @@ def test_review_lines_are_separated_from_approved_breaklines():
     explicit_review = select_features(doc, layer_ids=["PE_TALUDE_REVIEW"])
     assert len(explicit_review) == 1
     assert explicit_review[0]["layer_id"] == "PE_TALUDE_REVIEW"
+
+
+def test_endpoint_hook_is_trimmed_without_moving_line_body():
+    reference = np.asarray(
+        [
+            [0.0, 0.0, 10.0],
+            [5.0, 0.0, 10.0],
+            [10.0, 0.0, 10.0],
+            [15.0, 0.0, 10.0],
+            [20.0, 0.0, 10.0],
+        ],
+        dtype=float,
+    )
+    hooked = np.asarray(
+        [
+            [-5.0, 5.0, 10.0],  # lateral closure tail
+            [0.0, 0.0, 10.0],
+            [5.0, 0.0, 10.0],
+            [10.0, 0.0, 10.0],
+            [15.0, 0.0, 10.0],
+            [20.0, 0.0, 10.0],
+        ],
+        dtype=float,
+    )
+    trimmed = _trim_endpoint_hooks(hooked, reference)
+    assert len(trimmed) == 5
+    assert np.allclose(trimmed[0], [0.0, 0.0, 10.0])
+    assert np.allclose(trimmed[-1], [20.0, 0.0, 10.0])
 
 
 def test_failed_faces_do_not_publish_baseline_review_geometry():
