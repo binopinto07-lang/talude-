@@ -95,6 +95,7 @@
     byId("facesCount").textContent = "0";
     byId("crestCount").textContent = "0";
     byId("toeCount").textContent = "0";
+    if (byId("reviewCount")) byId("reviewCount").textContent = "0";
     byId("taludeFeatureList").innerHTML = "";
     byId("clearTaludeLines").disabled = true;
     byId("openTaludeResults").disabled = true;
@@ -114,10 +115,10 @@
       const confidence = Math.round(Number(data.quality_score ?? data.confidence ?? 0) * 100);
       const length = Number(data.length_m || 0);
       const source = String(data.source || "");
-      const sourceTag = source.startsWith("V2_")
-        ? " · V2"
-        : source.includes("FALLBACK")
-          ? " · fallback"
+      const sourceTag = source.includes("PROFILE_EDGE")
+        ? " · PROFILE-EDGE"
+        : source.startsWith("V2_")
+          ? " · V2"
           : "";
 
       row.innerHTML =
@@ -163,9 +164,14 @@
     s.updateWideLineResolution();
     renderResultList();
 
-    byId("facesCount").textContent = String(report.faces_detected || 0);
+    byId("facesCount").textContent = String(
+      report.approved_faces ?? report.faces_detected ?? 0
+    );
     byId("crestCount").textContent = String(report.crest_lines || 0);
     byId("toeCount").textContent = String(report.toe_lines || 0);
+    if (byId("reviewCount")) {
+      byId("reviewCount").textContent = String(report.review_faces || 0);
+    }
 
     byId("clearTaludeLines").disabled = autoObjects.length === 0;
     byId("openTaludeResults").disabled = !lastOutputDir;
@@ -174,24 +180,21 @@
     const isV2 = result.engine === "v2-global" ||
       report.engine === "BREAKLINE_ENGINE_V2_GLOBAL_HYBRID";
     if (isV2) {
-      const skipped = Number(report.performance_skipped_faces || 0);
+      const approved = Number(report.approved_faces ?? report.faces_detected ?? 0);
+      const review = Number(report.review_faces || 0);
       const attempted = Number(report.v2_attempted_faces || 0);
-      const fallbackTotal = Number(report.baseline_fallback_faces || 0);
-      const failedFallback = Math.max(0, fallbackTotal - skipped);
       s.setStatus(
         "AUTO V2 " + String(report.performance_mode || "balanced").toUpperCase() + " · " +
-        String(report.faces_detected || 0) + " faces · " +
-        "RAW-TIN " + String(attempted) + " tentadas / " +
-        String(report.v2_success_faces || 0) + " aceites · " +
-        "baseline desempenho " + String(skipped) + " · " +
-        "fallback técnico " + String(failedFallback) + " · " +
+        "PROFILE-EDGE " + String(attempted) + " faces · " +
+        String(approved) + " aprovadas · " +
+        String(review) + " revisão · " +
         elapsed.toFixed(1) + " s"
       );
       s.toast(
-        "AUTO V2 concluído · " +
-        String(report.v2_success_faces || 0) + " faces refinadas; " +
-        String(skipped) + " mantidas na baseline pelo perfil de desempenho.",
-        9000
+        "Deteção concluída · " + String(approved) +
+        " faces aprovadas; " + String(review) +
+        " ficaram em REVISÃO e não entram na exportação normal.",
+        10000
       );
     } else {
       s.setStatus(
@@ -302,7 +305,7 @@
       });
       s.setStatus(
         "AUTO GLOBAL V2 · perfil " + performanceMode.toUpperCase() +
-        " · descoberta → refinamento seletivo → fallback seguro…"
+        " · descoberta → perfis transversais → validação → revisão…"
       );
     }
 
