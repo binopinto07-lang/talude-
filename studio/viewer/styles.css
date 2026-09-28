@@ -429,3 +429,295 @@ footer { color: #8092a8; font-size: 10px; padding: 3px; }
   font-size:10px;
 }
 .vector-export-form input { margin:0; }
+
+
+/* V2.1 — QGIS-like layer tree, Agisoft navigation, CAD view cube */
+.qgis-layer-card {
+  padding: 8px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #151d27, #111821);
+}
+.qgis-title-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:6px;
+}
+.qgis-title-actions {
+  font-size:8px;
+  color:#71849a;
+  font-weight:700;
+  letter-spacing:.45px;
+}
+.qgis-layer-toolbar {
+  display:grid;
+  grid-template-columns:repeat(7, 1fr);
+  gap:3px;
+  padding:4px;
+  margin-bottom:6px;
+  border:1px solid #263445;
+  border-radius:4px;
+  background:#0d141d;
+}
+.qgis-layer-toolbar button {
+  min-height:27px;
+  padding:0;
+  border-radius:3px;
+  background:#182330;
+  font-size:12px;
+}
+.qgis-status {
+  margin:3px 3px 7px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qgis-layer-tree {
+  border:1px solid #2b3948;
+  background:#f4f5f6;
+  color:#20252b;
+  border-radius:3px;
+  overflow:hidden;
+  min-height:126px;
+  max-height:250px;
+  overflow-y:auto;
+  display:block;
+}
+.qgis-group {
+  border-bottom:1px solid #c9cdd2;
+}
+.qgis-group:last-child { border-bottom:0; }
+.qgis-group-header {
+  display:grid;
+  grid-template-columns:18px 1fr 38px;
+  align-items:center;
+  min-height:25px;
+  padding:2px 5px;
+  background:linear-gradient(#e7e9ec,#d9dde1);
+  color:#2e343b;
+  font-size:10.5px;
+  font-weight:700;
+  user-select:none;
+  cursor:pointer;
+}
+.qgis-group-header:hover { background:#d5e5f3; }
+.qgis-group-chevron {
+  width:14px;
+  text-align:center;
+  color:#53606d;
+  font-size:10px;
+}
+.qgis-group-count {
+  color:#6d7681;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  font-size:9.5px;
+}
+.qgis-group-body.collapsed { display:none; }
+.qgis-layer-row {
+  display:grid;
+  grid-template-columns:20px 22px 1fr 28px 28px;
+  align-items:center;
+  min-height:27px;
+  padding:1px 4px 1px 15px;
+  border-top:1px solid #e1e3e5;
+  background:#fbfbfc;
+  color:#252a30;
+  font-size:10.5px;
+}
+.qgis-layer-row:hover { background:#eaf3fb; }
+.qgis-layer-row.active {
+  background:#cfe8fb;
+  outline:1px solid #72add7;
+  outline-offset:-1px;
+}
+.qgis-layer-row input[type="checkbox"] {
+  margin:0;
+  accent-color:#3184c6;
+}
+.qgis-symbol {
+  display:inline-block;
+  width:18px;
+  height:3px;
+  border-radius:1px;
+  background:#7d8792;
+}
+.qgis-symbol.crest { background:#f3c300; }
+.qgis-symbol.toe { background:#1dc8ed; }
+.qgis-symbol.face { background:#59c956; height:8px; opacity:.55; }
+.qgis-symbol.debug { background:#bd62e7; border-top:1px dashed #633078; }
+.qgis-symbol.cloud {
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #d8d8d8, #5f6974 45%, #222a32 70%);
+}
+.qgis-layer-main {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:5px;
+  min-width:0;
+  cursor:pointer;
+  background:transparent;
+  border:0;
+  color:inherit;
+  padding:0 3px;
+  min-height:24px;
+  text-align:left;
+}
+.qgis-layer-main:hover { background:transparent !important; }
+.qgis-layer-name {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:600;
+}
+.qgis-layer-count {
+  color:#697681;
+  font-size:9.5px;
+  font-variant-numeric:tabular-nums;
+}
+.qgis-mini-button {
+  border:0;
+  background:transparent;
+  color:#3b4650;
+  padding:0;
+  min-height:23px;
+  border-radius:2px;
+  font-size:11px;
+}
+.qgis-mini-button:hover:not(:disabled) { background:#d7e9f8; }
+.qgis-mini-button.locked { color:#8b4a34; }
+.qgis-cloud-meta {
+  color:#77828d;
+  font-size:9px;
+  font-weight:400;
+}
+.vector-editor-details {
+  border-top:1px solid #27374a;
+  margin-top:8px;
+  padding-top:5px;
+}
+.vector-editor-details summary,
+.vector-project-tools summary {
+  list-style:none;
+  cursor:pointer;
+  color:#aebed0;
+  font-size:10.5px;
+  font-weight:750;
+  letter-spacing:.35px;
+  padding:4px 2px;
+}
+.vector-editor-details summary::before,
+.vector-project-tools summary::before {
+  content:"▾";
+  margin-right:6px;
+}
+.vector-editor-details:not([open]) summary::before,
+.vector-project-tools:not([open]) summary::before { content:"▸"; }
+
+.performance-profile {
+  padding:7px;
+  margin:7px 0;
+  border:1px solid #294158;
+  border-radius:7px;
+  background:#0d1823;
+}
+.performance-profile label { margin-top:0; color:#c8d6e6; }
+.performance-profile select { min-height:32px; font-size:10.5px; }
+
+/* Agisoft-like interaction cursors */
+#potree_render_area { cursor:grab; }
+#potree_render_area:active { cursor:grabbing; }
+#potree_render_area.pan-mode,
+#potree_render_area.panning { cursor:move !important; }
+.nav-profile-button.active {
+  background:#245f49 !important;
+  border-color:#3aa775 !important;
+  color:#eafff4 !important;
+}
+
+/* CAD / progeCAD inspired view cube */
+.view-cube-widget {
+  position:absolute;
+  z-index:18;
+  top:68px;
+  right:18px;
+  width:104px;
+  height:126px;
+  pointer-events:none;
+  user-select:none;
+  filter:drop-shadow(0 7px 12px rgba(0,0,0,.42));
+}
+.view-cube-scene {
+  width:80px;
+  height:80px;
+  margin:4px auto 0;
+  perspective:280px;
+  pointer-events:auto;
+}
+.view-cube {
+  --cube-yaw:-35deg;
+  --cube-pitch:-25deg;
+  position:relative;
+  width:56px;
+  height:56px;
+  margin:13px auto;
+  transform-style:preserve-3d;
+  transform:rotateX(var(--cube-pitch)) rotateY(var(--cube-yaw));
+  transition:transform .10s linear;
+}
+.cube-face {
+  position:absolute;
+  width:56px;
+  height:56px;
+  min-height:0;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.72);
+  border-radius:1px;
+  background:rgba(164,173,181,.78);
+  color:#101820;
+  font-size:8px;
+  font-weight:800;
+  letter-spacing:.2px;
+  backface-visibility:visible;
+  pointer-events:auto;
+}
+.cube-face:hover {
+  background:rgba(231,244,255,.96) !important;
+  color:#0a416a;
+  border-color:#62b7ed;
+}
+.cube-front { transform:translateZ(28px); }
+.cube-back { transform:rotateY(180deg) translateZ(28px); }
+.cube-right { transform:rotateY(90deg) translateZ(28px); }
+.cube-left { transform:rotateY(-90deg) translateZ(28px); }
+.cube-top { transform:rotateX(90deg) translateZ(28px); background:rgba(213,220,225,.88); }
+.cube-bottom { transform:rotateX(-90deg) translateZ(28px); }
+.cube-home {
+  pointer-events:auto;
+  display:block;
+  margin:1px auto 0;
+  min-height:22px;
+  padding:0 7px;
+  border-radius:3px;
+  font-size:8px;
+  background:rgba(26,37,50,.94);
+}
+.cube-wcs {
+  width:max-content;
+  margin:3px auto 0;
+  padding:2px 5px;
+  border-radius:3px;
+  background:rgba(10,14,19,.76);
+  color:#aeb8c4;
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.35px;
+}
+@media (max-width: 1050px) {
+  .view-cube-widget { transform:scale(.82); transform-origin:top right; }
+}
