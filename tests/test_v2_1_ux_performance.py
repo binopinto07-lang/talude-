@@ -92,6 +92,8 @@ def test_v2_performance_profile_is_wired_end_to_end():
     assert 'id="lineVertexSpacing"' in html
 
     assert "performance_mode: performanceMode" in auto
+    assert "const useV2 = true" in auto
+    assert 'const endpoint = "/api/v2/talude/auto"' in auto
     assert 'numberValue("lineVertexSpacing", 1.0)' in auto
     assert 'performance_mode: str = "balanced"' in server
     assert "performance_mode=req.performance_mode" in server
