@@ -174,16 +174,24 @@
     const isV2 = result.engine === "v2-global" ||
       report.engine === "BREAKLINE_ENGINE_V2_GLOBAL_HYBRID";
     if (isV2) {
+      const skipped = Number(report.performance_skipped_faces || 0);
+      const attempted = Number(report.v2_attempted_faces || 0);
+      const fallbackTotal = Number(report.baseline_fallback_faces || 0);
+      const failedFallback = Math.max(0, fallbackTotal - skipped);
       s.setStatus(
         "AUTO V2 " + String(report.performance_mode || "balanced").toUpperCase() + " · " +
         String(report.faces_detected || 0) + " faces · " +
-        "V2 " + String(report.v2_success_faces || 0) + " · " +
-        "fallback " + String(report.baseline_fallback_faces || 0) + " · " +
+        "RAW-TIN " + String(attempted) + " tentadas / " +
+        String(report.v2_success_faces || 0) + " aceites · " +
+        "baseline desempenho " + String(skipped) + " · " +
+        "fallback técnico " + String(failedFallback) + " · " +
         elapsed.toFixed(1) + " s"
       );
       s.toast(
-        "AUTO GLOBAL V2 concluído. As faces inseguras mantiveram a geometria baseline.",
-        8000
+        "AUTO V2 concluído · " +
+        String(report.v2_success_faces || 0) + " faces refinadas; " +
+        String(skipped) + " mantidas na baseline pelo perfil de desempenho.",
+        9000
       );
     } else {
       s.setStatus(
