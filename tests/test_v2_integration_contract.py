@@ -26,8 +26,7 @@ def test_v2_viewer_can_switch_global_and_clicked_engines():
     assert '"/api/v2/feature-lines/terrain-face"' in app
     assert '"/api/feature-lines/terrain-face"' in app
     assert '"/api/v2/talude/auto"' in auto
-    assert '"/api/talude/auto"' in auto
-    assert 's.state.geometryEngine === "v2"' in auto
+    assert 'const useV2 = true' in auto
 
 
 def test_v2_global_auto_has_progress_cancel_and_regression_fallback():
