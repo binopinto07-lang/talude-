@@ -1,6 +1,6 @@
 {
   "id": "talude_v2",
-  "name": "Talude Studio V2.1 — Layers + Navigation + Performance",
+  "name": "Talude Studio V2.4 — Profile Edge + Review",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
@@ -238,18 +238,20 @@
     ]
   },
   "release": {},
-  "config_revision": 12,
+  "config_revision": 13,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
+    "src/talude_v2/edge_profile.py",
     "studio/viewer/vector_editor.js",
     "studio/backend/vector_export.py",
     "localbuild/talude_v2.json",
-    "localbuild/SOURCE_REVISION.txt"
+    "localbuild/SOURCE_REVISION.txt",
+    "core/terrain_face.py"
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-28_R3"
+    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-28_R4"
   },
   "auto_bootstrap_python": true
 }
