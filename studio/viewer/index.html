@@ -152,7 +152,7 @@
               <option value="balanced" selected>Equilibrado — PROFILE-EDGE em todas as faces + cache</option>
               <option value="precise">Preciso — PROFILE-EDGE mais fino em todas as faces</option>
             </select>
-            <div class="hint">Equilibrado valida todas as faces por perfis transversais e reutiliza cache. Só pares CRISTA/PÉ geometricamente válidos entram nas BREAKLINES; o restante fica em REVISÃO.</div>
+            <div class="hint">Equilibrado resolve cada face de forma contínua numa única passagem Ground. Só pares CRISTA/PÉ geometricamente válidos entram nas BREAKLINES; faces falhadas contam em REVISÃO sem desenhar a baseline sobre a nuvem.</div>
           </div>
           <div class="talude-param-grid">
             <label>Cell size (m)<input id="cellSize" type="number" min="0" step="0.01" value="0"></label>
@@ -162,7 +162,7 @@
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
             <label>Espaçamento vértices (m)<input id="lineVertexSpacing" type="number" min="0.25" max="5" step="0.25" value="1.0"></label>
           </div>
-          <div class="hint">A baseline 1.1.7 serve apenas para descobrir as faces. A posição final é calculada por perfis transversais plano → face inclinada → plano. Resultados não validados ficam em REVISÃO e não são exportados por defeito.</div>
+          <div class="hint">A baseline 1.1.7 serve apenas para descobrir a existência e extensão aproximada das faces. A posição final é determinada pela face inclinada local e pelas transições plano → face → plano; a baseline nunca é publicada como resultado V2.</div>
         </details>
       </section>
 
@@ -273,7 +273,7 @@
           <span>Pivot: duplo clique</span>
           <span>Zoom: roda</span>
         </div>
-        <div id="pointStats">Potree · baseline 1.1.7 + V2 RAW-TIN-MST</div>
+        <div id="pointStats">Potree · baseline 1.1.7 + V2 PROFILE-EDGE</div>
       </div>
 
       <div id="potree_render_area"></div>
