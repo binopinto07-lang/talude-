@@ -15,7 +15,8 @@ from talude_v1.config import ExtractConfig
 from talude_v1.engine import _filter_stream_chunk
 from talude_v1.io import inspect_point_cloud, iter_point_chunks
 
-from .engine import V2Config, _resample_polyline, boundary_reference_guard
+from .engine import V2Config, _resample_polyline
+from .edge_profile import validate_edge_pair
 from .profiling import add_stage_time, build_performance_profile, merge_stage_times
 from .reasons import V2DetectionError, V2Reason
 
@@ -227,7 +228,7 @@ def _fragment_cache_identity(candidate, cfg: V2Config, tile_id: int) -> str:
             "boundary_side_cos_min": float(cfg.boundary_side_cos_min),
             "max_local_normal_change_deg": float(cfg.max_local_normal_change_deg),
         },
-        "schema": "v2_fragment_cache_v1",
+        "schema": "v2_fragment_cache_v2_profile_edge",
     }
     return hashlib.sha1(
         json.dumps(payload, sort_keys=True, ensure_ascii=True).encode("utf-8")
@@ -251,7 +252,7 @@ def _load_fragment_cache(path: Path) -> dict | None:
         return None
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-        if payload.get("schema") != "v2_fragment_cache_v1":
+        if payload.get("schema") != "v2_fragment_cache_v2_profile_edge":
             return None
         fragments = payload.get("fragments")
         if not isinstance(fragments, list):
@@ -269,7 +270,7 @@ def _save_fragment_cache(path: Path, fragments: list[dict], record: dict) -> Non
         serializable.append(item)
 
     payload = {
-        "schema": "v2_fragment_cache_v1",
+        "schema": "v2_fragment_cache_v2_profile_edge",
         "fragments": serializable,
         "record": dict(record),
     }
@@ -935,7 +936,7 @@ def process_candidates_tiled(
                             fragment["xyz"] = clipped
                             fragment["length_m"] = length
                             fragment["length_2d_m"] = length
-                            fragment["source"] = "V2_RAW_TIN_TILE"
+                            fragment["source"] = "V2_PROFILE_EDGE_TILE"
                             fragment["tile_id"] = int(tile_id)
                             fragments[int(candidate.face_id)][line["type"]].append(fragment)
                             produced_fragments.append(fragment)
@@ -1047,26 +1048,6 @@ def process_candidates_tiled(
                         np.asarray(reference, dtype=np.float64),
                         v2_cfg,
                     )
-                    opposite_reference = (
-                        candidate.toe if kind == "CREST" else candidate.crest
-                    )
-                    edge_guard = boundary_reference_guard(
-                        xyz,
-                        np.asarray(reference, dtype=np.float64),
-                        np.asarray(opposite_reference, dtype=np.float64),
-                        candidate.baseline_width_median,
-                    )
-                    if not bool(edge_guard["accepted"]):
-                        raise V2DetectionError(
-                            V2Reason.REFINEMENT_FAILED,
-                            (
-                                f"FACE_{face_id:06d}: {kind} tiled saiu da aresta "
-                                f"(median={edge_guard['own_median_m']:.2f} m, "
-                                f"P95={edge_guard['own_p95_m']:.2f} m, "
-                                f"side={edge_guard['side_ratio_median']:.2f})."
-                            ),
-                        )
-                    meta = {**meta, "edge_guard": edge_guard}
                     length_2d = float(
                         np.linalg.norm(np.diff(xyz[:, :2], axis=0), axis=1).sum()
                     )
@@ -1089,8 +1070,9 @@ def process_candidates_tiled(
                             "confidence": quality,
                             "quality_score": quality,
                             "median_rmse": None,
-                            "source": "V2_TILED_STITCHED",
-                            "status": "AUTO",
+                            "source": "V2_TILED_STITCHED_PROFILE_EDGE",
+                            "status": "AUTO_VALIDATED",
+                            "review_state": "APPROVED_AUTO",
                             "tile_fragment_count": int(meta["fragment_count"]),
                             "tile_coverage_ratio": float(meta["coverage_ratio"]),
                             "max_stitch_gap_m": float(meta["max_stitch_gap_m"]),
@@ -1100,6 +1082,43 @@ def process_candidates_tiled(
                 except Exception as exc:
                     failure = exc
                     break
+
+            if failure is None and len(pair_lines) == 2:
+                crest_line = next(
+                    (item for item in pair_lines if item["type"] == "CREST"),
+                    None,
+                )
+                toe_line = next(
+                    (item for item in pair_lines if item["type"] == "TOE"),
+                    None,
+                )
+                pair_quality = validate_edge_pair(
+                    np.asarray(crest_line["xyz"], dtype=np.float64),
+                    np.asarray(toe_line["xyz"], dtype=np.float64),
+                    expected_width_m=float(candidate.baseline_width_median),
+                    min_line_length_m=float(min_line_length_m),
+                )
+                if not bool(pair_quality.get("accepted")):
+                    failure = V2DetectionError(
+                        V2Reason.REFINEMENT_FAILED,
+                        (
+                            f"FACE_{face_id:06d}: stitching CRISTA/PÉ rejeitado "
+                            f"({pair_quality.get('reason')})."
+                        ),
+                    )
+                else:
+                    for line in pair_lines:
+                        line["pair_quality"] = pair_quality
+                        line["quality_score"] = float(
+                            np.clip(
+                                0.65 * float(line.get("quality_score", 0.0))
+                                + 0.35 * float(pair_quality.get("quality_score", 0.0)),
+                                0.0,
+                                0.995,
+                            )
+                        )
+                        line["confidence"] = line["quality_score"]
+                    stitch_meta["PAIR"] = pair_quality
 
             stitch_ms = float((perf_counter() - stitch_started) * 1000.0)
             add_stage_time(stage_seconds, "stitching", stitch_ms / 1000.0)
