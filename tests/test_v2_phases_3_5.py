@@ -196,10 +196,10 @@ def test_large_cloud_balanced_mode_limits_raw_tin_work():
         point_count=241_149_524,
     )
 
-    assert stats["attempt_limit"] == 60
-    assert len(attempted) == 60
-    assert len(skipped) == 120
-    assert stats["selection"] == "COHERENCE_PRIORITY"
+    assert stats["attempt_limit"] == 180
+    assert len(attempted) == 180
+    assert skipped == []
+    assert stats["selection"] == "ALL_PROFILE_EDGE"
 
 
 def test_tiled_engine_has_persistent_ground_and_fragment_caches():
