@@ -2088,15 +2088,59 @@
       payload.max_tin_points = 45000;
       payload.max_triangle_edge_m = 2.25;
       payload.graph_gap_m = 1.50;
-      payload.station_spacing_m = 1.00;
+      payload.station_spacing_m = Math.max(
+        0.25,
+        Math.min(
+          5.0,
+          Number(byId("lineVertexSpacing") ? byId("lineVertexSpacing").value : 1.0)
+        )
+      );
       payload.patch_along_m = 2.50;
       payload.patch_cross_m = 1.80;
     }
 
-    const result = await api(endpoint, {
-      method: "POST",
-      body: JSON.stringify(payload)
-    });
+    let result;
+    try {
+      result = await api(endpoint, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+    } catch (error) {
+      if (!useV2) throw error;
+
+      // A clicked RAW-TIN face is experimental. Never leave the operator with
+      // no usable line when the protected baseline can still solve the same
+      // local cloud sample (e.g. FACE_TOO_SMALL on sparse TIN support).
+      debugLog("terrain_face.v2_fallback_started", {
+        cloud_id: cloudId,
+        seed: [seed.x, seed.y, seed.z],
+        v2_error: error.message || String(error),
+        input_points: tile.points.length
+      }, "WARNING");
+
+      setStatus("V2 local rejeitada · a tentar baseline protegida…");
+      const baselinePayload = {
+        project_id: payload.project_id,
+        cloud_id: payload.cloud_id,
+        profile: payload.profile,
+        seed: payload.seed,
+        points: payload.points,
+        classifications: payload.classifications,
+        selected_classes: payload.selected_classes,
+        grid_resolution: payload.grid_resolution,
+        slope_low_deg: payload.slope_low_deg,
+        slope_high_deg: payload.slope_high_deg,
+        min_face_area_m2: payload.min_face_area_m2,
+        min_line_length_m: payload.min_line_length_m,
+        line_smooth_window: payload.line_smooth_window
+      };
+      result = await api("/api/feature-lines/terrain-face", {
+        method: "POST",
+        body: JSON.stringify(baselinePayload)
+      });
+      result.v2_fallback = true;
+      result.v2_fallback_reason = error.message || String(error);
+    }
 
     if (runId !== state.traceRunId) return;
 
@@ -2117,7 +2161,7 @@
 
     const engineLabel = result.engine === "v2"
       ? "V2 RAW-TIN-MST"
-      : "Baseline 1.1.7";
+      : (result.v2_fallback ? "Baseline 1.1.7 · fallback V2" : "Baseline 1.1.7");
     const geometryInfo = result.engine === "v2"
       ? (
           " · TIN " + Number(result.tin_points || 0).toLocaleString("pt-PT") +
