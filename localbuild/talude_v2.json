@@ -9,16 +9,16 @@
     {
       "id": "python",
       "name": "Python 3.12",
-      "command": "$v = python --version 2>&1; Write-Output $v; if ($v -notmatch 'Python 3\\.12\\.') { exit 1 }",
+      "command": "@lbm:python312",
       "required": true,
-      "hint": "Instalar Python 3.12 e adicionar ao PATH."
+      "hint": "O Local Build Manager gere automaticamente um Python 3.12 privado."
     },
     {
       "id": "git",
       "name": "Git",
-      "command": "git --version",
-      "required": true,
-      "hint": "Instalar Git for Windows."
+      "command": "if (Test-Path '.git') { git --version } else { Write-Output 'Git opcional: pasta ZIP sem .git; BUILD/TESTES funcionam sem Git'; exit 0 }",
+      "required": false,
+      "hint": "Opcional em pastas ZIP; necessário apenas para Git Pull/clones."
     }
   ],
   "pipelines": {
@@ -238,7 +238,7 @@
     ]
   },
   "release": {},
-  "config_revision": 11,
+  "config_revision": 12,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
@@ -250,5 +250,6 @@
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
     "value": "TALUDE_V2_BUILD_SOURCE_2026-09-28_R3"
-  }
+  },
+  "auto_bootstrap_python": true
 }
