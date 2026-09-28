@@ -572,6 +572,80 @@ def _jsonable_record(record: dict) -> dict:
     return out
 
 
+def _performance_candidate_score(candidate: GlobalFaceCandidate) -> tuple[float, float, int]:
+    """Rank faces for selective V2 refinement without changing baseline geometry.
+
+    Lower score is better. The score favours coherent, moderate-width faces
+    where RAW-TIN has the highest chance of improving the baseline rather than
+    wasting minutes on geometrically ambiguous faces that would later fallback.
+    """
+    crest_len = _line_length_2d(np.asarray(candidate.crest, dtype=np.float64))
+    toe_len = _line_length_2d(np.asarray(candidate.toe, dtype=np.float64))
+    length = max(crest_len, toe_len)
+    width = max(float(candidate.baseline_width_median), 0.10)
+    width_ratio = float(candidate.baseline_width_p90) / width
+    width_penalty = abs(width - 5.0) * 0.10
+    coherence_penalty = max(0.0, width_ratio - 1.0) * 3.0
+    length_penalty = max(0.0, length - 90.0) * 0.02
+    return (
+        float(coherence_penalty + width_penalty + length_penalty),
+        float(length),
+        int(candidate.face_id),
+    )
+
+
+def _partition_candidates_for_performance(
+    candidates: list[GlobalFaceCandidate],
+    *,
+    mode: str,
+    point_count: int | None,
+) -> tuple[list[GlobalFaceCandidate], list[GlobalFaceCandidate], dict]:
+    normalized = str(mode or "balanced").strip().lower()
+    if normalized not in {"fast", "balanced", "precise"}:
+        normalized = "balanced"
+
+    if normalized == "fast":
+        return [], list(candidates), {
+            "mode": normalized,
+            "attempt_limit": 0,
+            "attempted_faces": 0,
+            "skipped_faces": len(candidates),
+            "selection": "BASELINE_ONLY",
+        }
+
+    if normalized == "precise":
+        return list(candidates), [], {
+            "mode": normalized,
+            "attempt_limit": len(candidates),
+            "attempted_faces": len(candidates),
+            "skipped_faces": 0,
+            "selection": "ALL_FACES",
+        }
+
+    points = int(point_count or 0)
+    if points >= 150_000_000:
+        limit = 120
+    elif points >= 75_000_000:
+        limit = 160
+    elif points >= 30_000_000:
+        limit = 220
+    else:
+        limit = 300
+
+    ranked = sorted(candidates, key=_performance_candidate_score)
+    attempted = ranked[:limit]
+    attempted_ids = {int(item.face_id) for item in attempted}
+    skipped = [item for item in candidates if int(item.face_id) not in attempted_ids]
+    return attempted, skipped, {
+        "mode": normalized,
+        "attempt_limit": int(limit),
+        "attempted_faces": len(attempted),
+        "skipped_faces": len(skipped),
+        "selection": "COHERENCE_PRIORITY",
+        "point_count": points,
+    }
+
+
 def run_auto_global_v2(
     input_path: str | Path,
     output_dir: str | Path,
@@ -581,6 +655,7 @@ def run_auto_global_v2(
     progress: Callable[[float, str], None] | None = None,
     cancel_check: Callable[[], bool] | None = None,
     max_roi_points: int = 45_000,
+    performance_mode: str = "balanced",
 ) -> dict:
     """AUTO GLOBAL V2.
 
@@ -600,6 +675,10 @@ def run_auto_global_v2(
 
     cfg = baseline_config or ExtractConfig()
     v2_cfg = v2_config or V2Config()
+
+    mode = str(performance_mode or "balanced").strip().lower()
+    if mode not in {"fast", "balanced", "precise"}:
+        mode = "balanced"
 
     _check_cancel(cancel_check)
     if progress is not None:
@@ -630,12 +709,26 @@ def run_auto_global_v2(
     for line in baseline_lines:
         baseline_by_face.setdefault(int(line["face_id"]), {})[str(line["type"]).upper()] = line
 
+    source_info = (
+        inspect_point_cloud(source)
+        if source.suffix.lower() in {".las", ".laz"}
+        else None
+    )
+    refine_candidates, performance_skipped, performance_stats = (
+        _partition_candidates_for_performance(
+            candidates,
+            mode=mode,
+            point_count=(int(source_info.point_count) if source_info is not None else None),
+        )
+    )
+
     if progress is not None:
         progress(
             39.5,
             (
-                f"AUTO V2 · {len(candidates)} faces candidatas · "
-                "a recolher RAW Ground por ROI…"
+                f"AUTO V2 {mode.upper()} · {len(candidates)} faces · "
+                f"{len(refine_candidates)} para RAW-TIN · "
+                f"{len(performance_skipped)} baseline seguro"
             ),
         )
 
@@ -645,6 +738,25 @@ def run_auto_global_v2(
     v2_success = 0
     baseline_fallback = 0
     tiled_stats: dict | None = None
+
+    for candidate in performance_skipped:
+        final_lines.extend(_fallback_pair(candidate, baseline_by_face))
+        face_records.append(
+            {
+                "face_id": int(candidate.face_id),
+                "status": "BASELINE_PERFORMANCE_FALLBACK",
+                "reason": "PERFORMANCE_BASELINE",
+                "message": (
+                    "Face mantida na baseline pelo perfil de desempenho "
+                    f"{mode.upper()}."
+                ),
+                "corridor_radius_m": float(candidate.corridor_radius_m),
+            }
+        )
+        baseline_fallback += 1
+
+    if performance_skipped:
+        reason_counts["PERFORMANCE_BASELINE"] = len(performance_skipped)
 
     if not candidates:
         # Do not scan a 200M+ point cloud a second time when discovery found
@@ -670,23 +782,63 @@ def run_auto_global_v2(
             "crs_wkt": crs_wkt,
         }
 
+    elif mode == "fast":
+        # FAST intentionally stops after the proven global detector. It avoids
+        # the second 241M-point RAW scan and thousands of local Delaunay solves.
+        if source_info is not None:
+            crs_wkt = source_info.crs_wkt
+            points_total = int(source_info.point_count)
+        else:
+            cloud_info = load_point_cloud(source)
+            crs_wkt = cloud_info.crs_wkt
+            points_total = int(len(cloud_info.xyz))
+        roi_stats = {
+            "mode": "FAST_BASELINE_ONLY",
+            "points_total": points_total,
+            "points_selected": 0,
+            "points_routed_with_overlap": 0,
+            "roi_max_points_per_face": 0,
+            "roi_seen_total": 0,
+            "roi_kept_total": 0,
+            "spatial_index_cells": 0,
+            "spatial_tile_size_m": None,
+            "crs_wkt": crs_wkt,
+        }
+        tiled_stats = {
+            "mode": "FAST_BASELINE_ONLY",
+            "performance_mode": mode,
+            "candidate_faces": len(candidates),
+            "attempted_faces": 0,
+            "skipped_faces": len(performance_skipped),
+        }
+        if progress is not None:
+            progress(
+                96.0,
+                (
+                    f"AUTO V2 FAST · {len(candidates)} faces baseline prontas · "
+                    "sem segunda passagem RAW-TIN"
+                ),
+            )
+
     elif source.suffix.lower() in {".las", ".laz"}:
         # Phase 3: large clouds are processed as core tiles + halo. Ground is
         # streamed once to temporary tile spools, local RAW-TIN fragments are
         # solved independently, then deduplicated/stiched per baseline face.
         from .tiled_auto import process_candidates_tiled
 
-        info = inspect_point_cloud(source)
+        info = source_info or inspect_point_cloud(source)
         tiled_results, tiled_stats = process_candidates_tiled(
             source,
             cfg,
-            candidates,
+            refine_candidates,
             v2_cfg,
             output_debug_dir=debug_dir,
             min_line_length_m=cfg.min_line_length_m,
             progress=progress,
             cancel_check=cancel_check,
         )
+        tiled_stats = dict(tiled_stats or {})
+        tiled_stats["performance"] = performance_stats
         spool = dict((tiled_stats or {}).get("spool") or {})
         roi_stats = {
             "mode": "TILED_HALO_STITCH",
@@ -701,7 +853,7 @@ def run_auto_global_v2(
             "crs_wkt": info.crs_wkt,
         }
 
-        for index, candidate in enumerate(candidates, start=1):
+        for index, candidate in enumerate(refine_candidates, start=1):
             _check_cancel(cancel_check)
             face_id = int(candidate.face_id)
             item = tiled_results.get(face_id) or {
@@ -739,9 +891,9 @@ def run_auto_global_v2(
                 baseline_fallback += 1
 
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
-            if progress is not None and candidates:
+            if progress is not None and refine_candidates:
                 progress(
-                    88.0 + 8.0 * index / len(candidates),
+                    88.0 + 8.0 * index / len(refine_candidates),
                     (
                         f"AUTO V2 TILED · validar faces {index}/{len(candidates)} · "
                         f"V2 {v2_success} · fallback {baseline_fallback}"
@@ -754,13 +906,13 @@ def run_auto_global_v2(
         roi_points, roi_stats = _collect_roi_points_memory(
             source,
             cfg,
-            candidates,
+            refine_candidates,
             max_roi_points=max_roi_points,
             progress=progress,
             cancel_check=cancel_check,
         )
 
-        for index, (candidate, points) in enumerate(zip(candidates, roi_points), start=1):
+        for index, (candidate, points) in enumerate(zip(refine_candidates, roi_points), start=1):
             _check_cancel(cancel_check)
             try:
                 lines, record = refine_face_candidate_v2(
@@ -798,9 +950,9 @@ def run_auto_global_v2(
                 baseline_fallback += 1
 
             reason_counts[reason] = reason_counts.get(reason, 0) + 1
-            if progress is not None and candidates:
+            if progress is not None and refine_candidates:
                 progress(
-                    67.0 + 29.0 * index / len(candidates),
+                    67.0 + 29.0 * index / len(refine_candidates),
                     (
                         f"AUTO V2 · faces {index}/{len(candidates)} · "
                         f"V2 {v2_success} · fallback {baseline_fallback}"
@@ -845,6 +997,10 @@ def run_auto_global_v2(
         "faces_detected": int(faces_final),
         "baseline_faces_detected": int(baseline_report.get("faces_detected", 0)),
         "candidate_faces": int(len(candidates)),
+        "performance_mode": mode,
+        "v2_attempted_faces": int(len(refine_candidates)),
+        "performance_skipped_faces": int(len(performance_skipped)),
+        "performance": performance_stats,
         "v2_success_faces": int(v2_success),
         "baseline_fallback_faces": int(baseline_fallback),
         "unpaired_baseline_lines": int(len(unpaired)),
