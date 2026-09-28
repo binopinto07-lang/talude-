@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import shutil
@@ -162,6 +163,88 @@ def _source_tiles_needed(
                     continue
                 needed.add(jy * nx + jx)
     return needed
+
+
+def _persistent_spool_dir(
+    source: Path,
+    baseline_cfg: ExtractConfig,
+    *,
+    output_debug_dir: Path,
+    nx: int,
+    ny: int,
+    tile_size_m: float,
+    x0: float,
+    y0: float,
+) -> tuple[Path, dict]:
+    stat = source.stat()
+    payload = {
+        "source": str(source.resolve()),
+        "size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+        "baseline_filter": baseline_cfg.to_dict(),
+        "nx": int(nx),
+        "ny": int(ny),
+        "tile_size_m": round(float(tile_size_m), 6),
+        "x0": round(float(x0), 4),
+        "y0": round(float(y0), 4),
+        "format": "f64_xyz_v1",
+    }
+    digest = hashlib.sha1(
+        json.dumps(payload, sort_keys=True, ensure_ascii=True).encode("utf-8")
+    ).hexdigest()[:20]
+
+    # output_debug_dir = <project>/exports/<run>/debug
+    try:
+        project_root = output_debug_dir.parents[2]
+    except IndexError:
+        project_root = output_debug_dir.parent
+
+    cache_dir = project_root / "cache" / "v2_ground_tiles" / digest
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir, payload
+
+
+def _load_spool_manifest(spool_dir: Path) -> dict:
+    path = spool_dir / "manifest.json"
+    if not path.exists():
+        return {"complete_tiles": []}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(value, dict):
+            return {"complete_tiles": []}
+        return value
+    except Exception:
+        return {"complete_tiles": []}
+
+
+def _save_spool_manifest(spool_dir: Path, payload: dict) -> None:
+    path = spool_dir / "manifest.json"
+    tmp = spool_dir / "manifest.json.tmp"
+    tmp.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    tmp.replace(path)
+
+
+def _valid_cached_tile(spool_dir: Path, tile_id: int) -> bool:
+    path = spool_dir / f"tile_{int(tile_id):08d}.f64"
+    # An absent file can legitimately represent an empty Ground tile, but only
+    # when the manifest says the tile completed. Existing files must contain
+    # complete float64 XYZ triplets.
+    if not path.exists():
+        return True
+    size = int(path.stat().st_size)
+    return size % 24 == 0
+
+
+def _cached_point_count(spool_dir: Path, tile_ids: set[int]) -> int:
+    total = 0
+    for tile_id in tile_ids:
+        path = spool_dir / f"tile_{int(tile_id):08d}.f64"
+        if path.exists():
+            total += int(path.stat().st_size // 24)
+    return total
 
 
 def _spool_tiles(
@@ -514,9 +597,34 @@ def process_candidates_tiled(
         halo_m=halo,
     )
 
-    spool_dir = output_debug_dir / "_tile_spool"
-    if spool_dir.exists():
-        shutil.rmtree(spool_dir, ignore_errors=True)
+    spool_dir, cache_identity = _persistent_spool_dir(
+        source,
+        baseline_cfg,
+        output_debug_dir=output_debug_dir,
+        nx=nx,
+        ny=ny,
+        tile_size_m=tile_size,
+        x0=x0,
+        y0=y0,
+    )
+    manifest = _load_spool_manifest(spool_dir)
+    completed = {int(value) for value in manifest.get("complete_tiles", [])}
+    cached_tiles = {
+        tile_id
+        for tile_id in needed_tiles
+        if tile_id in completed and _valid_cached_tile(spool_dir, tile_id)
+    }
+    missing_tiles = set(needed_tiles) - cached_tiles
+
+    # Any non-complete tile can contain bytes from an interrupted previous
+    # scan. Delete it before rebuilding to avoid duplicate/partial Ground data.
+    for tile_id in missing_tiles:
+        stale = spool_dir / f"tile_{int(tile_id):08d}.f64"
+        if stale.exists():
+            try:
+                stale.unlink()
+            except OSError:
+                pass
 
     tile_records: list[dict] = []
     fragments: dict[int, dict[str, list[dict]]] = {
@@ -525,18 +633,54 @@ def process_candidates_tiled(
     }
 
     try:
-        spool_stats = _spool_tiles(
-            source,
-            baseline_cfg,
-            needed_tiles=needed_tiles,
-            spool_dir=spool_dir,
-            nx=nx,
-            ny=ny,
-            tile_size_m=tile_size,
-            x0=x0,
-            y0=y0,
-            progress=progress,
-            cancel_check=cancel_check,
+        if missing_tiles:
+            spool_stats = _spool_tiles(
+                source,
+                baseline_cfg,
+                needed_tiles=missing_tiles,
+                spool_dir=spool_dir,
+                nx=nx,
+                ny=ny,
+                tile_size_m=tile_size,
+                x0=x0,
+                y0=y0,
+                progress=progress,
+                cancel_check=cancel_check,
+            )
+            completed.update(missing_tiles)
+            _save_spool_manifest(
+                spool_dir,
+                {
+                    **cache_identity,
+                    "complete_tiles": sorted(completed),
+                },
+            )
+        else:
+            spool_stats = {
+                "raw_seen": 0,
+                "selected_seen": 0,
+                "spooled_points": 0,
+                "tiles_written": 0,
+            }
+            if progress is not None:
+                progress(
+                    62.0,
+                    (
+                        f"AUTO V2 TILED · cache Ground HIT · "
+                        f"{len(cached_tiles)}/{len(needed_tiles)} tiles"
+                    ),
+                )
+
+        cached_points = _cached_point_count(spool_dir, set(needed_tiles))
+        spool_stats.update(
+            {
+                "cache_enabled": True,
+                "cache_key": spool_dir.name,
+                "cache_hit_tiles": int(len(cached_tiles)),
+                "cache_miss_tiles": int(len(missing_tiles)),
+                "cached_points_available": int(cached_points),
+                "cache_dir": str(spool_dir),
+            }
         )
 
         total_jobs = max(1, len(jobs))
@@ -784,4 +928,12 @@ def process_candidates_tiled(
             "elapsed_s": float(perf_counter() - started),
         }
     finally:
-        shutil.rmtree(spool_dir, ignore_errors=True)
+        # Ground core tiles are a persistent cache keyed by source/config.
+        # Only transient manifest files are removed; completed tile data is
+        # intentionally kept so a second AUTO run avoids a full LAS scan.
+        tmp_manifest = spool_dir / "manifest.json.tmp"
+        if tmp_manifest.exists():
+            try:
+                tmp_manifest.unlink()
+            except OSError:
+                pass
