@@ -238,5 +238,11 @@
     ]
   },
   "release": {},
-  "config_revision": 8
+  "config_revision": 8,
+  "required_paths": [
+    "scripts/build_windows.py",
+    "studio/viewer/vector_editor.js",
+    "studio/backend/vector_export.py",
+    "localbuild/talude_v2.json"
+  ]
 }
