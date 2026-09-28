@@ -41,6 +41,10 @@ def select_features(
     doc = validate_vector_document(document)
     allowed_layers = {str(v) for v in layer_ids} if layer_ids else None
     allowed_features = {str(v) for v in feature_ids} if feature_ids else None
+    # Safe default: exporting the whole document must never leak unreviewed or
+    # rejected detection candidates into CAD/GIS deliverables.
+    if allowed_layers is None and allowed_features is None and not selected_only:
+        allowed_layers = {"CRISTA", "PE_TALUDE"}
     layer_visibility = {
         str(layer.get("id")): bool(layer.get("visible", True))
         for layer in doc.get("layers", [])
