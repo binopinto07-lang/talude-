@@ -15,7 +15,7 @@ from talude_v1.config import ExtractConfig
 from talude_v1.engine import _filter_stream_chunk
 from talude_v1.io import inspect_point_cloud, iter_point_chunks
 
-from .engine import V2Config, _resample_polyline
+from .engine import V2Config, _resample_polyline, boundary_reference_guard
 from .profiling import add_stage_time, build_performance_profile, merge_stage_times
 from .reasons import V2DetectionError, V2Reason
 
@@ -1047,6 +1047,26 @@ def process_candidates_tiled(
                         np.asarray(reference, dtype=np.float64),
                         v2_cfg,
                     )
+                    opposite_reference = (
+                        candidate.toe if kind == "CREST" else candidate.crest
+                    )
+                    edge_guard = boundary_reference_guard(
+                        xyz,
+                        np.asarray(reference, dtype=np.float64),
+                        np.asarray(opposite_reference, dtype=np.float64),
+                        candidate.baseline_width_median,
+                    )
+                    if not bool(edge_guard["accepted"]):
+                        raise V2DetectionError(
+                            V2Reason.REFINEMENT_FAILED,
+                            (
+                                f"FACE_{face_id:06d}: {kind} tiled saiu da aresta "
+                                f"(median={edge_guard['own_median_m']:.2f} m, "
+                                f"P95={edge_guard['own_p95_m']:.2f} m, "
+                                f"side={edge_guard['side_ratio_median']:.2f})."
+                            ),
+                        )
+                    meta = {**meta, "edge_guard": edge_guard}
                     length_2d = float(
                         np.linalg.norm(np.diff(xyz[:, :2], axis=0), axis=1).sum()
                     )
