@@ -19,7 +19,7 @@
         <div class="brand-mark">TL</div>
         <div>
           <div class="brand-title">TALUDE STUDIO</div>
-          <div class="brand-subtitle">V2 · AUTO + Editor vetorial 3D</div>
+          <div class="brand-subtitle">V2.1 · Layers + Navegação + Performance</div>
         </div>
       </header>
 
@@ -114,13 +114,22 @@
 
         <details class="talude-advanced">
           <summary>Parâmetros avançados</summary>
+          <div class="performance-profile">
+            <label>Perfil de processamento V2</label>
+            <select id="v2PerformanceMode">
+              <option value="fast">Rápido — baseline global, sem RAW-TIN massivo</option>
+              <option value="balanced" selected>Equilibrado — RAW-TIN seletivo + fallback</option>
+              <option value="precise">Preciso — RAW-TIN em todas as faces</option>
+            </select>
+            <div class="hint">Para nuvens grandes use Equilibrado. Preciso mantém o processamento integral por tiles.</div>
+          </div>
           <div class="talude-param-grid">
             <label>Cell size (m)<input id="cellSize" type="number" min="0" step="0.01" value="0"></label>
             <label>Slope LOW (°)<input id="slopeLow" type="number" min="0" step="1" value="0"></label>
             <label>Slope HIGH (°)<input id="slopeHigh" type="number" min="0" step="1" value="0"></label>
             <label>Área mín. (m²)<input id="minArea" type="number" min="0.1" step="0.5" value="4"></label>
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
-            <label>Suavização linha<input id="lineSmooth" type="number" min="3" max="51" step="2" value="11"></label>
+            <label>Espaçamento vértices (m)<input id="lineVertexSpacing" type="number" min="0.25" max="5" step="0.25" value="1.0"></label>
           </div>
           <div class="hint">Baseline 1.1.7 mantém o AUTO comprovado. Com V2 RAW TIN selecionado, DETETAR CRISTA + PÉ executa AUTO GLOBAL V2: descoberta 1.1.7 → ROI RAW Ground → TIN local → refinamento por face, com fallback seguro para não perder taludes.</div>
         </details>
@@ -139,19 +148,27 @@
         </div>
         <div id="taludeFeatureList" class="layer-list talude-feature-list"></div>
       </section>
-\n      <section class="card vector-editor-card">
-        <div class="section-title">LAYERS + EDITOR 3D</div>
+\n      <section class="card vector-editor-card qgis-layer-card">
+        <div class="section-title qgis-title-row">
+          <span>CAMADAS</span>
+          <span class="qgis-title-actions">QGIS STYLE</span>
+        </div>
 
-        <div class="vector-toolbar">
-          <button id="vectorRefresh">Atualizar</button>
-          <button id="vectorSave">Guardar</button>
+        <div class="qgis-layer-toolbar" title="Controlo de camadas">
+          <button id="layersShowAll" title="Mostrar todas">👁</button>
+          <button id="layersHideAll" title="Ocultar todas">◉</button>
+          <button id="layersSoloActive" title="Só layer ativa">S</button>
+          <button id="vectorRefresh" title="Atualizar árvore">↻</button>
+          <button id="vectorSave" title="Guardar">💾</button>
           <button id="vectorUndo" title="Undo">↶</button>
           <button id="vectorRedo" title="Redo">↷</button>
         </div>
 
-        <div id="vectorStatus" class="hint">Sem Vector Document carregado.</div>
-        <div id="vectorLayers" class="vector-layer-list"></div>
+        <div id="vectorStatus" class="hint qgis-status">Sem Vector Document carregado.</div>
+        <div id="vectorLayers" class="vector-layer-list qgis-layer-tree"></div>
 
+        <details class="vector-editor-details" open>
+          <summary>EDITOR 3D</summary>
         <label>Features</label>
         <div class="vector-filter-row">
           <select id="vectorLayerFilter">
@@ -187,6 +204,8 @@
           <button id="vectorCancelLine">Cancelar</button>
         </div>
 
+        </details>
+
         <details class="vector-project-tools">
           <summary>Projeto / recuperação / exportação</summary>
           <div class="vector-toolbar">
@@ -205,13 +224,10 @@
         </details>
       </section>
 
-      <section class="card grow">
-        <div class="section-title">CAMADAS</div>
-        <div id="cloudList" class="layer-list"></div>
-        <div id="featureList" class="layer-list"></div>
-      </section>
+      <div id="cloudList" class="hidden"></div>
+      <div id="featureList" class="hidden"></div>
 
-      <footer id="status">Baseline 1.1.7 protegida · V2 Fases 3–9.</footer>
+      <footer id="status">Baseline 1.1.7 protegida · V2.1 UX/Performance.</footer>
     </aside>
 
     <main class="viewport-shell">
@@ -230,19 +246,35 @@
           <button data-standard-view="left">ESQ</button>
           <button data-standard-view="right">DIR</button>
           <button data-standard-view="iso">ISO</button>
+          <button id="navProfileButton" class="nav-profile-button active" title="Alternar navegação">AGISOFT</button>
           <button id="panModeButton" class="pan-button">PAN</button>
         </div>
         <div class="nav-help" title="Navegação 3D">
-          <span>Rodar: arrastar esquerdo</span>
-          <span>PAN: direito / meio / botão PAN</span>
+          <span>Orbit: arrastar esquerdo</span>
+          <span>PAN: direito / meio / Shift+esquerdo</span>
+          <span>Pivot: duplo clique</span>
           <span>Zoom: roda</span>
-          <span>Picar face: clique curto</span>
         </div>
         <div id="pointStats">Potree · baseline 1.1.7 + V2 RAW-TIN-MST</div>
       </div>
 
       <div id="potree_render_area"></div>
       <div id="potree_sidebar_container" class="potree_container"></div>
+
+      <div id="viewCubeWidget" class="view-cube-widget" aria-label="Cubo de vistas CAD">
+        <div class="view-cube-scene">
+          <div id="viewCube" class="view-cube">
+            <button class="cube-face cube-front" data-cube-view="front">FRONT</button>
+            <button class="cube-face cube-back" data-cube-view="back">BACK</button>
+            <button class="cube-face cube-right" data-cube-view="right">RIGHT</button>
+            <button class="cube-face cube-left" data-cube-view="left">LEFT</button>
+            <button class="cube-face cube-top" data-cube-view="top">TOP</button>
+            <button class="cube-face cube-bottom" data-cube-view="bottom">BOTTOM</button>
+          </div>
+        </div>
+        <button class="cube-home" data-cube-view="iso" title="Vista isométrica">⌂ ISO</button>
+        <div class="cube-wcs">WCS</div>
+      </div>
 
       <div id="emptyState" class="empty-state">
         <div class="empty-icon">⌁</div>
