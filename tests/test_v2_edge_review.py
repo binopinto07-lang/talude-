@@ -79,10 +79,18 @@ def test_review_lines_are_separated_from_approved_breaklines():
     assert explicit_review[0]["layer_id"] == "PE_TALUDE_REVIEW"
 
 
-def test_profile_edge_cache_version_invalidates_old_raw_tin_fragments():
-    source = Path("src/talude_v2/tiled_auto.py").read_text(encoding="utf-8")
-    assert "v2_fragment_cache_v2_profile_edge" in source
-    assert '"v2_fragment_cache_v1"' not in source
+def test_failed_faces_do_not_publish_baseline_review_geometry():
+    source = Path("src/talude_v2/global_auto.py").read_text(encoding="utf-8")
+    assert '"review_geometry": False' in source
+    assert "STREAM_FACE_GLOBAL" in source
+    assert "process_candidates_tiled(" not in source
+
+
+def test_face_and_edge_seeds_are_decoupled():
+    source = Path("core/terrain_face.py").read_text(encoding="utf-8")
+    assert "face_seed_xyz=None" in source
+    assert "face_seed_cell" in source
+    assert "edge_seed_cell" in source
 
 
 def test_windows_builder_packages_profile_edge_engine():
