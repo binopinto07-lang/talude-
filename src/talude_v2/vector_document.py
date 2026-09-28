@@ -44,6 +44,30 @@ DEFAULT_LAYERS = (
         "locked": True,
         "role": "diagnostics",
     },
+    {
+        "id": "CRISTA_REVIEW",
+        "name": "CRISTA · REVISÃO",
+        "geometry_type": "LineStringZ",
+        "visible": False,
+        "locked": False,
+        "role": "review_crest",
+    },
+    {
+        "id": "PE_TALUDE_REVIEW",
+        "name": "PÉ · REVISÃO",
+        "geometry_type": "LineStringZ",
+        "visible": False,
+        "locked": False,
+        "role": "review_toe",
+    },
+    {
+        "id": "FACES_REJEITADAS",
+        "name": "REJEITADAS",
+        "geometry_type": "LineStringZ",
+        "visible": False,
+        "locked": False,
+        "role": "review_rejected",
+    },
 )
 
 
@@ -63,8 +87,17 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
-def _layer_for_type(feature_type: str) -> str:
+def _layer_for_line(line: dict[str, Any], feature_type: str) -> str:
     kind = str(feature_type or "").upper()
+    review_state = str(
+        line.get("review_state")
+        or line.get("status")
+        or ""
+    ).upper()
+    if review_state in {"REJECTED", "REJEITADA", "REJEITADO"}:
+        return "FACES_REJEITADAS"
+    if review_state in {"PENDING", "REVIEW_REQUIRED", "BASELINE_FALLBACK"}:
+        return "CRISTA_REVIEW" if kind == "CREST" else "PE_TALUDE_REVIEW"
     return "CRISTA" if kind == "CREST" else "PE_TALUDE"
 
 
@@ -96,7 +129,7 @@ def feature_from_line(line: dict[str, Any], index: int) -> dict[str, Any]:
 
     return {
         "id": _feature_id(line, index),
-        "layer_id": _layer_for_type(kind),
+        "layer_id": _layer_for_line(props, kind),
         "geometry": {
             "type": "LineString",
             "coordinates": _jsonable(coords[:, :3]),
@@ -188,9 +221,18 @@ def validate_vector_document(document: dict[str, Any]) -> dict[str, Any]:
             document["layers"].append(copy.deepcopy(default_layer))
             layer_ids.add(layer_id)
 
-    if not {"CRISTA", "PE_TALUDE", "FACES", "DEBUG"}.issubset(layer_ids):
+    required_layers = {
+        "CRISTA",
+        "PE_TALUDE",
+        "FACES",
+        "DEBUG",
+        "CRISTA_REVIEW",
+        "PE_TALUDE_REVIEW",
+        "FACES_REJEITADAS",
+    }
+    if not required_layers.issubset(layer_ids):
         raise ValueError(
-            "Vector document precisa das layers CRISTA, PE_TALUDE, FACES e DEBUG."
+            "Vector document sem o conjunto obrigatório de layers V2/revisão."
         )
 
     seen: set[str] = set()
