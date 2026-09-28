@@ -83,7 +83,7 @@ def test_priority_reservoir_is_bounded_and_counts_all_seen_points():
     assert float(np.max(reservoir.array()[:, 0])) > 1000.0
 
 
-def test_auto_global_face_refinement_uses_raw_tin_and_returns_pair():
+def test_auto_global_face_refinement_uses_profile_edges_and_returns_pair():
     raw = _synthetic_bench()
     crest, toe = _baseline_pair()
     candidate = _normalize_face_pair(
@@ -109,8 +109,17 @@ def test_auto_global_face_refinement_uses_raw_tin_and_returns_pair():
     assert record["reason"] == "SUCCESS"
     assert len(lines) == 2
     assert {line["type"] for line in lines} == {"CREST", "TOE"}
-    assert all(line["source"] == "V2_RAW_TIN" for line in lines)
+    assert all(line["source"] == "V2_PROFILE_EDGE" for line in lines)
+    assert all(line["status"] == "AUTO_VALIDATED" for line in lines)
+    assert all(line["review_state"] == "APPROVED_AUTO" for line in lines)
     assert all(line["length_m"] > 10.0 for line in lines)
+
+    by_type = {line["type"]: np.asarray(line["xyz"]) for line in lines}
+    assert np.median(np.abs(by_type["CREST"][:, 0] - 10.0)) < 0.9
+    assert np.median(np.abs(by_type["TOE"][:, 0] - 15.0)) < 0.9
+    assert np.median(by_type["CREST"][:, 2]) > np.median(by_type["TOE"][:, 2]) + 3.0
+    assert record["detector"] == "PROFILE_EDGE_FLAT_FACE_FLAT"
+    assert record["geometry"]["accepted"] is True
 
 
 def test_edge_guard_accepts_real_edge_and_rejects_face_centre():
