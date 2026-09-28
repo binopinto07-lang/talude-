@@ -11,7 +11,7 @@ def test_v2_api_is_isolated_from_baseline_and_has_global_auto():
     assert "start_auto_extract_v2" in server
     assert "extract_terrain_face_from_points" in server
     assert "extract_face_raw_tin" in server
-    assert 'APP_VERSION = "2.2.0-qgis-agisoft-cache"' in server
+    assert 'APP_VERSION = "2.4.0-profile-edge-review"' in server
 
 
 def test_v2_viewer_can_switch_global_and_clicked_engines():
@@ -42,7 +42,9 @@ def test_v2_global_auto_has_progress_cancel_and_regression_fallback():
     assert "BASELINE_1_1_7_FALLBACK" in engine
     assert "_collect_roi_points_stream" in engine
     assert "_PriorityReservoir" in engine
-    assert "extract_face_raw_tin" in engine
+    assert "extract_profile_edge_pair" in engine
+    assert "talude_review.geojson" in engine
+    assert "REVIEW_REQUIRED" in engine
     assert "reason_counts" in engine
     assert "v2_success_faces" in engine
     assert "baseline_fallback_faces" in engine
@@ -106,6 +108,9 @@ def test_v2_phases_6_to_9_are_wired_end_to_end():
     build = Path("scripts/build_windows.py").read_text(encoding="utf-8")
 
     assert '"FACES"' in vector and '"DEBUG"' in vector
+    assert '"CRISTA_REVIEW"' in vector
+    assert '"PE_TALUDE_REVIEW"' in vector
+    assert '"FACES_REJEITADAS"' in vector
     assert "save_active_document" in backend
     assert "recover_revision" in backend
     assert "export_shapefiles" in export
@@ -118,6 +123,8 @@ def test_v2_phases_6_to_9_are_wired_end_to_end():
     assert "vectorInsertVertex" in js
     assert "vectorDeleteVertex" in js
     assert "vectorDeleteLine" in js
+    assert "approveSelectedFace" in js
+    assert "rejectSelectedFace" in js
     assert "TaludeStudioBuild" in build
 
 
