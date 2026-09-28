@@ -23,7 +23,7 @@ from talude_v1.io import (
     save_vertices_csv,
 )
 
-from .engine import V2Config, _resample_polyline, extract_face_raw_tin
+from .engine import V2Config, _resample_polyline, boundary_reference_guard, extract_face_raw_tin
 from .profiling import add_stage_time, build_performance_profile, merge_stage_times
 from .reasons import V2DetectionError, V2Reason
 
@@ -495,19 +495,26 @@ def refine_face_candidate_v2(
             )
 
         metrics = _agreement(xyz, baseline_xyz)
-        agreement[kind] = metrics
+        opposite_xyz = candidate.toe if kind == "CREST" else candidate.crest
+        edge_guard = boundary_reference_guard(
+            xyz,
+            baseline_xyz,
+            opposite_xyz,
+            candidate.baseline_width_median,
+        )
+        agreement[kind] = {**metrics, "edge_guard": edge_guard}
 
-        # Regression guard: V2 may improve the exact edge location, but it may
-        # not silently jump to a neighbouring terrace/talude.
-        median_limit = max(2.50, candidate.corridor_radius_m * 0.32)
-        p95_limit = max(5.00, candidate.corridor_radius_m * 0.58)
-        if metrics["median_m"] > median_limit or metrics["p95_m"] > p95_limit:
+        # Strong regression guard: a refined CRISTA/PÉ must remain on its own
+        # side of the face. A line that drifts towards the centre is rejected
+        # immediately and the protected 1.1.7 geometry is used as fallback.
+        if not bool(edge_guard["accepted"]):
             raise V2DetectionError(
                 V2Reason.REFINEMENT_FAILED,
                 (
-                    f"FACE_{candidate.face_id:06d}: {kind} divergiu da região "
-                    f"baseline (median={metrics['median_m']:.2f} m, "
-                    f"P95={metrics['p95_m']:.2f} m)."
+                    f"FACE_{candidate.face_id:06d}: {kind} saiu da aresta "
+                    f"(median={edge_guard['own_median_m']:.2f} m, "
+                    f"P95={edge_guard['own_p95_m']:.2f} m, "
+                    f"side={edge_guard['side_ratio_median']:.2f})."
                 ),
             )
 
