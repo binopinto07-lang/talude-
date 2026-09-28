@@ -565,6 +565,66 @@ def _resample_polyline(xyz: np.ndarray, spacing: float) -> np.ndarray:
     )
 
 
+def boundary_reference_guard(
+    xyz: np.ndarray,
+    own_reference: np.ndarray,
+    opposite_reference: np.ndarray,
+    face_width_m: float,
+) -> dict[str, float | bool]:
+    """Reject a crest/toe refinement that drifts into the slope face.
+
+    The V2 RAW-TIN result may refine an edge, but it must remain clearly closer
+    to its own protected baseline boundary than to the opposite boundary.
+    This is intentionally cheap so it also validates cached tiled fragments.
+    """
+    pts = np.asarray(xyz, dtype=np.float64)
+    own = np.asarray(own_reference, dtype=np.float64)
+    opposite = np.asarray(opposite_reference, dtype=np.float64)
+    if len(pts) < 2 or len(own) < 2 or len(opposite) < 2:
+        return {
+            "accepted": False,
+            "own_median_m": float("inf"),
+            "own_p95_m": float("inf"),
+            "side_ratio_median": 1.0,
+            "side_ratio_p95": 1.0,
+            "median_limit_m": 0.0,
+            "p95_limit_m": 0.0,
+        }
+
+    own_tree = cKDTree(own[:, :2])
+    opposite_tree = cKDTree(opposite[:, :2])
+    own_dist, _ = own_tree.query(pts[:, :2], k=1)
+    opposite_dist, _ = opposite_tree.query(pts[:, :2], k=1)
+    own_dist = np.asarray(own_dist, dtype=np.float64)
+    opposite_dist = np.asarray(opposite_dist, dtype=np.float64)
+
+    width = max(float(face_width_m), 0.50)
+    median_limit = float(np.clip(width * 0.20, 0.45, 1.75))
+    p95_limit = float(np.clip(width * 0.35, 0.90, 3.00))
+    side_ratio = own_dist / np.maximum(own_dist + opposite_dist, 1e-9)
+
+    own_median = float(np.median(own_dist))
+    own_p95 = float(np.percentile(own_dist, 95.0))
+    ratio_median = float(np.median(side_ratio))
+    ratio_p95 = float(np.percentile(side_ratio, 95.0))
+
+    accepted = bool(
+        own_median <= median_limit
+        and own_p95 <= p95_limit
+        and ratio_median <= 0.38
+        and ratio_p95 <= 0.58
+    )
+    return {
+        "accepted": accepted,
+        "own_median_m": own_median,
+        "own_p95_m": own_p95,
+        "side_ratio_median": ratio_median,
+        "side_ratio_p95": ratio_p95,
+        "median_limit_m": median_limit,
+        "p95_limit_m": p95_limit,
+    }
+
+
 def _robust_plane(
     points: np.ndarray,
     min_points: int,
