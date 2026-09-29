@@ -124,9 +124,14 @@ def test_face_and_edge_seeds_are_decoupled():
     assert "_extract_face_centered_edges" in edge
     assert "_component_lines(" not in edge
     assert "detect_faces(" not in edge
+    active = edge.split("def extract_profile_edge_pair(", 1)[1]
+    assert "extract_section_edge_pair(" in active
+    assert "_extract_face_centered_edges(" not in active
+    assert '"detector": "SECTION_PROFILE_THREE_PLANE_TRACKER"' in active
 
 
 def test_windows_builder_packages_profile_edge_engine():
     source = Path("scripts/build_windows.py").read_text(encoding="utf-8")
     assert '"talude_v2.edge_profile"' in source
+    assert '"talude_v2.section_edge_tracker"' in source
     assert '"core.terrain_face"' in source
