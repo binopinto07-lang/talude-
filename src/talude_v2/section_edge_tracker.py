@@ -573,8 +573,27 @@ def extract_section_edge_pair(
             "Tracking transversal produziu uma breakline demasiado curta."
         )
 
+    seed_to_face_distance_m = 0.0
+    seed_xyz = getattr(candidate, "seed_xyz", None)
+    if seed_xyz is not None and len(crest) and len(toe):
+        seed = np.asarray(seed_xyz, dtype=np.float64)
+        if seed.shape == (3,) and np.all(np.isfinite(seed)):
+            centerline = 0.5 * (crest + toe)
+            seed_to_face_distance_m = float(
+                np.min(
+                    np.linalg.norm(
+                        centerline[:, :2] - seed[:2][None, :],
+                        axis=1,
+                    )
+                )
+            )
+
     return crest, toe, {
         "source": "CROSS_SECTION_THREE_PLANE_TRACKER",
+        # Compatibility/diagnostic field retained for global-auto reports and
+        # older V2 contracts. It measures XY distance from the discovery seed
+        # to the detected face centreline; it never positions the final edge.
+        "seed_to_face_distance_m": float(seed_to_face_distance_m),
         "stations_total": int(len(frames)),
         "stations_accepted": int(len(ordered)),
         "coverage_ratio": float(coverage),
