@@ -10,6 +10,7 @@ from scipy.spatial import cKDTree
 from core.terrain_face import extract_terrain_face_edge
 
 from .reasons import V2DetectionError, V2Reason
+from .section_edge_tracker import extract_section_edge_pair
 
 
 def _line_length_2d(xyz: np.ndarray) -> float:
@@ -420,39 +421,48 @@ def extract_profile_edge_pair(
     *,
     min_line_length_m: float,
     grid_resolution_m: float = 0.20,
+    station_spacing_m: float = 1.00,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Extract real upper/lower slope breaks using cross-slope terrain profiles."""
+    """Extract physical crest/toe from tracked transverse terrain sections."""
     started = perf_counter()
     raw = np.asarray(raw_points, dtype=np.float64)
-    raw = raw[np.all(np.isfinite(raw[:, :3]), axis=1)] if raw.ndim == 2 else raw
+    raw = (
+        raw[np.all(np.isfinite(raw[:, :3]), axis=1)]
+        if raw.ndim == 2
+        else raw
+    )
     if raw.ndim != 2 or raw.shape[1] < 3 or len(raw) < 500:
         raise V2DetectionError(
             V2Reason.LOW_GROUND_SUPPORT,
             f"FACE_{int(candidate.face_id):06d}: poucos pontos Ground para perfil geométrico.",
         )
 
-    resolution = float(np.clip(grid_resolution_m, 0.16, 0.30))
+    profile_bin = float(np.clip(grid_resolution_m, 0.14, 0.30))
     try:
-        crest_result, toe_result, local_face = _extract_face_centered_edges(
+        crest, toe, tracker = extract_section_edge_pair(
             raw,
             candidate,
-            resolution=resolution,
+            station_spacing_m=float(station_spacing_m),
+            profile_bin_m=profile_bin,
+            min_line_length_m=float(min_line_length_m),
         )
     except Exception as exc:
         raise V2DetectionError(
-            V2Reason.NO_FACE,
-            f"FACE_{int(candidate.face_id):06d}: descoberta local da face falhou: {exc}",
+            V2Reason.REFINEMENT_FAILED,
+            (
+                f"FACE_{int(candidate.face_id):06d}: tracking transversal "
+                f"plano→face→plano falhou: {exc}"
+            ),
         ) from exc
 
-    # Baseline geometry is used only to orient the output consistently and to
-    # identify obvious endpoint closure tails. It does not seed or position the
-    # detected edge.
+    # The discovery pair may define longitudinal orientation, but never the
+    # physical XY/Z position of the published crest/toe.
     crest = _orient_like_reference(
-        np.asarray(crest_result.vertices, dtype=np.float64),
+        np.asarray(crest, dtype=np.float64),
         np.asarray(candidate.crest, dtype=np.float64),
     )
     toe = _orient_like_reference(
-        np.asarray(toe_result.vertices, dtype=np.float64),
+        np.asarray(toe, dtype=np.float64),
         np.asarray(candidate.toe, dtype=np.float64),
     )
     crest = _trim_endpoint_hooks(
@@ -489,18 +499,37 @@ def extract_profile_edge_pair(
             ),
         )
 
+    coverage = float(tracker.get("coverage_ratio", 0.0))
+    residual = float(tracker.get("median_rmse_m", profile_bin))
     detector_quality = float(
         np.clip(
-            0.5 * float(crest_result.confidence)
-            + 0.5 * float(toe_result.confidence),
+            0.62 * coverage
+            + 0.38 * math.exp(-residual / max(profile_bin, 0.08)),
             0.0,
             1.0,
         )
     )
     pair_quality = float(geometry.get("quality_score", 0.0))
-    quality = float(np.clip(0.58 * detector_quality + 0.42 * pair_quality, 0.0, 0.995))
+    quality = float(
+        np.clip(
+            0.55 * detector_quality + 0.45 * pair_quality,
+            0.0,
+            0.995,
+        )
+    )
+    median_width = max(
+        float(tracker.get("median_width_m", local_width)),
+        1e-6,
+    )
+    median_relief = max(
+        float(tracker.get("median_relief_m", 0.0)),
+        0.0,
+    )
+    face_slope_deg = float(
+        math.degrees(math.atan2(median_relief, median_width))
+    )
 
-    def payload(kind: str, xyz: np.ndarray, edge_result) -> dict[str, Any]:
+    def payload(kind: str, xyz: np.ndarray) -> dict[str, Any]:
         length_2d = _line_length_2d(xyz)
         length_3d = float(
             np.linalg.norm(np.diff(xyz[:, :3], axis=0), axis=1).sum()
@@ -516,45 +545,48 @@ def extract_profile_edge_pair(
             "length_3d_m": length_3d,
             "confidence": quality,
             "quality_score": quality,
+            # Keep the public source contract stable for Vector Document/UI.
             "source": "V2_PROFILE_EDGE",
             "status": "AUTO_VALIDATED",
             "review_state": "APPROVED_AUTO",
-            "edge_profile": "ridge" if kind == "CREST" else "toe",
-            "edge_confidence": float(edge_result.confidence),
-            "edge_snap_ratio": float(edge_result.snap_ratio),
-            "edge_refinement_ratio": float(edge_result.refinement_ratio),
-            "edge_face_slope_deg": float(edge_result.face_slope_deg),
-            "edge_grid_resolution_m": float(edge_result.grid_resolution),
+            "edge_profile": "three-plane-cross-section",
+            "edge_confidence": detector_quality,
+            "edge_snap_ratio": coverage,
+            "edge_refinement_ratio": coverage,
+            "edge_face_slope_deg": face_slope_deg,
+            "edge_grid_resolution_m": float(
+                tracker.get("profile_bin_m", profile_bin)
+            ),
         }
 
     elapsed = float(perf_counter() - started)
     lines = [
-        payload("CREST", crest, crest_result),
-        payload("TOE", toe, toe_result),
+        payload("CREST", crest),
+        payload("TOE", toe),
     ]
     return lines, {
         "face_id": int(candidate.face_id),
         "status": "SUCCESS",
         "reason": V2Reason.SUCCESS.value,
-        "detector": "PROFILE_EDGE_FLAT_FACE_FLAT",
+        "detector": "SECTION_PROFILE_THREE_PLANE_TRACKER",
         "roi_points": int(len(raw)),
         "geometry": geometry,
-        "local_face": local_face,
+        "local_face": tracker,
         "local_width_median_m": float(local_width),
         "crest_agreement": crest_agreement,
         "toe_agreement": toe_agreement,
         "crest": {
-            "confidence": float(crest_result.confidence),
-            "snap_ratio": float(crest_result.snap_ratio),
-            "refinement_ratio": float(crest_result.refinement_ratio),
-            "face_slope_deg": float(crest_result.face_slope_deg),
+            "confidence": detector_quality,
+            "snap_ratio": coverage,
+            "refinement_ratio": coverage,
+            "face_slope_deg": face_slope_deg,
             "vertices": int(len(crest)),
         },
         "toe": {
-            "confidence": float(toe_result.confidence),
-            "snap_ratio": float(toe_result.snap_ratio),
-            "refinement_ratio": float(toe_result.refinement_ratio),
-            "face_slope_deg": float(toe_result.face_slope_deg),
+            "confidence": detector_quality,
+            "snap_ratio": coverage,
+            "refinement_ratio": coverage,
+            "face_slope_deg": face_slope_deg,
             "vertices": int(len(toe)),
         },
         "v2_metrics": {
@@ -564,6 +596,10 @@ def extract_profile_edge_pair(
             "local_width_median_m": float(local_width),
             "crest_agreement_p95_m": crest_agreement.get("p95_m"),
             "toe_agreement_p95_m": toe_agreement.get("p95_m"),
+            "section_coverage_ratio": coverage,
+            "section_median_rmse_m": residual,
+            "section_stations_total": tracker.get("stations_total"),
+            "section_stations_accepted": tracker.get("stations_accepted"),
         },
         "v2_timing_s": {"refinement": elapsed},
         "elapsed_s": elapsed,

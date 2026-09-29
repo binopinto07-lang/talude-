@@ -480,6 +480,7 @@ def refine_face_candidate_v2(
         candidate,
         min_line_length_m=float(min_line_length_m),
         grid_resolution_m=resolution,
+        station_spacing_m=float(v2_config.station_spacing_m),
     )
     record["corridor_radius_m"] = float(candidate.corridor_radius_m)
     record["baseline_width_median"] = float(candidate.baseline_width_median)
