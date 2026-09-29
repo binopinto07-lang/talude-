@@ -118,7 +118,8 @@ def test_auto_global_face_refinement_uses_profile_edges_and_returns_pair():
     assert np.median(np.abs(by_type["CREST"][:, 0] - 10.0)) < 0.9
     assert np.median(np.abs(by_type["TOE"][:, 0] - 15.0)) < 0.9
     assert np.median(by_type["CREST"][:, 2]) > np.median(by_type["TOE"][:, 2]) + 3.0
-    assert record["detector"] == "SECTION_PROFILE_THREE_PLANE_TRACKER"\n    assert record["local_face"]["source"] == "CROSS_SECTION_THREE_PLANE_TRACKER"
+    assert record["detector"] == "SECTION_PROFILE_THREE_PLANE_TRACKER"
+    assert record["local_face"]["source"] == "CROSS_SECTION_THREE_PLANE_TRACKER"
     assert record["geometry"]["accepted"] is True
 
 
