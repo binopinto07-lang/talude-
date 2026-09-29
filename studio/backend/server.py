@@ -27,7 +27,7 @@ from .vector_export import export_vector_document
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
-APP_VERSION = "2.4.2-face-centred-edge-lock"
+APP_VERSION = "2.5.0-section-three-plane-tracker"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
