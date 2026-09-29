@@ -1,6 +1,6 @@
 {
   "id": "talude_v2",
-  "name": "Talude Studio V2.6.0 — Adaptive Plane Edge Snap",
+  "name": "Talude Studio V2.6.1 — Metadata Contract Hotfix",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
@@ -238,7 +238,7 @@
     ]
   },
   "release": {},
-  "config_revision": 17,
+  "config_revision": 18,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
@@ -253,7 +253,7 @@
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-29_R8"
+    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-29_R9"
   },
   "auto_bootstrap_python": true
 }
