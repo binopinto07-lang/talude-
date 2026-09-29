@@ -11,6 +11,7 @@ from core.terrain_face import extract_terrain_face_edge
 
 from .reasons import V2DetectionError, V2Reason
 from .section_edge_tracker import extract_section_edge_pair
+from .plane_edge_snap import snap_edge_pair_to_local_planes
 
 
 def _line_length_2d(xyz: np.ndarray) -> float:
@@ -455,24 +456,47 @@ def extract_profile_edge_pair(
             ),
         ) from exc
 
-    # The discovery pair may define longitudinal orientation, but never the
-    # physical XY/Z position of the published crest/toe.
-    crest = _orient_like_reference(
+    # The section tracker owns the geometry. Local-plane snapping is only a
+    # refinement; any instability falls back to the section result unchanged.
+    section_crest = _orient_like_reference(
         np.asarray(crest, dtype=np.float64),
         np.asarray(candidate.crest, dtype=np.float64),
     )
-    toe = _orient_like_reference(
+    section_toe = _orient_like_reference(
         np.asarray(toe, dtype=np.float64),
         np.asarray(candidate.toe, dtype=np.float64),
     )
-    crest = _trim_endpoint_hooks(
-        crest,
-        np.asarray(candidate.crest, dtype=np.float64),
-    )
-    toe = _trim_endpoint_hooks(
-        toe,
-        np.asarray(candidate.toe, dtype=np.float64),
-    )
+    crest = section_crest
+    toe = section_toe
+    edge_snap: dict[str, Any] = {
+        "source": "SECTION_TRACKER_FALLBACK",
+        "applied": False,
+    }
+    try:
+        snapped_crest, snapped_toe, edge_snap = (
+            snap_edge_pair_to_local_planes(
+                raw,
+                section_crest,
+                section_toe,
+            )
+        )
+        crest = _orient_like_reference(
+            snapped_crest,
+            section_crest,
+        )
+        toe = _orient_like_reference(
+            snapped_toe,
+            section_toe,
+        )
+    except Exception as snap_exc:
+        edge_snap = {
+            "source": "SECTION_TRACKER_FALLBACK",
+            "applied": False,
+            "reason": f"{type(snap_exc).__name__}: {snap_exc}",
+        }
+
+    crest = _trim_endpoint_hooks(crest, section_crest)
+    toe = _trim_endpoint_hooks(toe, section_toe)
 
     local_width = _pair_width_median(crest, toe)
     crest_agreement = _reference_agreement(
@@ -549,9 +573,15 @@ def extract_profile_edge_pair(
             "source": "V2_PROFILE_EDGE",
             "status": "AUTO_VALIDATED",
             "review_state": "APPROVED_AUTO",
-            "edge_profile": "three-plane-cross-section",
+            "edge_profile": (
+                "three-plane-cross-section+local-plane-snap"
+                if bool(edge_snap.get("applied"))
+                else "three-plane-cross-section"
+            ),
             "edge_confidence": detector_quality,
-            "edge_snap_ratio": coverage,
+            "edge_snap_ratio": float(
+                edge_snap.get("coverage_ratio", coverage)
+            ),
             "edge_refinement_ratio": coverage,
             "edge_face_slope_deg": face_slope_deg,
             "edge_grid_resolution_m": float(
@@ -572,6 +602,7 @@ def extract_profile_edge_pair(
         "roi_points": int(len(raw)),
         "geometry": geometry,
         "local_face": tracker,
+        "edge_snap": edge_snap,
         "local_width_median_m": float(local_width),
         "crest_agreement": crest_agreement,
         "toe_agreement": toe_agreement,
@@ -600,6 +631,11 @@ def extract_profile_edge_pair(
             "section_median_rmse_m": residual,
             "section_stations_total": tracker.get("stations_total"),
             "section_stations_accepted": tracker.get("stations_accepted"),
+            "plane_snap_applied": bool(edge_snap.get("applied")),
+            "plane_snap_coverage_ratio": edge_snap.get("coverage_ratio"),
+            "plane_snap_mean_distance_m": edge_snap.get("mean_distance_m"),
+            "plane_snap_search_radius_m": edge_snap.get("search_radius_m"),
+            "plane_snap_rmse_m": edge_snap.get("median_plane_rmse_m"),
         },
         "v2_timing_s": {"refinement": elapsed},
         "elapsed_s": elapsed,
