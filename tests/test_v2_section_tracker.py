@@ -51,6 +51,8 @@ def test_section_tracker_locks_onto_true_flat_face_flat_intersections():
     assert abs(float(np.median(found_toe[:, 0])) - 15.0) < 0.15
     assert meta["coverage_ratio"] > 0.8
     assert meta["source"] == "CROSS_SECTION_THREE_PLANE_TRACKER"
+    assert "seed_to_face_distance_m" in meta
+    assert meta["seed_to_face_distance_m"] >= 0.0
 
 
 def test_section_tracker_does_not_follow_shifted_discovery_baseline():
