@@ -120,6 +120,11 @@ def test_auto_global_face_refinement_uses_profile_edges_and_returns_pair():
     assert np.median(by_type["CREST"][:, 2]) > np.median(by_type["TOE"][:, 2]) + 3.0
     assert record["detector"] == "SECTION_PROFILE_THREE_PLANE_TRACKER"
     assert record["local_face"]["source"] == "CROSS_SECTION_THREE_PLANE_TRACKER"
+    assert "edge_snap" in record
+    assert record["edge_snap"]["source"] in {
+        "ADAPTIVE_LOCAL_PLANE_SNAP",
+        "SECTION_TRACKER_FALLBACK",
+    }
     assert record["geometry"]["accepted"] is True
 
 
