@@ -215,6 +215,87 @@ def _single_edge_candidate(
     return best[1] if best is not None else None
 
 
+def _pair_edge_has_local_support(
+    local_points: np.ndarray,
+    origin_xyz: np.ndarray,
+    tangent: np.ndarray,
+    across: np.ndarray,
+    *,
+    pair_lateral: float,
+    kind: str,
+    half_width_m: float,
+    gate_m: float,
+    cfg: SectionTrackConfig,
+) -> bool:
+    """Require current-station cloud support before accepting a pair edge.
+
+    Pair fitting uses a transverse strip around the station and can otherwise
+    borrow points from the previous longitudinal station when one bench becomes
+    occluded.  This guard keeps the existing pair geometry, but only when an
+    independent edge fit agrees with it and real points exist on both sides of
+    the break close to the current/forward station.
+    """
+    validation_gate = min(
+        float(gate_m),
+        max(0.75, float(cfg.profile_bin_m) * 4.0),
+    )
+    witness = _single_edge_candidate(
+        local_points,
+        origin_xyz,
+        tangent,
+        across,
+        predicted_lateral=float(pair_lateral),
+        kind=kind,
+        half_width_m=half_width_m,
+        gate_m=validation_gate,
+        cfg=cfg,
+    )
+    if witness is None:
+        return False
+    if abs(float(witness["lateral"]) - float(pair_lateral)) > max(
+        0.45,
+        float(cfg.profile_bin_m) * 2.5,
+    ):
+        return False
+
+    delta = local_points[:, :2] - origin_xyz[:2][None, :]
+    along = delta @ tangent
+    lateral_offset = delta @ across - float(pair_lateral)
+
+    # Bias the support window towards the extension direction.  This prevents
+    # an occluded terminal edge from surviving only because the wider profile
+    # window still contains points from the last valid station behind it.
+    along_back = max(
+        0.15,
+        min(0.35, float(cfg.station_spacing_m) * 0.25),
+    )
+    along_forward = max(
+        0.35,
+        min(0.80, float(cfg.station_spacing_m) * 0.60),
+    )
+    side_span = max(0.45, float(cfg.profile_bin_m) * 3.0)
+    deadband = max(0.04, float(cfg.profile_bin_m) * 0.35)
+    keep = (
+        (along >= -along_back)
+        & (along <= along_forward)
+        & (np.abs(lateral_offset) <= side_span)
+    )
+    if int(np.count_nonzero(keep)) < 2 * max(
+        3,
+        int(cfg.min_points_per_bin) * 2,
+    ):
+        return False
+
+    offsets = lateral_offset[keep]
+    min_side_support = max(3, int(cfg.min_points_per_bin) * 2)
+    negative_support = int(np.count_nonzero(offsets < -deadband))
+    positive_support = int(np.count_nonzero(offsets > deadband))
+    return (
+        negative_support >= min_side_support
+        and positive_support >= min_side_support
+    )
+
+
 def _extend_one_direction(
     points: np.ndarray,
     tree: cKDTree,
@@ -333,31 +414,99 @@ def _extend_one_direction(
         found_toe = None
 
         if pair is not None:
-            crest_xy = (
-                origin[:2]
-                + float(pair["crest_lateral"]) * across
+            pair_crest_valid = crest_active and _pair_edge_has_local_support(
+                local,
+                origin,
+                tangent,
+                across,
+                pair_lateral=float(pair["crest_lateral"]),
+                kind="CREST",
+                half_width_m=half_width,
+                gate_m=gate,
+                cfg=cfg,
             )
-            toe_xy = (
-                origin[:2]
-                + float(pair["toe_lateral"]) * across
+            pair_toe_valid = toe_active and _pair_edge_has_local_support(
+                local,
+                origin,
+                tangent,
+                across,
+                pair_lateral=float(pair["toe_lateral"]),
+                kind="TOE",
+                half_width_m=half_width,
+                gate_m=gate,
+                cfg=cfg,
             )
-            found_crest = np.asarray(
-                (
-                    crest_xy[0],
-                    crest_xy[1],
-                    float(pair["crest_z"]),
-                ),
-                dtype=np.float64,
-            )
-            found_toe = np.asarray(
-                (
-                    toe_xy[0],
-                    toe_xy[1],
-                    float(pair["toe_z"]),
-                ),
-                dtype=np.float64,
-            )
-            pair_stations += 1
+
+            if pair_crest_valid:
+                crest_xy = (
+                    origin[:2]
+                    + float(pair["crest_lateral"]) * across
+                )
+                found_crest = np.asarray(
+                    (
+                        crest_xy[0],
+                        crest_xy[1],
+                        float(pair["crest_z"]),
+                    ),
+                    dtype=np.float64,
+                )
+            if pair_toe_valid:
+                toe_xy = (
+                    origin[:2]
+                    + float(pair["toe_lateral"]) * across
+                )
+                found_toe = np.asarray(
+                    (
+                        toe_xy[0],
+                        toe_xy[1],
+                        float(pair["toe_z"]),
+                    ),
+                    dtype=np.float64,
+                )
+
+            # A nominal pair may degrade to one independently supported edge.
+            # Do not let the missing side suppress continuation of the valid one.
+            if found_crest is None and crest_active:
+                item = _single_edge_candidate(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    predicted_lateral=predicted_crest,
+                    kind="CREST",
+                    half_width_m=half_width,
+                    gate_m=gate,
+                    cfg=cfg,
+                )
+                if item is not None:
+                    xy = origin[:2] + float(item["lateral"]) * across
+                    found_crest = np.asarray(
+                        (xy[0], xy[1], float(item["z"])),
+                        dtype=np.float64,
+                    )
+            if found_toe is None and toe_active:
+                item = _single_edge_candidate(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    predicted_lateral=predicted_toe,
+                    kind="TOE",
+                    half_width_m=half_width,
+                    gate_m=gate,
+                    cfg=cfg,
+                )
+                if item is not None:
+                    xy = origin[:2] + float(item["lateral"]) * across
+                    found_toe = np.asarray(
+                        (xy[0], xy[1], float(item["z"])),
+                        dtype=np.float64,
+                    )
+
+            if pair_crest_valid and pair_toe_valid:
+                pair_stations += 1
+            elif found_crest is not None or found_toe is not None:
+                independent_stations += 1
         else:
             if crest_active:
                 item = _single_edge_candidate(
