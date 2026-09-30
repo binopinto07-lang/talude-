@@ -110,9 +110,10 @@
   }
 
   function featureColor(feature) {
+    if (String(feature.id) === String(editor.selectedFeatureId)) return 0xff38cf;
     const layer = String(feature.layer_id || "");
-    if (layer === "CRISTA") return 0xe34b4b;
-    if (layer === "PE_TALUDE") return 0x2f80ed;
+    if (layer === "CRISTA") return 0xffd54a;
+    if (layer === "PE_TALUDE") return 0x38d5ff;
     if (layer === "CRISTA_REVIEW") return 0xff8a3d;
     if (layer === "PE_TALUDE_REVIEW") return 0x9b7bff;
     if (layer === "FACES_REJEITADAS") return 0x8f98a3;
@@ -147,7 +148,7 @@
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const material = new THREE.PointsMaterial({
-      color: 0x2d8fb8,
+      color: 0xff38cf,
       size: 8,
       sizeAttenuation: false,
       depthTest: false,
