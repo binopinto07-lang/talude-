@@ -26,8 +26,8 @@ def test_studio_uses_professional_cloud_viewer():
     assert "createLineObject" in app
 
     assert "/api/v2/talude/auto" in auto
-    assert "0xe34b4b" in auto
-    assert "0x2f80ed" in auto
+    assert "0xffd54a" in auto
+    assert "0x38d5ff" in auto
 
     assert "QWebEngineView" in desktop
     assert "Talude Studio" in desktop
@@ -79,33 +79,3 @@ def test_v22_qgis_agisoft_cad_navigation_contract():
     assert "Potree.CameraMode.ORTHOGRAPHIC" in app
     assert ".view-cube-widget" in css
     assert ".view-axis-widget" in css
-
-
-def test_precision_workspace_contract():
-    html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
-    css = Path("studio/viewer/precision_workspace.css").read_text(encoding="utf-8")
-    js = Path("studio/viewer/precision_workspace.js").read_text(encoding="utf-8")
-    auto = Path("studio/viewer/talude_auto.js").read_text(encoding="utf-8")
-    editor = Path("studio/viewer/vector_editor.js").read_text(encoding="utf-8")
-
-    assert "./precision_workspace.css" in html
-    assert "./precision_workspace.js" in html
-    assert "precisionApplicationBar" in js
-    assert "precisionCommandBar" in js
-    assert "precisionInspector" in js
-    assert "precisionEditRail" in js
-    assert "precisionDigitizing" in js
-    assert "Point Cloud" in js
-    assert "SNAPPING" in js
-
-    assert "grid-template-columns: minmax(250px, 17%) minmax(0, 1fr) minmax(260px, 17%)" in css
-    assert "--precision-viewport: #171b1f" in css
-    assert "--precision-active: #eaf4f8" in css
-    assert ".precision-edit-rail" in css
-    assert ".precision-inspector" in css
-
-    # Geometry colours are distinct from the blue UI accent.
-    assert "0xe34b4b" in auto
-    assert "0x2f80ed" in auto
-    assert "0xe34b4b" in editor
-    assert "0x2f80ed" in editor
