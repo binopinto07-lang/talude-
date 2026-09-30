@@ -479,58 +479,12 @@ def _extend_one_direction(
                     dtype=np.float64,
                 )
 
-            # A nominal pair may degrade to one independently supported edge.
-            # Do not let the missing side suppress continuation of the valid one.
-            if found_crest is None and crest_active:
-                item = _single_edge_candidate(
-                    local,
-                    origin,
-                    tangent,
-                    across,
-                    predicted_lateral=predicted_crest,
-                    kind="CREST",
-                    half_width_m=half_width,
-                    gate_m=gate,
-                    cfg=cfg,
-                )
-                if item is not None and _edge_has_current_station_support(
-                    local,
-                    origin,
-                    tangent,
-                    across,
-                    lateral=float(item["lateral"]),
-                    cfg=cfg,
-                ):
-                    xy = origin[:2] + float(item["lateral"]) * across
-                    found_crest = np.asarray(
-                        (xy[0], xy[1], float(item["z"])),
-                        dtype=np.float64,
-                    )
-            if found_toe is None and toe_active:
-                item = _single_edge_candidate(
-                    local,
-                    origin,
-                    tangent,
-                    across,
-                    predicted_lateral=predicted_toe,
-                    kind="TOE",
-                    half_width_m=half_width,
-                    gate_m=gate,
-                    cfg=cfg,
-                )
-                if item is not None and _edge_has_current_station_support(
-                    local,
-                    origin,
-                    tangent,
-                    across,
-                    lateral=float(item["lateral"]),
-                    cfg=cfg,
-                ):
-                    xy = origin[:2] + float(item["lateral"]) * across
-                    found_toe = np.asarray(
-                        (xy[0], xy[1], float(item["z"])),
-                        dtype=np.float64,
-                    )
+            # Important: when a pair degrades, never immediately "rescue"
+            # the rejected side with an independent fit from the same strip.
+            # That can reinterpret the steep face itself as a false CREST/TOE.
+            # The valid side may continue alone; the rejected side accumulates
+            # misses and can only recover later when pair support is physical
+            # again at a subsequent station.
 
             if pair_crest_valid and pair_toe_valid:
                 pair_stations += 1

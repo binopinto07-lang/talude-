@@ -11,7 +11,7 @@ def test_v2_api_is_isolated_from_baseline_and_has_global_auto():
     assert "start_auto_extract_v2" in server
     assert "extract_terrain_face_from_points" in server
     assert "extract_face_raw_tin" in server
-    assert 'APP_VERSION = "2.7.0-endpoint-continuation-gap-bridging"' in server
+    assert 'APP_VERSION = "2.7.3-independent-edge-state"' in server
 
 
 def test_v2_viewer_can_switch_global_and_clicked_engines():
