@@ -161,7 +161,7 @@ body.precision-workspace-ready {
 #app {
   min-height: 0;
   width: 100%;
-  height: 100% !important;
+  height: auto !important;
   display: grid !important;
   grid-template-columns: minmax(250px, 17%) minmax(0, 1fr) minmax(260px, 17%);
   background: var(--precision-bg);
