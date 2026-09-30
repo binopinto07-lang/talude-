@@ -14,14 +14,14 @@ def _talude_v2_data() -> dict:
     return json.loads((ROOT / "projects" / "talude_v2.json").read_text(encoding="utf-8"))
 
 
-def test_embedded_talude_v2_profile_matches_r14_contract():
+def test_embedded_talude_v2_profile_matches_r16_contract():
     data = _talude_v2_data()
     cfg = ProjectConfig.from_dict(data)
     assert cfg.id == "talude_v2"
     assert cfg.branch == "v2-experimental-raw-tin-mst"
-    assert data["config_revision"] >= 24
+    assert data["config_revision"] >= 25
     assert data["required_source_revision"]["path"] == "localbuild/SOURCE_REVISION.txt"
-    assert data["required_source_revision"]["value"] == "TALUDE_V2_BUILD_SOURCE_2026-09-30_R15"
+    assert data["required_source_revision"]["value"] == "TALUDE_V2_BUILD_SOURCE_2026-09-30_R16"
 
 
 def test_embedded_profile_requires_current_geometry_modules():
@@ -33,6 +33,8 @@ def test_embedded_profile_requires_current_geometry_modules():
     assert "scripts/build_windows.py" in required
     assert "LocalBuildManager__TALUDE_STUDIO/START_LOCAL_BUILD_MANAGER.bat" in required
     assert "LocalBuildManager__TALUDE_STUDIO/TALUDE_INTEGRATION.txt" in required
+    assert "studio/viewer/precision_workspace.css" in required
+    assert "studio/viewer/precision_workspace.js" in required
 
 
 def test_embedded_profile_uses_managed_python_and_optional_git():
@@ -60,4 +62,4 @@ def test_repo_profile_discovery_works_for_github_zip(tmp_path):
 def test_local_build_manager_is_talude_integrated():
     marker = (ROOT / "TALUDE_INTEGRATION.txt").read_text(encoding="utf-8")
     assert "LOCAL_BUILD_MANAGER_INTEGRATED_WITH_TALUDE_STUDIO" in marker
-    assert "SOURCE_GUARD=TALUDE_V2_BUILD_SOURCE_2026-09-30_R14" in marker
+    assert "SOURCE_GUARD=TALUDE_V2_BUILD_SOURCE_2026-09-30_R16" in marker

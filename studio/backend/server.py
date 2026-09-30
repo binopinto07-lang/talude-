@@ -27,7 +27,7 @@ from .vector_export import export_vector_document
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
-APP_VERSION = "2.7.4-edge-prediction-gate"
+APP_VERSION = "2.8.0-polar-precision-safe-core"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
