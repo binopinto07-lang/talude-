@@ -12,6 +12,7 @@ from core.terrain_face import extract_terrain_face_edge
 from .reasons import V2DetectionError, V2Reason
 from .section_edge_tracker import extract_section_edge_pair
 from .plane_edge_snap import snap_edge_pair_to_local_planes
+from .endpoint_continuation import continue_edge_pair_to_face_ends
 
 
 def _line_length_2d(xyz: np.ndarray) -> float:
@@ -498,16 +499,9 @@ def extract_profile_edge_pair(
     crest = _trim_endpoint_hooks(crest, section_crest)
     toe = _trim_endpoint_hooks(toe, section_toe)
 
+    # Validate the already trusted paired core before any independent tails are
+    # added. Endpoint continuation is not allowed to rescue a bad core.
     local_width = _pair_width_median(crest, toe)
-    crest_agreement = _reference_agreement(
-        crest,
-        np.asarray(candidate.crest, dtype=np.float64),
-    )
-    toe_agreement = _reference_agreement(
-        toe,
-        np.asarray(candidate.toe, dtype=np.float64),
-    )
-
     geometry = validate_edge_pair(
         crest,
         toe,
@@ -522,6 +516,44 @@ def extract_profile_edge_pair(
                 f"pela qualidade geométrica ({geometry.get('reason')})."
             ),
         )
+
+    endpoint_continuation: dict[str, Any] = {
+        "source": "ENDPOINT_CONTINUATION_FALLBACK",
+        "applied": False,
+    }
+    try:
+        extended_crest, extended_toe, endpoint_continuation = (
+            continue_edge_pair_to_face_ends(
+                raw,
+                crest,
+                toe,
+                candidate,
+                station_spacing_m=float(station_spacing_m),
+                profile_bin_m=profile_bin,
+            )
+        )
+        if len(extended_crest) >= len(crest):
+            crest = np.asarray(extended_crest, dtype=np.float64)
+        if len(extended_toe) >= len(toe):
+            toe = np.asarray(extended_toe, dtype=np.float64)
+    except Exception as continuation_exc:
+        endpoint_continuation = {
+            "source": "ENDPOINT_CONTINUATION_FALLBACK",
+            "applied": False,
+            "reason": (
+                f"{type(continuation_exc).__name__}: "
+                f"{continuation_exc}"
+            ),
+        }
+
+    crest_agreement = _reference_agreement(
+        crest,
+        np.asarray(candidate.crest, dtype=np.float64),
+    )
+    toe_agreement = _reference_agreement(
+        toe,
+        np.asarray(candidate.toe, dtype=np.float64),
+    )
 
     coverage = float(tracker.get("coverage_ratio", 0.0))
     residual = float(tracker.get("median_rmse_m", profile_bin))
@@ -574,9 +606,17 @@ def extract_profile_edge_pair(
             "status": "AUTO_VALIDATED",
             "review_state": "APPROVED_AUTO",
             "edge_profile": (
-                "three-plane-cross-section+local-plane-snap"
-                if bool(edge_snap.get("applied"))
-                else "three-plane-cross-section"
+                "three-plane-cross-section"
+                + (
+                    "+local-plane-snap"
+                    if bool(edge_snap.get("applied"))
+                    else ""
+                )
+                + (
+                    "+endpoint-continuation"
+                    if bool(endpoint_continuation.get("applied"))
+                    else ""
+                )
             ),
             "edge_confidence": detector_quality,
             "edge_snap_ratio": float(
@@ -603,6 +643,7 @@ def extract_profile_edge_pair(
         "geometry": geometry,
         "local_face": tracker,
         "edge_snap": edge_snap,
+        "endpoint_continuation": endpoint_continuation,
         "local_width_median_m": float(local_width),
         "crest_agreement": crest_agreement,
         "toe_agreement": toe_agreement,
@@ -636,6 +677,13 @@ def extract_profile_edge_pair(
             "plane_snap_mean_distance_m": edge_snap.get("mean_distance_m"),
             "plane_snap_search_radius_m": edge_snap.get("search_radius_m"),
             "plane_snap_rmse_m": edge_snap.get("median_plane_rmse_m"),
+            "endpoint_continuation_applied": bool(
+                endpoint_continuation.get("applied")
+            ),
+            "endpoint_crest_added": endpoint_continuation.get("crest_added"),
+            "endpoint_toe_added": endpoint_continuation.get("toe_added"),
+            "endpoint_start": endpoint_continuation.get("start"),
+            "endpoint_end": endpoint_continuation.get("end"),
         },
         "v2_timing_s": {"refinement": elapsed},
         "elapsed_s": elapsed,
