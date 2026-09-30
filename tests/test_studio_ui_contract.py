@@ -26,8 +26,8 @@ def test_studio_uses_professional_cloud_viewer():
     assert "createLineObject" in app
 
     assert "/api/v2/talude/auto" in auto
-    assert "0xffd54a" in auto
-    assert "0x38d5ff" in auto
+    assert "0xe34b4b" in auto
+    assert "0x2f80ed" in auto
 
     assert "QWebEngineView" in desktop
     assert "Talude Studio" in desktop
