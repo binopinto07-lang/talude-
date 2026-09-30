@@ -1,6 +1,6 @@
 {
   "id": "talude_v2",
-  "name": "Talude Studio V2.8.0 — Polar Precision + Safe Core",
+  "name": "Talude Studio V2.8.2 — Classic UX + Safe Core",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
@@ -238,7 +238,7 @@
     ]
   },
   "release": {},
-  "config_revision": 25,
+  "config_revision": 27,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
@@ -252,13 +252,11 @@
     "localbuild/SOURCE_REVISION.txt",
     "core/terrain_face.py",
     "LocalBuildManager__TALUDE_STUDIO/START_LOCAL_BUILD_MANAGER.bat",
-    "LocalBuildManager__TALUDE_STUDIO/TALUDE_INTEGRATION.txt",
-    "studio/viewer/precision_workspace.css",
-    "studio/viewer/precision_workspace.js"
+    "LocalBuildManager__TALUDE_STUDIO/TALUDE_INTEGRATION.txt"
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-30_R16"
+    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-30_R18"
   },
   "auto_bootstrap_python": true
 }
