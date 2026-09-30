@@ -152,7 +152,7 @@
 
       const isCrest = data.type === "CREST";
       const object = s.createLineObject(data.vertices, {
-        color: isCrest ? 0xe34b4b : 0x2f80ed,
+        color: isCrest ? 0xffd54a : 0x38d5ff,
         widthPx: isCrest ? 3.4 : 3.0,
         dashed: false
       });
