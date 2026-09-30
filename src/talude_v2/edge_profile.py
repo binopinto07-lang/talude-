@@ -12,7 +12,6 @@ from core.terrain_face import extract_terrain_face_edge
 from .reasons import V2DetectionError, V2Reason
 from .section_edge_tracker import extract_section_edge_pair
 from .plane_edge_snap import snap_edge_pair_to_local_planes
-from .endpoint_continuation import continue_edge_pair_to_face_ends
 
 
 def _line_length_2d(xyz: np.ndarray) -> float:
@@ -517,34 +516,14 @@ def extract_profile_edge_pair(
             ),
         )
 
+    # V2.8 safety rule: do not extrapolate published geometry beyond the
+    # physically validated section/snap core. Missing coverage must be solved
+    # by independent discovery/tracking, never by blind endpoint extension.
     endpoint_continuation: dict[str, Any] = {
-        "source": "ENDPOINT_CONTINUATION_FALLBACK",
+        "source": "DISABLED_V2_8_SAFE_CORE",
         "applied": False,
+        "reason": "automatic endpoint extrapolation disabled",
     }
-    try:
-        extended_crest, extended_toe, endpoint_continuation = (
-            continue_edge_pair_to_face_ends(
-                raw,
-                crest,
-                toe,
-                candidate,
-                station_spacing_m=float(station_spacing_m),
-                profile_bin_m=profile_bin,
-            )
-        )
-        if len(extended_crest) >= len(crest):
-            crest = np.asarray(extended_crest, dtype=np.float64)
-        if len(extended_toe) >= len(toe):
-            toe = np.asarray(extended_toe, dtype=np.float64)
-    except Exception as continuation_exc:
-        endpoint_continuation = {
-            "source": "ENDPOINT_CONTINUATION_FALLBACK",
-            "applied": False,
-            "reason": (
-                f"{type(continuation_exc).__name__}: "
-                f"{continuation_exc}"
-            ),
-        }
 
     crest_agreement = _reference_agreement(
         crest,
@@ -610,11 +589,6 @@ def extract_profile_edge_pair(
                 + (
                     "+local-plane-snap"
                     if bool(edge_snap.get("applied"))
-                    else ""
-                )
-                + (
-                    "+endpoint-continuation"
-                    if bool(endpoint_continuation.get("applied"))
                     else ""
                 )
             ),

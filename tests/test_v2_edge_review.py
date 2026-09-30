@@ -127,8 +127,8 @@ def test_face_and_edge_seeds_are_decoupled():
     active = edge.split("def extract_profile_edge_pair(", 1)[1]
     assert "extract_section_edge_pair(" in active
     assert "snap_edge_pair_to_local_planes(" in active
-    assert "continue_edge_pair_to_face_ends(" in active
-    assert "ENDPOINT_CONTINUATION_FALLBACK" in active
+    assert "continue_edge_pair_to_face_ends(" not in active
+    assert "DISABLED_V2_8_SAFE_CORE" in active
     assert "SECTION_TRACKER_FALLBACK" in active
     assert "_extract_face_centered_edges(" not in active
     assert '"detector": "SECTION_PROFILE_THREE_PLANE_TRACKER"' in active

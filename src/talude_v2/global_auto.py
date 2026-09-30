@@ -251,61 +251,13 @@ def _build_face_candidates(
 
 
 def _routing_endpoint_extension_m(candidate: GlobalFaceCandidate) -> float:
-    length = _line_length_2d(candidate.centerline)
-    return float(
-        np.clip(
-            max(
-                12.0,
-                0.35 * max(length, 1.0),
-                2.5 * float(candidate.corridor_radius_m),
-            ),
-            12.0,
-            40.0,
-        )
-    )
+    """No blind longitudinal extension in the production V2 routing path."""
+    return 0.0
 
 
 def _routing_centerline(candidate: GlobalFaceCandidate) -> np.ndarray:
-    """Extend only the LAS routing axis, never the published geometry."""
-    center = np.asarray(candidate.centerline, dtype=np.float64)
-    if len(center) < 2:
-        return center.copy()
-
-    sample = min(5, len(center))
-    start_vec = center[0, :2] - center[sample - 1, :2]
-    end_vec = center[-1, :2] - center[-sample, :2]
-    start_norm = float(np.linalg.norm(start_vec))
-    end_norm = float(np.linalg.norm(end_vec))
-    if start_norm <= 1e-9 or end_norm <= 1e-9:
-        return center.copy()
-
-    start_dir = start_vec / start_norm
-    end_dir = end_vec / end_norm
-    extension = _routing_endpoint_extension_m(candidate)
-    step = 4.0
-    distances = np.arange(step, extension + 0.5 * step, step)
-
-    start_points = []
-    for distance in distances[::-1]:
-        point = center[0].copy()
-        point[:2] += start_dir * float(distance)
-        start_points.append(point)
-
-    end_points = []
-    for distance in distances:
-        point = center[-1].copy()
-        point[:2] += end_dir * float(distance)
-        end_points.append(point)
-
-    return np.vstack(
-        (
-            np.asarray(start_points, dtype=np.float64)
-            if start_points else np.empty((0, 3), dtype=np.float64),
-            center,
-            np.asarray(end_points, dtype=np.float64)
-            if end_points else np.empty((0, 3), dtype=np.float64),
-        )
-    )
+    """Route points only around geometry that was actually discovered."""
+    return np.asarray(candidate.centerline, dtype=np.float64).copy()
 
 
 def _candidate_spatial_index(
