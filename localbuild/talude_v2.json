@@ -1,6 +1,6 @@
 {
   "id": "talude_v2",
-  "name": "Talude Studio V2.7.1 — Endpoint Continuation + Pair Support",
+  "name": "Talude Studio V2.7.2 — Endpoint Local Support Guard",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
@@ -238,7 +238,7 @@
     ]
   },
   "release": {},
-  "config_revision": 20,
+  "config_revision": 21,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
@@ -254,7 +254,7 @@
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-30_R11"
+    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-30_R12"
   },
   "auto_bootstrap_python": true
 }

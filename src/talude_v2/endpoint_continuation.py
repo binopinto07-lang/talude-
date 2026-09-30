@@ -215,6 +215,50 @@ def _single_edge_candidate(
     return best[1] if best is not None else None
 
 
+def _edge_has_current_station_support(
+    local_points: np.ndarray,
+    origin_xyz: np.ndarray,
+    tangent: np.ndarray,
+    across: np.ndarray,
+    *,
+    lateral: float,
+    cfg: SectionTrackConfig,
+) -> bool:
+    """Check that the break is supported on both sides at this station."""
+    delta = local_points[:, :2] - origin_xyz[:2][None, :]
+    along = delta @ tangent
+    lateral_offset = delta @ across - float(lateral)
+
+    # Bias the support window towards the extension direction so points from a
+    # previous valid station cannot keep an occluded terminal edge alive.
+    along_back = max(
+        0.15,
+        min(0.35, float(cfg.station_spacing_m) * 0.25),
+    )
+    along_forward = max(
+        0.35,
+        min(0.80, float(cfg.station_spacing_m) * 0.60),
+    )
+    side_span = max(0.45, float(cfg.profile_bin_m) * 3.0)
+    deadband = max(0.04, float(cfg.profile_bin_m) * 0.35)
+    keep = (
+        (along >= -along_back)
+        & (along <= along_forward)
+        & (np.abs(lateral_offset) <= side_span)
+    )
+    min_side_support = max(3, int(cfg.min_points_per_bin) * 2)
+    if int(np.count_nonzero(keep)) < 2 * min_side_support:
+        return False
+
+    offsets = lateral_offset[keep]
+    negative_support = int(np.count_nonzero(offsets < -deadband))
+    positive_support = int(np.count_nonzero(offsets > deadband))
+    return (
+        negative_support >= min_side_support
+        and positive_support >= min_side_support
+    )
+
+
 def _pair_edge_has_local_support(
     local_points: np.ndarray,
     origin_xyz: np.ndarray,
@@ -257,42 +301,13 @@ def _pair_edge_has_local_support(
         float(cfg.profile_bin_m) * 2.5,
     ):
         return False
-
-    delta = local_points[:, :2] - origin_xyz[:2][None, :]
-    along = delta @ tangent
-    lateral_offset = delta @ across - float(pair_lateral)
-
-    # Bias the support window towards the extension direction.  This prevents
-    # an occluded terminal edge from surviving only because the wider profile
-    # window still contains points from the last valid station behind it.
-    along_back = max(
-        0.15,
-        min(0.35, float(cfg.station_spacing_m) * 0.25),
-    )
-    along_forward = max(
-        0.35,
-        min(0.80, float(cfg.station_spacing_m) * 0.60),
-    )
-    side_span = max(0.45, float(cfg.profile_bin_m) * 3.0)
-    deadband = max(0.04, float(cfg.profile_bin_m) * 0.35)
-    keep = (
-        (along >= -along_back)
-        & (along <= along_forward)
-        & (np.abs(lateral_offset) <= side_span)
-    )
-    if int(np.count_nonzero(keep)) < 2 * max(
-        3,
-        int(cfg.min_points_per_bin) * 2,
-    ):
-        return False
-
-    offsets = lateral_offset[keep]
-    min_side_support = max(3, int(cfg.min_points_per_bin) * 2)
-    negative_support = int(np.count_nonzero(offsets < -deadband))
-    positive_support = int(np.count_nonzero(offsets > deadband))
-    return (
-        negative_support >= min_side_support
-        and positive_support >= min_side_support
+    return _edge_has_current_station_support(
+        local_points,
+        origin_xyz,
+        tangent,
+        across,
+        lateral=float(pair_lateral),
+        cfg=cfg,
     )
 
 
@@ -478,7 +493,14 @@ def _extend_one_direction(
                     gate_m=gate,
                     cfg=cfg,
                 )
-                if item is not None:
+                if item is not None and _edge_has_current_station_support(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    lateral=float(item["lateral"]),
+                    cfg=cfg,
+                ):
                     xy = origin[:2] + float(item["lateral"]) * across
                     found_crest = np.asarray(
                         (xy[0], xy[1], float(item["z"])),
@@ -496,7 +518,14 @@ def _extend_one_direction(
                     gate_m=gate,
                     cfg=cfg,
                 )
-                if item is not None:
+                if item is not None and _edge_has_current_station_support(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    lateral=float(item["lateral"]),
+                    cfg=cfg,
+                ):
                     xy = origin[:2] + float(item["lateral"]) * across
                     found_toe = np.asarray(
                         (xy[0], xy[1], float(item["z"])),
@@ -520,7 +549,14 @@ def _extend_one_direction(
                     gate_m=gate,
                     cfg=cfg,
                 )
-                if item is not None:
+                if item is not None and _edge_has_current_station_support(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    lateral=float(item["lateral"]),
+                    cfg=cfg,
+                ):
                     xy = origin[:2] + float(item["lateral"]) * across
                     found_crest = np.asarray(
                         (xy[0], xy[1], float(item["z"])),
@@ -539,7 +575,14 @@ def _extend_one_direction(
                     gate_m=gate,
                     cfg=cfg,
                 )
-                if item is not None:
+                if item is not None and _edge_has_current_station_support(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    lateral=float(item["lateral"]),
+                    cfg=cfg,
+                ):
                     xy = origin[:2] + float(item["lateral"]) * across
                     found_toe = np.asarray(
                         (xy[0], xy[1], float(item["z"])),
