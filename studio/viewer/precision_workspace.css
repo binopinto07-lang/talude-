@@ -1,0 +1,572 @@
+:root {
+  --precision-bg: #f5f7f8;
+  --precision-panel: #fafbfc;
+  --precision-toolbar: #f8fafb;
+  --precision-active: #eaf4f8;
+  --precision-border: #d8dee3;
+  --precision-text: #20252a;
+  --precision-muted: #66717b;
+  --precision-accent: #2d8fb8;
+  --precision-viewport: #171b1f;
+  --precision-viewport-2: #101419;
+  --precision-crest: #e34b4b;
+  --precision-toe: #2f80ed;
+  --precision-orange: #e9902f;
+  --precision-purple: #8d5cc7;
+  --precision-cyan: #2dbec7;
+  --precision-amber: #c99416;
+  --sidebar-width: 17vw;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--precision-bg) !important;
+  color: var(--precision-text) !important;
+}
+
+body.precision-workspace-ready {
+  display: grid;
+  grid-template-rows: 34px 25px 48px minmax(0, 1fr) 24px;
+}
+
+#precisionApplicationBar,
+#precisionMenuBar,
+#precisionCommandBar,
+#precisionStatusBar {
+  min-width: 0;
+}
+
+#precisionApplicationBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--precision-border);
+  background: #ffffff;
+  color: var(--precision-text);
+  user-select: none;
+}
+
+#precisionApplicationBar .brand {
+  padding: 0;
+  gap: 8px;
+}
+#precisionApplicationBar .brand-mark {
+  width: 25px;
+  height: 25px;
+  border-radius: 5px;
+  font-size: 11px;
+  background: #2d8fb8;
+  box-shadow: none;
+  color: #fff;
+}
+#precisionApplicationBar .brand-title {
+  font-size: 13px;
+  letter-spacing: .15px;
+  color: var(--precision-text);
+}
+#precisionApplicationBar .brand-subtitle {
+  display: none;
+}
+.precision-project-mirror {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--precision-border);
+  color: var(--precision-muted);
+  font-size: 12px;
+  max-width: 520px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.precision-app-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--precision-muted);
+  font-size: 11px;
+}
+
+#precisionMenuBar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 13px;
+  background: #ffffff;
+  border-bottom: 1px solid #e4e8eb;
+  color: #30363b;
+  font-size: 12px;
+}
+#precisionMenuBar span {
+  line-height: 24px;
+  cursor: default;
+}
+
+#precisionCommandBar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 4px 8px;
+  background: var(--precision-toolbar);
+  border-bottom: 1px solid var(--precision-border);
+  overflow-x: auto;
+}
+.precision-command-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border-right: 1px solid var(--precision-border);
+}
+.precision-command-group:last-child { border-right: 0; }
+.precision-command-label {
+  align-self: flex-start;
+  margin: 2px 5px 0 0;
+  color: #8a949c;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .45px;
+  text-transform: uppercase;
+}
+#precisionCommandBar button,
+#precisionCommandBar select {
+  min-height: 30px;
+  height: 30px;
+  border-radius: 4px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #2a3137;
+  font-size: 11px;
+  box-shadow: none;
+}
+#precisionCommandBar button:hover:not(:disabled) {
+  background: #edf2f5;
+  border-color: #d8e0e5;
+}
+#precisionCommandBar button.active {
+  background: var(--precision-active);
+  color: #176f96;
+  border-color: #bcd8e5;
+}
+.precision-proxy-primary {
+  font-weight: 650;
+  color: #176f96 !important;
+}
+
+#app {
+  min-height: 0;
+  width: 100%;
+  height: 100% !important;
+  display: grid !important;
+  grid-template-columns: minmax(250px, 17%) minmax(0, 1fr) minmax(260px, 17%);
+  background: var(--precision-bg);
+}
+
+.sidebar {
+  grid-column: 1;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 8px !important;
+  gap: 7px !important;
+  background: var(--precision-panel) !important;
+  color: var(--precision-text) !important;
+  border-right: 1px solid var(--precision-border) !important;
+  overflow-y: auto;
+}
+.sidebar > .brand { display: none; }
+.sidebar-resize-handle { display: none !important; }
+
+.card,
+.advanced-workflow {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 8px 5px !important;
+  color: var(--precision-text) !important;
+  border-bottom: 1px solid #e5e9ec !important;
+}
+.section-title {
+  margin-bottom: 7px !important;
+  color: #4d5962 !important;
+  font-size: 10px !important;
+  letter-spacing: .55px !important;
+}
+.project-name,
+.hint,
+.qgis-status,
+label {
+  color: var(--precision-muted) !important;
+}
+
+.sidebar button,
+.sidebar select,
+.sidebar input,
+.precision-inspector button,
+.precision-inspector select,
+.precision-inspector input {
+  min-height: 30px;
+  border: 1px solid #cfd7dd !important;
+  border-radius: 4px !important;
+  background: #fff !important;
+  color: #273037 !important;
+  box-shadow: none !important;
+}
+.sidebar button:hover:not(:disabled),
+.precision-inspector button:hover:not(:disabled) {
+  background: #f1f5f7 !important;
+  border-color: #afbec8 !important;
+}
+.sidebar button.primary,
+.precision-inspector button.primary {
+  color: #fff !important;
+  background: var(--precision-accent) !important;
+  border-color: #277fa5 !important;
+}
+
+.qgis-layer-toolbar {
+  display: flex !important;
+  gap: 3px !important;
+  margin-bottom: 5px !important;
+}
+.qgis-layer-toolbar button {
+  width: 28px !important;
+  height: 27px !important;
+  min-height: 27px !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+}
+.qgis-layer-tree,
+.vector-feature-list {
+  border: 1px solid var(--precision-border) !important;
+  background: #fff !important;
+  border-radius: 3px !important;
+}
+.qgis-group-header {
+  min-height: 25px !important;
+  background: #f2f5f6 !important;
+  color: #39444c !important;
+  border-bottom: 1px solid #e1e6e9 !important;
+}
+.qgis-layer-row,
+.vector-feature-row {
+  min-height: 25px !important;
+  color: #303940 !important;
+  background: #fff !important;
+  border-bottom: 1px solid #eef1f2 !important;
+}
+.qgis-layer-row.active,
+.qgis-layer-row.selected,
+.vector-feature-row.selected {
+  background: var(--precision-active) !important;
+  color: #1f4859 !important;
+}
+.qgis-layer-symbol.crest,
+.swatch.talude-crest { background: var(--precision-crest) !important; }
+.qgis-layer-symbol.toe,
+.swatch.talude-toe { background: var(--precision-toe) !important; }
+
+.vector-editor-details,
+.vector-project-tools,
+.talude-advanced,
+.advanced-workflow {
+  color: var(--precision-text) !important;
+}
+.vector-editor-details > summary,
+.vector-project-tools > summary,
+.talude-advanced > summary,
+.advanced-workflow > summary {
+  color: #4e5a63 !important;
+  font-size: 11px !important;
+}
+
+.viewport-shell {
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--precision-viewport) !important;
+  border: 0 !important;
+}
+#potree_render_area {
+  inset: 0 !important;
+  background: var(--precision-viewport) !important;
+}
+#potree_sidebar_container { display: none !important; }
+
+.viewport-shell .topbar {
+  position: absolute !important;
+  z-index: 28;
+  top: 7px !important;
+  right: 8px !important;
+  left: auto !important;
+  width: auto !important;
+  min-height: 24px !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  pointer-events: none;
+}
+.viewport-shell .topbar .view-pills,
+.viewport-shell .topbar .standard-views,
+.viewport-shell .topbar .nav-help {
+  display: none !important;
+}
+#pointStats {
+  color: #d2d9de !important;
+  background: rgba(15, 20, 24, .76);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 10px !important;
+}
+
+.precision-inspector {
+  grid-column: 3;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 8px 10px 14px;
+  background: var(--precision-panel);
+  color: var(--precision-text);
+  border-left: 1px solid var(--precision-border);
+}
+.precision-inspector-header {
+  padding: 7px 4px 9px;
+  border-bottom: 1px solid var(--precision-border);
+}
+.precision-inspector-kicker {
+  color: #7c8790;
+  font-size: 9px;
+  letter-spacing: .6px;
+  font-weight: 800;
+}
+.precision-inspector-title {
+  margin-top: 2px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.precision-inspector-section {
+  padding: 10px 4px;
+  border-bottom: 1px solid #e3e8eb;
+}
+.precision-inspector-section h3 {
+  margin: 0 0 8px;
+  color: #606b73;
+  font-size: 10px;
+  letter-spacing: .55px;
+}
+.precision-inspector .auto-talude-card,
+.precision-inspector .talude-results-card,
+.precision-inspector .vector-edit-box {
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+}
+.precision-inspector .talude-feature-head {
+  margin-bottom: 7px;
+}
+.precision-inspector .talude-symbol {
+  background: #eef5f8 !important;
+  color: #237ca3 !important;
+  border-color: #cfe1e8 !important;
+}
+.precision-inspector .talude-stats {
+  gap: 4px !important;
+}
+.precision-inspector .talude-stats > div {
+  background: #fff !important;
+  border: 1px solid #dce2e6 !important;
+  color: #30383e !important;
+}
+
+.precision-snap-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 10px;
+  align-items: center;
+  color: #49545c;
+  font-size: 11px;
+}
+.precision-snap-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c3ccd2;
+}
+.precision-snap-dot.on { background: var(--precision-accent); }
+.precision-field-row {
+  display: grid;
+  grid-template-columns: 1fr 72px;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #55616a;
+}
+
+.precision-edit-rail {
+  position: absolute;
+  z-index: 34;
+  top: 44px;
+  left: 8px;
+  width: 38px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(250,251,252,.97);
+  border: 1px solid #cfd7dc;
+  border-radius: 5px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.18);
+}
+.precision-edit-rail button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #2d353b;
+  font: 600 12px/1 "Segoe UI", sans-serif;
+}
+.precision-edit-rail button:hover:not(:disabled) {
+  background: #edf3f6;
+  border-color: #d2dde3;
+}
+.precision-edit-rail button.active {
+  color: #176f96;
+  background: var(--precision-active);
+  border-color: #afd2e1;
+}
+.precision-edit-rail button:disabled {
+  color: #a4adb3;
+  opacity: .55;
+}
+.precision-rail-separator {
+  height: 1px;
+  margin: 2px 3px;
+  background: #d8dee3;
+}
+
+.precision-digitizing {
+  position: absolute;
+  z-index: 32;
+  left: 54px;
+  bottom: 14px;
+  width: 190px;
+  color: #263038;
+  background: rgba(250,251,252,.96);
+  border: 1px solid #cfd7dd;
+  border-radius: 5px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.18);
+  font-size: 10px;
+}
+.precision-digitizing-header {
+  padding: 6px 8px;
+  border-bottom: 1px solid #dde3e6;
+  font-weight: 750;
+  letter-spacing: .4px;
+}
+.precision-digitizing-body { padding: 7px 8px; }
+.precision-digitizing-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+.precision-digitizing-value {
+  font-variant-numeric: tabular-nums;
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+.precision-digitizing-locks {
+  display: flex;
+  gap: 6px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid #e2e6e8;
+  color: #7b858d;
+}
+
+.view-cube-widget {
+  top: 45px !important;
+  right: 12px !important;
+  transform: scale(.86);
+  transform-origin: top right;
+}
+.view-axis-widget {
+  left: 12px !important;
+  bottom: 14px !important;
+  transform: scale(.8);
+  transform-origin: bottom left;
+}
+
+#precisionStatusBar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 0 10px;
+  background: #f8fafb;
+  border-top: 1px solid var(--precision-border);
+  color: #56616a;
+  font-size: 10px;
+}
+#precisionStatusBar #status {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: #56616a !important;
+}
+.precision-status-flags {
+  display: flex;
+  gap: 10px;
+  white-space: nowrap;
+}
+.precision-status-flags b {
+  color: #39434a;
+  font-weight: 650;
+}
+.precision-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 3px;
+  border-radius: 50%;
+  background: var(--precision-accent);
+}
+
+.empty-state {
+  background: rgba(23,27,31,.88) !important;
+  color: #eef3f5 !important;
+}
+.empty-state h1 { color: #f5f8f9 !important; }
+.empty-state p { color: #adb8bf !important; }
+
+.toast {
+  right: 12px !important;
+  bottom: 16px !important;
+  background: rgba(250,251,252,.97) !important;
+  color: #273037 !important;
+  border: 1px solid #cfd7dd !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,.22) !important;
+}
+
+.precision-hidden-by-layout { display: none !important; }
+
+@media (max-width: 1280px) {
+  #app {
+    grid-template-columns: 260px minmax(0, 1fr) 285px;
+  }
+  .precision-command-label { display: none; }
+  #precisionMenuBar { gap: 12px; font-size: 11px; }
+}
