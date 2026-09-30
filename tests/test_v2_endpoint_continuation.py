@@ -124,6 +124,9 @@ def test_toe_can_continue_when_crest_side_is_occluded():
     assert meta["end"]["independent_stations"] >= 1
     assert float(np.max(toe_out[:, 1])) > 37.0
     assert float(np.max(crest_out[:, 1])) < 36.0
+    terminal_crest = crest_out[crest_out[:, 1] > 30.0]
+    assert len(terminal_crest) >= 1
+    assert float(np.max(np.abs(terminal_crest[:, 0]))) < 0.75
     assert float(np.max(toe_out[:, 1])) > float(np.max(crest_out[:, 1])) + 1.5
 
 

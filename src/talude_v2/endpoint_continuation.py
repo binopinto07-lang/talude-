@@ -404,6 +404,20 @@ def _extend_one_direction(
         )
         gate += 0.30 * max(crest_misses, toe_misses)
 
+        # Each physical break gets its own tighter prediction gate.  The pair
+        # gate may be wide enough to follow the face corridor, but a single
+        # CREST/TOE must not jump laterally into that face when its bench is
+        # occluded.  This still permits substantial curvature between 1 m
+        # stations while rejecting the ~1 m false-edge jump seen in the
+        # terminal-occlusion regression.
+        edge_gate = float(
+            np.clip(
+                0.35 + 0.08 * predicted_width,
+                max(0.55, cfg.profile_bin_m * 2.75),
+                0.90,
+            )
+        )
+
         options = _section_candidates(
             local,
             origin,
@@ -429,27 +443,39 @@ def _extend_one_direction(
         found_toe = None
 
         if pair is not None:
-            pair_crest_valid = crest_active and _pair_edge_has_local_support(
-                local,
-                origin,
-                tangent,
-                across,
-                pair_lateral=float(pair["crest_lateral"]),
-                kind="CREST",
-                half_width_m=half_width,
-                gate_m=gate,
-                cfg=cfg,
+            pair_crest_valid = (
+                crest_active
+                and abs(
+                    float(pair["crest_lateral"]) - predicted_crest
+                ) <= edge_gate
+                and _pair_edge_has_local_support(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    pair_lateral=float(pair["crest_lateral"]),
+                    kind="CREST",
+                    half_width_m=half_width,
+                    gate_m=edge_gate,
+                    cfg=cfg,
+                )
             )
-            pair_toe_valid = toe_active and _pair_edge_has_local_support(
-                local,
-                origin,
-                tangent,
-                across,
-                pair_lateral=float(pair["toe_lateral"]),
-                kind="TOE",
-                half_width_m=half_width,
-                gate_m=gate,
-                cfg=cfg,
+            pair_toe_valid = (
+                toe_active
+                and abs(
+                    float(pair["toe_lateral"]) - predicted_toe
+                ) <= edge_gate
+                and _pair_edge_has_local_support(
+                    local,
+                    origin,
+                    tangent,
+                    across,
+                    pair_lateral=float(pair["toe_lateral"]),
+                    kind="TOE",
+                    half_width_m=half_width,
+                    gate_m=edge_gate,
+                    cfg=cfg,
+                )
             )
 
             if pair_crest_valid:
@@ -500,7 +526,7 @@ def _extend_one_direction(
                     predicted_lateral=predicted_crest,
                     kind="CREST",
                     half_width_m=half_width,
-                    gate_m=gate,
+                    gate_m=edge_gate,
                     cfg=cfg,
                 )
                 if item is not None and _edge_has_current_station_support(
@@ -526,7 +552,7 @@ def _extend_one_direction(
                     predicted_lateral=predicted_toe,
                     kind="TOE",
                     half_width_m=half_width,
-                    gate_m=gate,
+                    gate_m=edge_gate,
                     cfg=cfg,
                 )
                 if item is not None and _edge_has_current_station_support(
