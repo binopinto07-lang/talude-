@@ -1,6 +1,6 @@
 {
   "id": "talude_v2",
-  "name": "Talude Studio V2.7.4 — Edge Prediction Gate",
+  "name": "Talude Studio V2.7.4 — Edge Prediction Gate + Integrated LBM",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
   "branch": "v2-experimental-raw-tin-mst",
   "python_version": "3.12",
@@ -238,7 +238,7 @@
     ]
   },
   "release": {},
-  "config_revision": 23,
+  "config_revision": 24,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
@@ -250,11 +250,13 @@
     "studio/backend/vector_export.py",
     "localbuild/talude_v2.json",
     "localbuild/SOURCE_REVISION.txt",
-    "core/terrain_face.py"
+    "core/terrain_face.py",
+    "LocalBuildManager__TALUDE_STUDIO/START_LOCAL_BUILD_MANAGER.bat",
+    "LocalBuildManager__TALUDE_STUDIO/TALUDE_INTEGRATION.txt"
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-30_R14"
+    "value": "TALUDE_V2_BUILD_SOURCE_2026-09-30_R15"
   },
   "auto_bootstrap_python": true
 }

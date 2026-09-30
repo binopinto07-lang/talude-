@@ -19,9 +19,9 @@ def test_embedded_talude_v2_profile_matches_r14_contract():
     cfg = ProjectConfig.from_dict(data)
     assert cfg.id == "talude_v2"
     assert cfg.branch == "v2-experimental-raw-tin-mst"
-    assert data["config_revision"] >= 23
+    assert data["config_revision"] >= 24
     assert data["required_source_revision"]["path"] == "localbuild/SOURCE_REVISION.txt"
-    assert data["required_source_revision"]["value"] == "TALUDE_V2_BUILD_SOURCE_2026-09-30_R14"
+    assert data["required_source_revision"]["value"] == "TALUDE_V2_BUILD_SOURCE_2026-09-30_R15"
 
 
 def test_embedded_profile_requires_current_geometry_modules():
@@ -31,6 +31,8 @@ def test_embedded_profile_requires_current_geometry_modules():
     assert "src/talude_v2/plane_edge_snap.py" in required
     assert "src/talude_v2/endpoint_continuation.py" in required
     assert "scripts/build_windows.py" in required
+    assert "LocalBuildManager__TALUDE_STUDIO/START_LOCAL_BUILD_MANAGER.bat" in required
+    assert "LocalBuildManager__TALUDE_STUDIO/TALUDE_INTEGRATION.txt" in required
 
 
 def test_embedded_profile_uses_managed_python_and_optional_git():
