@@ -30,3 +30,15 @@ def test_complete_offline_package_checks_selftest_and_whitelists_sources():
     assert "'src', 'core', 'studio', 'scripts'" in ps1
     assert "'.git'" not in ps1.split("foreach ($part in @(", 1)[1].split('))', 1)[0]
     assert "DEV_RELEASES" in ps1
+
+
+def test_first_run_missing_pip_is_handled_by_exit_code_not_ps_stderr():
+    ps1 = (REPO / "scripts" / "dev_portable.ps1").read_text(encoding="utf-8")
+    assert "function Test-PythonImports" in ps1
+    assert "function Test-PythonModule" in ps1
+    assert "if (Test-PythonModule 'pip')" in ps1
+    assert "if (-not (Test-PythonModule 'pytest'))" in ps1
+    assert "-m pip --version *> $null" not in ps1
+    assert "-m pytest --version *> $null" not in ps1
+    assert "$ErrorActionPreference = 'Continue'" in ps1
+    assert "$code = $LASTEXITCODE" in ps1

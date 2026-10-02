@@ -34,10 +34,42 @@ function Write-Status([string]$Message) {
 
 function Invoke-External([string]$Description, [scriptblock]$Command) {
     Write-Status $Description
-    & $Command
-    if ($LASTEXITCODE -ne 0) {
-        throw ('{0} falhou (codigo {1}).' -f $Description, $LASTEXITCODE)
+    # Windows PowerShell 5.1 converte STDERR nativo em NativeCommandError
+    # quando ErrorActionPreference='Stop'. O pip pode emitir avisos normais.
+    # Decidir o resultado pelo exit code real, sem esconder STDERR.
+    $previousPreference = $ErrorActionPreference
+    $code = 1
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $Command
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
     }
+    if ($code -ne 0) {
+        throw ('{0} falhou (codigo {1}).' -f $Description, $code)
+    }
+}
+
+function Test-PythonImports([string[]]$Modules) {
+    # Dependencias em falta no primeiro arranque sao NORMAIS. Capturar o
+    # ImportError em Python para que o PowerShell receba apenas exit code.
+    $probe = @'
+import importlib
+import sys
+for name in sys.argv[1:]:
+    try:
+        importlib.import_module(name)
+    except Exception:
+        sys.exit(1)
+sys.exit(0)
+'@
+    & $Python -c $probe @Modules | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Test-PythonModule([string]$Module) {
+    return (Test-PythonImports -Modules @($Module))
 }
 
 function Assert-Source {
@@ -89,8 +121,7 @@ function Ensure-Python {
 }
 
 function Ensure-Pip {
-    & $Python -m pip --version *> $null
-    if ($LASTEXITCODE -eq 0) { return }
+    if (Test-PythonModule 'pip') { return }
     Write-Status 'pip ainda nao existe no Python embeddable; a prepara-lo.'
     $bootstrap = Join-Path $Cache 'get-pip.py'
     if (-not (Test-Path -LiteralPath $bootstrap)) {
@@ -112,9 +143,14 @@ function Ensure-Dependencies {
         }
     }
     # Um marcador sem bibliotecas e considerado incompleto.
+    # Um import em falta e sinal para reinstalar, nao erro fatal do PS5.1.
     if (-not $needInstall) {
-        & $Python -c 'import numpy, scipy, laspy, lazrs, ezdxf, fastapi, uvicorn, pyproj; from PySide6 import QtWebEngineWidgets, QtWebEngineCore, QtWebChannel' *> $null
-        $needInstall = ($LASTEXITCODE -ne 0)
+        $modules = @(
+            'numpy', 'scipy', 'laspy', 'lazrs', 'ezdxf', 'fastapi',
+            'uvicorn', 'pyproj', 'PySide6.QtWebEngineWidgets',
+            'PySide6.QtWebEngineCore', 'PySide6.QtWebChannel'
+        )
+        $needInstall = -not (Test-PythonImports -Modules $modules)
     }
     if ($needInstall) {
         Ensure-Pip
@@ -180,8 +216,7 @@ function Invoke-SelfTest {
 }
 
 function Invoke-Tests {
-    & $Python -m pytest --version *> $null
-    if ($LASTEXITCODE -ne 0) {
+    if (-not (Test-PythonModule 'pytest')) {
         Ensure-Pip
         Invoke-External 'Preparar pytest sem PyInstaller' {
             & $Python -m pip install --disable-pip-version-check --no-warn-script-location --only-binary=:all: 'pytest>=8,<9'
