@@ -31,6 +31,7 @@
     viewer: null,
     pointclouds: new Map(),
     featureMode: "guided",
+    geometryEngine: "v2",
     traceArmed: false,
     currentSeed: null,
     seedMarker: null,
@@ -55,6 +56,14 @@
     navPointerDown: null,
     panMode: false,
     panPointer: null,
+    editorPickArmed: false,
+    editorPickContext: null,
+    navigationProfile: "agisoft",
+    viewCubeLastYaw: null,
+    viewCubeLastPitch: null,
+    navPivotMarker: null,
+    cameraProjection: "perspective",
+    sidebarResizePointer: null,
   };
 
   const byId = (id) => document.getElementById(id);
@@ -101,6 +110,7 @@
       details: Object.assign({
         sequence: ++state.debugSequence,
         feature_mode: state.featureMode,
+        geometry_engine: state.geometryEngine,
         profile: byId("profile") ? byId("profile").value : null,
         class_filter_mode: state.classFilterMode,
         selected_classes: Array.from(state.selectedClasses).sort((a, b) => a - b),
@@ -349,19 +359,18 @@
     viewer.setPointBudget(7500000);
     viewer.setBackground("black");
 
-    // Navegação CAD simples:
-    // - arrastar com botão esquerdo = rodar/orbitar
-    // - botão direito = deslocar
+    // Navegação V2.1 inspirada no Agisoft:
+    // - arrastar esquerdo = orbit
+    // - direito / meio / Shift+esquerdo = pan
     // - roda = zoom
-    // EarthControls é ótimo para navegação geográfica, mas para inspecionar
-    // taludes em 3D o OrbitControls é muito mais previsível.
+    // - duplo clique = novo pivot/foco na nuvem
     if (viewer.orbitControls) {
       viewer.setControls(viewer.orbitControls);
       if ("rotationSpeed" in viewer.orbitControls) {
-        viewer.orbitControls.rotationSpeed = 6.0;
+        viewer.orbitControls.rotationSpeed = 4.2;
       }
       if ("fadeFactor" in viewer.orbitControls) {
-        viewer.orbitControls.fadeFactor = 18.0;
+        viewer.orbitControls.fadeFactor = 12.0;
       }
     } else {
       viewer.setControls(viewer.earthControls);
@@ -401,8 +410,15 @@
     viewer.renderer.domElement.addEventListener("mousemove", onViewerNavMouseMove, true);
     viewer.renderer.domElement.addEventListener("mouseup", onViewerNavMouseUp, true);
     viewer.renderer.domElement.addEventListener("mouseleave", onViewerNavMouseUp, true);
-    viewer.addEventListener("update", updateWideLineResolution);
-    setStatus("Potree pronto · Talude V1.1.7 · AUTO 1.1.2 + face clicada");
+    viewer.renderer.domElement.addEventListener("dblclick", onViewerDoubleClick, true);
+    viewer.renderer.domElement.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+    }, true);
+    viewer.addEventListener("update", () => {
+      updateWideLineResolution();
+      updateViewCubeOrientation();
+    });
+    setStatus("Potree pronto · Talude V2 EXP · AUTO 1.1.2 + face clicada");
   }
 
   function configurePointcloud(pointcloud) {
@@ -604,6 +620,10 @@
     } else {
       byId("emptyState").classList.remove("hidden");
     }
+
+    window.dispatchEvent(new CustomEvent("talude:project-activated", {
+      detail: { project: project }
+    }));
   }
 
   function initDesktopBridge() {
@@ -784,8 +804,8 @@
       terrainRasterReady()
         ? (
             (state.project.terrain || {}).slope
-              ? "Talude V1.1.7 · motor MDT + Declive pronto."
-              : "Talude V1.1.7 · MDT pronto · declive será calculado automaticamente."
+              ? "Talude V2 EXP · motor MDT + Declive pronto."
+              : "Talude V2 EXP · MDT pronto · declive será calculado automaticamente."
           )
         : "Raster registado · falta o MDT GeoTIFF."
     );
@@ -810,8 +830,8 @@
 
     setStatus(
       (state.project.terrain || {}).slope
-        ? "Talude V1.1.7 · a ler MDT + Declive…"
-        : "Talude V1.1.7 · a ler MDT e calcular Declive automaticamente…"
+        ? "Talude V2 EXP · a ler MDT + Declive…"
+        : "Talude V2 EXP · a ler MDT e calcular Declive automaticamente…"
     );
     byId("traceHint").textContent =
       "Motor raster: a identificar a face inteira do talude e a sua " +
@@ -868,7 +888,7 @@
       " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.7 · raster-terrain · " +
+      "Talude V2 EXP · raster-terrain · " +
       result.vertices.length + " vértices · " +
       length.toFixed(1) + " m"
     );
@@ -1616,7 +1636,7 @@
     const direction = terrainEndpointDirection(currentVertices, side);
     if (!direction) return null;
 
-    // The tile MUST overlap the current endpoint. Talude V1.1.7 used lead=6.5 m
+    // The tile MUST overlap the current endpoint. Talude V2 EXP used lead=6.5 m
     // and then demanded a <=3 m join, which made the two rules contradictory.
     // Two cheap attempts handle both normal and tighter curved terraces.
     const attempts = [
@@ -2010,14 +2030,21 @@
       profile: "face",
       seed: [seed.x, seed.y, seed.z],
       selected_classes: selectedClasses,
-      detector: "same-auto-1.1.2-clicked-face",
+      detector: state.geometryEngine === "v2"
+        ? "V2_RAW_TIN_MST"
+        : "same-auto-1.1.2-clicked-face",
+      geometry_engine: state.geometryEngine,
       half_m: half
     });
 
-    setStatus("Talude V1.1.7 · AUTO 1.1.2 apenas na face clicada…");
+    const selectedEngineLabel = state.geometryEngine === "v2"
+      ? "V2 RAW-TIN-MST"
+      : "Baseline 1.1.7";
+    setStatus(selectedEngineLabel + " · a processar face clicada…");
     byId("traceHint").textContent =
-      "A recolher a zona da face e executar o mesmo processo do AUTO: " +
-      "slope multiescala → persistence/hysteresis → FACE_DETECTOR → CRISTA + PÉ…";
+      state.geometryEngine === "v2"
+        ? "V2: RAW points → Delaunay TIN → region growing → boundary → Kruskal MST → plane intersections…"
+        : "Baseline: slope multiescala → persistence/hysteresis → FACE_DETECTOR → CRISTA + PÉ…";
 
     const tile = await collectTerrainTile(
       pointcloud,
@@ -2035,26 +2062,87 @@
       );
     }
 
-    const result = await api("/api/feature-lines/terrain-face", {
-      method: "POST",
-      body: JSON.stringify({
-        project_id: state.project.id,
-        cloud_id: cloudId,
-        profile: "face",
-        seed: [seed.x, seed.y, seed.z],
-        points: tile.points,
-        classifications: tile.classifications,
-        selected_classes: selectedClasses,
-        grid_resolution: Number(byId("cellSize") ? byId("cellSize").value : 0),
-        slope_low_deg: Number(byId("slopeLow") ? byId("slopeLow").value : 0),
-        slope_high_deg: Number(byId("slopeHigh") ? byId("slopeHigh").value : 0),
-        min_face_area_m2: Number(byId("minArea") ? byId("minArea").value : 4),
-        min_line_length_m: Number(byId("minLength") ? byId("minLength").value : 2),
-        line_smooth_window: Number(
-          byId("lineSmooth") ? byId("lineSmooth").value : 11
+    const useV2 = state.geometryEngine === "v2";
+    const endpoint = useV2
+      ? "/api/v2/feature-lines/terrain-face"
+      : "/api/feature-lines/terrain-face";
+
+    const payload = {
+      project_id: state.project.id,
+      cloud_id: cloudId,
+      profile: "face",
+      seed: [seed.x, seed.y, seed.z],
+      points: tile.points,
+      classifications: tile.classifications,
+      selected_classes: selectedClasses,
+      grid_resolution: Number(byId("cellSize") ? byId("cellSize").value : 0),
+      slope_low_deg: Number(byId("slopeLow") ? byId("slopeLow").value : 0),
+      slope_high_deg: Number(byId("slopeHigh") ? byId("slopeHigh").value : 0),
+      min_face_area_m2: Number(byId("minArea") ? byId("minArea").value : 4),
+      min_line_length_m: Number(byId("minLength") ? byId("minLength").value : 2),
+      line_smooth_window: Number(
+        byId("lineSmooth") ? byId("lineSmooth").value : 11
+      )
+    };
+
+    if (useV2) {
+      payload.tin_spacing_m = 0.25;
+      payload.max_tin_points = 45000;
+      payload.max_triangle_edge_m = 2.25;
+      payload.graph_gap_m = 1.50;
+      payload.station_spacing_m = Math.max(
+        0.25,
+        Math.min(
+          5.0,
+          Number(byId("lineVertexSpacing") ? byId("lineVertexSpacing").value : 1.0)
         )
-      })
-    });
+      );
+      payload.patch_along_m = 2.50;
+      payload.patch_cross_m = 1.80;
+    }
+
+    let result;
+    try {
+      result = await api(endpoint, {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+    } catch (error) {
+      if (!useV2) throw error;
+
+      // A clicked RAW-TIN face is experimental. Never leave the operator with
+      // no usable line when the protected baseline can still solve the same
+      // local cloud sample (e.g. FACE_TOO_SMALL on sparse TIN support).
+      debugLog("terrain_face.v2_fallback_started", {
+        cloud_id: cloudId,
+        seed: [seed.x, seed.y, seed.z],
+        v2_error: error.message || String(error),
+        input_points: tile.points.length
+      }, "WARNING");
+
+      setStatus("V2 local rejeitada · a tentar baseline protegida…");
+      const baselinePayload = {
+        project_id: payload.project_id,
+        cloud_id: payload.cloud_id,
+        profile: payload.profile,
+        seed: payload.seed,
+        points: payload.points,
+        classifications: payload.classifications,
+        selected_classes: payload.selected_classes,
+        grid_resolution: payload.grid_resolution,
+        slope_low_deg: payload.slope_low_deg,
+        slope_high_deg: payload.slope_high_deg,
+        min_face_area_m2: payload.min_face_area_m2,
+        min_line_length_m: payload.min_line_length_m,
+        line_smooth_window: payload.line_smooth_window
+      };
+      result = await api("/api/feature-lines/terrain-face", {
+        method: "POST",
+        body: JSON.stringify(baselinePayload)
+      });
+      result.v2_fallback = true;
+      result.v2_fallback_reason = error.message || String(error);
+    }
 
     if (runId !== state.traceRunId) return;
 
@@ -2073,16 +2161,28 @@
     const toe = result.toe || {};
     const confidence = Math.round(Number(result.confidence || 0) * 100);
 
+    const engineLabel = result.engine === "v2"
+      ? "V2 RAW-TIN-MST"
+      : (result.v2_fallback ? "Baseline 1.1.7 · fallback V2" : "Baseline 1.1.7");
+    const geometryInfo = result.engine === "v2"
+      ? (
+          " · TIN " + Number(result.tin_points || 0).toLocaleString("pt-PT") +
+          " pts · refine " + Math.round(Number(result.refine_ratio || 0) * 100) + "%"
+        )
+      : (
+          " · cell " + Number(result.grid_resolution || 0).toFixed(3) + " m"
+        );
+
     byId("traceHint").textContent =
-      "Face clicada · CRISTA " +
+      engineLabel + " · CRISTA " +
       Number(crest.length_m || 0).toFixed(1) + " m · PÉ " +
-      Number(toe.length_m || 0).toFixed(1) + " m · " +
-      "cell " + Number(result.grid_resolution || 0).toFixed(3) + " m · " +
-      "confiança " + confidence + "% · " +
+      Number(toe.length_m || 0).toFixed(1) + " m" +
+      geometryInfo +
+      " · confiança " + confidence + "% · " +
       result.trace_elapsed_ms.toFixed(0) + " ms. Aceite ou rejeite.";
 
     setStatus(
-      "Talude V1.1.7 · face clicada · CRISTA + PÉ · " +
+      engineLabel + " · face clicada · CRISTA + PÉ · " +
       result.trace_elapsed_ms.toFixed(0) + " ms"
     );
 
@@ -2093,7 +2193,15 @@
       profile_query_points: tile.points.length,
       tile_finish_reason: tile.finish_reason,
       detector: result.detector,
+      engine: result.engine || "baseline",
       grid_resolution: result.grid_resolution,
+      tin_points: result.tin_points,
+      tin_triangles: result.tin_triangles,
+      face_triangles: result.face_triangles,
+      crest_candidate_edges: result.crest_candidate_edges,
+      toe_candidate_edges: result.toe_candidate_edges,
+      refine_ratio: result.refine_ratio,
+      face_slope_median_deg: result.face_slope_median_deg,
       estimated_spacing_m: result.estimated_spacing_m,
       auto_cell_capped: result.auto_cell_capped,
       sample_density_pts_m2: result.sample_density_pts_m2,
@@ -2685,12 +2793,15 @@
       throw new Error("A face clicada não devolveu CRISTA + PÉ.");
     }
 
+    const isV2 = result.engine === "v2" || result.detector === "V2_RAW_TIN_MST";
     const objects = [];
     for (const data of lines) {
       const isCrest = data.type === "CREST";
       const line = createLineObject(data.vertices, {
-        color: isCrest ? 0xffd54a : 0x38d5ff,
-        widthPx: isCrest ? 3.4 : 3.1,
+        color: isV2
+          ? (isCrest ? 0x7cff4f : 0xff4fd8)
+          : (isCrest ? 0xffd54a : 0x38d5ff),
+        widthPx: isV2 ? 4.0 : (isCrest ? 3.4 : 3.1),
         dashed: true,
         dashSize: 0.95,
         gapSize: 0.45
@@ -2705,6 +2816,7 @@
 
     debugLog("feature.face_pair_candidate_drawn", {
       detector: result.detector,
+      engine: result.engine || "baseline",
       line_count: lines.length,
       crest_vertices: result.crest && result.crest.vertices
         ? result.crest.vertices.length
@@ -2728,9 +2840,13 @@
       const confidence = item.data.confidence == null
         ? ""
         : " · " + Math.round(item.data.confidence * 100) + "%";
+      const engine = item.data.engine === "v2"
+        ? " · V2 RAW TIN"
+        : " · baseline";
       el.innerHTML =
         "<strong>Feature " + String(i + 1).padStart(3, "0") + "</strong>" +
         escapeHtml(item.data.profile || "feature") +
+        engine +
         confidence;
       box.appendChild(el);
     }
@@ -2751,6 +2867,7 @@
       id: "fl_" + Date.now(),
       profile: data.profile,
       detector: data.detector,
+      engine: data.engine || "baseline",
       vertices: data.vertices,
       confidence: data.confidence,
       mean_break_angle_deg: data.mean_break_angle_deg,
@@ -2805,6 +2922,7 @@
         const persisted = Object.assign({}, lineData, {
           profile: isCrest ? "ridge" : "toe",
           detector: data.detector,
+          engine: data.engine || "baseline",
           seed: data.seed || null,
           cloud_id: data.cloud_id || null,
           selected_classes: data.selected_classes || null,
@@ -2812,9 +2930,12 @@
           query_source: data.query_source || "potree-local-auto-face"
         });
 
+        const isV2 = data.engine === "v2" || data.detector === "V2_RAW_TIN_MST";
         const accepted = createLineObject(lineData.vertices, {
-          color: isCrest ? 0xffd54a : 0x38d5ff,
-          widthPx: isCrest ? 3.2 : 3.0,
+          color: isV2
+            ? (isCrest ? 0x7cff4f : 0xff4fd8)
+            : (isCrest ? 0xffd54a : 0x38d5ff),
+          widthPx: isV2 ? 3.6 : (isCrest ? 3.2 : 3.0),
           dashed: false
         });
         addFeatureOverlayObject(accepted);
@@ -3390,11 +3511,232 @@
     debugLog("viewer.pan_mode", { enabled: state.panMode });
   }
 
+  function bindSidebarResize() {
+    const handle = byId("sidebarResizeHandle");
+    if (!handle) return;
+
+    const readWidth = () => {
+      const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue("--sidebar-width")
+        .trim();
+      const value = parseFloat(raw);
+      return Number.isFinite(value) ? value : 330;
+    };
+
+    const stop = (event) => {
+      if (!state.sidebarResizePointer) return;
+      if (
+        event &&
+        event.pointerId !== undefined &&
+        state.sidebarResizePointer.pointerId !== event.pointerId
+      ) return;
+
+      state.sidebarResizePointer = null;
+      handle.classList.remove("dragging");
+      document.body.classList.remove("resizing-sidebar");
+      try { handle.releasePointerCapture(event.pointerId); } catch (_) {}
+    };
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      state.sidebarResizePointer = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startWidth: readWidth(),
+      };
+      handle.setPointerCapture(event.pointerId);
+      handle.classList.add("dragging");
+      document.body.classList.add("resizing-sidebar");
+      event.preventDefault();
+    });
+
+    handle.addEventListener("pointermove", (event) => {
+      const drag = state.sidebarResizePointer;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const width = Math.max(
+        280,
+        Math.min(560, drag.startWidth + event.clientX - drag.startX)
+      );
+      document.documentElement.style.setProperty(
+        "--sidebar-width",
+        width.toFixed(0) + "px"
+      );
+      updateWideLineResolution();
+      event.preventDefault();
+    });
+
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+    handle.addEventListener("dblclick", () => {
+      document.documentElement.style.setProperty("--sidebar-width", "330px");
+      updateWideLineResolution();
+    });
+  }
+
+
+  function setCameraProjectionMode(mode) {
+    if (!state.viewer) return;
+    const next = mode === "orthographic" ? "orthographic" : "perspective";
+    state.cameraProjection = next;
+
+    try {
+      if (
+        typeof state.viewer.setCameraMode === "function" &&
+        typeof Potree !== "undefined" &&
+        Potree.CameraMode
+      ) {
+        state.viewer.setCameraMode(
+          next === "orthographic"
+            ? Potree.CameraMode.ORTHOGRAPHIC
+            : Potree.CameraMode.PERSPECTIVE
+        );
+      } else if (state.viewer.scene && Potree.CameraMode) {
+        state.viewer.scene.cameraMode =
+          next === "orthographic"
+            ? Potree.CameraMode.ORTHOGRAPHIC
+            : Potree.CameraMode.PERSPECTIVE;
+      }
+    } catch (_) {}
+
+    const button = byId("orthoModeButton");
+    if (button) {
+      button.textContent = next === "orthographic" ? "ORTO" : "PERSP";
+      button.classList.toggle("active", next === "orthographic");
+    }
+
+    debugLog("viewer.camera_projection", { mode: next });
+  }
+
+
+  function setNavigationProfile(profile) {
+    state.navigationProfile = profile === "cad" ? "cad" : "agisoft";
+    const button = byId("navProfileButton");
+    if (button) {
+      button.textContent = state.navigationProfile === "agisoft" ? "AGISOFT" : "CAD";
+      button.classList.toggle("active", state.navigationProfile === "agisoft");
+    }
+
+    const controls = state.viewer && state.viewer.orbitControls;
+    if (controls) {
+      if ("rotationSpeed" in controls) {
+        controls.rotationSpeed = state.navigationProfile === "agisoft" ? 4.2 : 6.0;
+      }
+      if ("fadeFactor" in controls) {
+        controls.fadeFactor = state.navigationProfile === "agisoft" ? 12.0 : 18.0;
+      }
+    }
+    debugLog("viewer.navigation_profile", { profile: state.navigationProfile });
+  }
+
+  function pointCloudIntersectionFromEvent(event) {
+    if (!state.viewer) return null;
+    try {
+      const rect = state.viewer.renderer.domElement.getBoundingClientRect();
+      state.viewer.inputHandler.mouse.set(
+        event.clientX - rect.left,
+        event.clientY - rect.top
+      );
+      return Potree.Utils.getMousePointCloudIntersection(
+        state.viewer.inputHandler.mouse,
+        state.viewer.scene.getActiveCamera(),
+        state.viewer,
+        state.viewer.scene.pointclouds
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function onViewerDoubleClick(event) {
+    if (!state.viewer || state.editorPickArmed || state.traceArmed) return;
+    const hit = pointCloudIntersectionFromEvent(event);
+    if (!hit || !hit.location) return;
+
+    const view = state.viewer.scene && state.viewer.scene.view;
+    if (!view) return;
+
+    try {
+      if (typeof view.lookAt === "function") {
+        view.lookAt(hit.location);
+      } else {
+        const camera = state.viewer.scene.getActiveCamera();
+        if (camera) {
+          const direction = new THREE.Vector3();
+          camera.getWorldDirection(direction);
+          const distance = Math.max(4.0, camera.position.distanceTo(hit.location));
+          view.position.copy(hit.location.clone().addScaledVector(direction, -distance));
+        }
+      }
+      drawPivotMarker(hit.location);
+      debugLog("viewer.pivot_changed", {
+        xyz: [hit.location.x, hit.location.y, hit.location.z],
+        navigation_profile: state.navigationProfile
+      });
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    } catch (_) {}
+  }
+
+  function drawPivotMarker(position) {
+    if (!state.featureOverlayScene) return;
+    if (state.navPivotMarker) {
+      try {
+        state.featureOverlayScene.remove(state.navPivotMarker);
+        state.navPivotMarker.geometry.dispose();
+        state.navPivotMarker.material.dispose();
+      } catch (_) {}
+    }
+    const geometry = new THREE.RingGeometry(0.20, 0.30, 24);
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x65d5ff,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      transparent: true,
+      opacity: 0.9
+    });
+    const marker = new THREE.Mesh(geometry, material);
+    marker.position.copy(position);
+    marker.renderOrder = 10080;
+    state.featureOverlayScene.add(marker);
+    state.navPivotMarker = marker;
+    window.setTimeout(() => {
+      if (state.navPivotMarker === marker && state.featureOverlayScene) {
+        state.featureOverlayScene.remove(marker);
+        try {
+          marker.geometry.dispose();
+          marker.material.dispose();
+        } catch (_) {}
+        state.navPivotMarker = null;
+      }
+    }, 1400);
+  }
+
+  function updateViewCubeOrientation() {
+    const cube = byId("viewCube");
+    const view = state.viewer && state.viewer.scene && state.viewer.scene.view;
+    if (!cube || !view) return;
+
+    const yaw = Number(view.yaw || 0);
+    const pitch = Number(view.pitch || 0);
+    if (
+      state.viewCubeLastYaw !== null &&
+      Math.abs(yaw - state.viewCubeLastYaw) < 0.002 &&
+      Math.abs(pitch - state.viewCubeLastPitch) < 0.002
+    ) return;
+
+    state.viewCubeLastYaw = yaw;
+    state.viewCubeLastPitch = pitch;
+    cube.style.setProperty("--cube-yaw", (-yaw * 180 / Math.PI - 35).toFixed(2) + "deg");
+    cube.style.setProperty("--cube-pitch", (pitch * 180 / Math.PI - 5).toFixed(2) + "deg");
+  }
+
   function onViewerNavMouseDown(event) {
     if (!state.viewer) return;
 
     const explicitPan =
       event.button === 1 ||
+      event.button === 2 ||
+      (event.button === 0 && event.shiftKey) ||
       (event.button === 0 && state.panMode);
 
     if (explicitPan) {
@@ -3461,17 +3803,58 @@
     const start = state.navPointerDown;
     state.navPointerDown = null;
 
-    if (!state.traceArmed || !start || event.shiftKey || state.panMode) return;
+    if (!start || event.shiftKey || state.panMode) return;
 
     const moved = Math.hypot(
       event.clientX - start.x,
       event.clientY - start.y
     );
 
-    // Clique curto = selecionar a face. Arrastar = OrbitControls.
+    // Clique curto (<5 px) é sempre tratado aqui; arrastar continua OrbitControls.
+    // O editor vetorial tem prioridade quando está armado, sem alterar a UX CAD.
     if (moved <= 5) {
-      onViewerPickClick(event);
+      if (state.editorPickArmed && state.viewer) {
+        const hit = Potree.Utils.getMousePointCloudIntersection(
+          state.viewer.inputHandler.mouse,
+          state.viewer.scene.getActiveCamera(),
+          state.viewer,
+          state.viewer.scene.pointclouds
+        );
+        if (hit) {
+          const context = state.editorPickContext || {};
+          state.editorPickArmed = false;
+          state.editorPickContext = null;
+          window.dispatchEvent(new CustomEvent("talude:editor-pick", {
+            detail: {
+              xyz: [hit.location.x, hit.location.y, hit.location.z],
+              context: context
+            }
+          }));
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
+      }
+
+      if (state.traceArmed) {
+        onViewerPickClick(event);
+      }
     }
+  }
+
+
+  function armEditorPick(context) {
+    state.editorPickArmed = true;
+    state.editorPickContext = context || {};
+    state.traceArmed = false;
+    const traceButton = byId("traceButton");
+    if (traceButton) traceButton.classList.remove("active");
+    setStatus("Editor vetorial · clique curto na nuvem para escolher XYZ.");
+  }
+
+  function cancelEditorPick() {
+    state.editorPickArmed = false;
+    state.editorPickContext = null;
   }
 
 
@@ -3481,6 +3864,7 @@
     const viewer = state.viewer;
     const methods = {
       top: "setTopView",
+      bottom: "setBottomView",
       front: "setFrontView",
       back: "setBackView",
       left: "setLeftView",
@@ -3496,6 +3880,7 @@
 
       const fallback = {
         top: { yaw: 0.0, pitch: -Math.PI / 2 + 0.001 },
+        bottom: { yaw: 0.0, pitch: Math.PI / 2 - 0.001 },
         front: { yaw: 0.0, pitch: 0.0 },
         back: { yaw: Math.PI, pitch: 0.0 },
         left: { yaw: -Math.PI / 2, pitch: 0.0 },
@@ -3581,7 +3966,9 @@
       armed: state.traceArmed,
       feature_mode: state.featureMode,
       profile: "face",
-      detector: "same-auto-1.1.2-clicked-face"
+      detector: state.geometryEngine === "v2"
+        ? "V2_RAW_TIN_MST"
+        : "same-auto-1.1.2-clicked-face"
     });
 
     if (state.traceArmed) {
@@ -3593,9 +3980,15 @@
             : "janela média da face";
 
       byId("traceHint").textContent =
-        "Clique curto aproximadamente no CENTRO da face inclinada. " +
-        "O mesmo detector AUTO da 1.1.2 processará apenas essa " +
-        extent + " e devolverá CRISTA + PÉ. Arraste para rodar.";
+        state.geometryEngine === "v2"
+          ? (
+              "V2 experimental: clique no CENTRO da face. RAW TIN + MST + " +
+              "interseção local das superfícies processará essa " + extent + "."
+            )
+          : (
+              "Baseline 1.1.7: clique no CENTRO da face. O detector base " +
+              "processará essa " + extent + " e devolverá CRISTA + PÉ."
+            );
     } else {
       byId("traceHint").textContent =
         state.candidateData
@@ -3606,6 +3999,7 @@
 
 
   function bindUi() {
+    bindSidebarResize();
     document.querySelectorAll("[data-standard-view]").forEach((button) => {
       button.onclick = () => {
         const view = button.dataset.standardView;
@@ -3614,8 +4008,62 @@
       };
     });
 
+    document.querySelectorAll("[data-cube-view]").forEach((button) => {
+      button.onclick = () => {
+        const view = button.dataset.cubeView;
+        if (view === "iso") setIsoView();
+        else setStandardView(view);
+      };
+    });
+
+    if (byId("navProfileButton")) {
+      byId("navProfileButton").onclick = () => {
+        setNavigationProfile(
+          state.navigationProfile === "agisoft" ? "cad" : "agisoft"
+        );
+      };
+      setNavigationProfile("agisoft");
+    }
+
+    window.addEventListener("keydown", (event) => {
+      if (event.target && ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) return;
+      const key = String(event.key || "").toLowerCase();
+      if (key === "f") {
+        try { state.viewer.fitToScreen(0.82); } catch (_) {}
+      } else if ((event.altKey && key === "1") || event.code === "Numpad7") {
+        setStandardView("top");
+      } else if ((event.altKey && key === "2") || event.code === "Numpad1") {
+        setStandardView("front");
+      } else if (event.altKey && key === "3") {
+        setStandardView("back");
+      } else if ((event.altKey && key === "4") || event.code === "Numpad3") {
+        setStandardView("left");
+      } else if (event.altKey && key === "5") {
+        setStandardView("right");
+      } else if ((event.altKey && key === "6") || event.code === "Numpad5") {
+        setIsoView();
+      } else if (key === "o") {
+        setCameraProjectionMode(
+          state.cameraProjection === "orthographic"
+            ? "perspective"
+            : "orthographic"
+        );
+      }
+    });
+
     if (byId("panModeButton")) {
       byId("panModeButton").onclick = () => setPanMode(!state.panMode);
+    }
+
+    if (byId("orthoModeButton")) {
+      byId("orthoModeButton").onclick = () => {
+        setCameraProjectionMode(
+          state.cameraProjection === "orthographic"
+            ? "perspective"
+            : "orthographic"
+        );
+      };
+      setCameraProjectionMode("perspective");
     }
 
     byId("newProject").onclick = () => {
@@ -3646,6 +4094,35 @@
       acceptCandidate().catch((e) => toast(e.message, 8000));
     };
     byId("rejectTrace").onclick = rejectCandidate;
+
+    document.querySelectorAll("#geometryEngine button").forEach((button) => {
+      button.onclick = () => {
+        document
+          .querySelectorAll("#geometryEngine button")
+          .forEach((b) => b.classList.remove("active"));
+        button.classList.add("active");
+        state.geometryEngine = button.dataset.engine || "baseline";
+        state.traceArmed = false;
+        byId("traceButton").classList.remove("active");
+        if (state.candidateObject) removeCandidate();
+        resetWaypointSession();
+        const label = state.geometryEngine === "v2"
+          ? "V2 RAW-TIN-MST experimental"
+          : "Baseline 1.1.7";
+        const autoButton = byId("detectTalude");
+        if (autoButton) {
+          autoButton.textContent = state.geometryEngine === "v2"
+            ? "AUTO GLOBAL V2 — CRISTA + PÉ"
+            : "DETETAR CRISTA + PÉ";
+        }
+        byId("traceHint").textContent =
+          label + " selecionada. Picar face usa o motor escolhido; DETETAR CRISTA + PÉ usa o AUTO global do mesmo motor.";
+        setStatus(label + " selecionada.");
+        debugLog("feature.geometry_engine_changed", {
+          geometry_engine: state.geometryEngine
+        });
+      };
+    });
 
     document.querySelectorAll("#featureMode button").forEach((button) => {
       button.onclick = () => {
@@ -3760,6 +4237,12 @@
     toast,
     selectedClassesForEngine,
     setClassificationPreset,
-    updateWideLineResolution
+    updateWideLineResolution,
+    armEditorPick,
+    cancelEditorPick,
+    setNavigationProfile,
+    setStandardView,
+    setIsoView,
+    setCameraProjectionMode
   };
 })();

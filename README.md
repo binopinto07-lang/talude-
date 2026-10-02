@@ -184,3 +184,118 @@ Esta versão corrige duas regressões observadas nos testes reais da cloud de 24
 - **Face clicada:** o ProfileRequest estava a terminar por `soft_timeout` ainda com apenas alguns milhares de pontos e o espaçamento dessa amostra LOD fazia a grelha subir até **1.0 m**. Agora uma amostra pobre continua a carregar até ao limite duro e a grelha AUTO local é limitada a **0.35 m** quando o utilizador deixa Cell size = 0.
 
 A suavização predefinida regressa a **11**, que preserva melhor curvas e extremos. A deteção de faces continua a ser a base 1.1.2; a suavização permanece exclusivamente pós-deteção.
+
+
+## V2 Exp2 — AUTO GLOBAL RAW TIN
+
+A branch `v2-experimental-raw-tin-mst` acrescenta um segundo AUTO global sem
+alterar a baseline `baseline-1.1.7-refine`.
+
+Na UI, o seletor **Motor da face** passa a controlar também
+**DETETAR CRISTA + PÉ**:
+
+```text
+Baseline 1.1.7
+  → AUTO comprovado 1.1.7
+
+V2 RAW TIN
+  → AUTO GLOBAL V2
+  → descoberta de faces pela baseline
+  → ROI RAW Ground automática
+  → Delaunay TIN por face
+  → local region growing
+  → boundary CREST/TOE
+  → Kruskal MST
+  → refinamento 3D
+  → fallback baseline quando V2 não é segura
+```
+
+A V2 global produz ainda:
+
+- `debug/v2_faces.jsonl`;
+- `debug/summary.json`;
+- contadores de faces V2 bem sucedidas e fallbacks;
+- reason codes por falha/rejeição;
+- botão de cancelamento do processamento.
+
+Ver `docs/V2_SECOND_DELIVERY.md`.
+
+
+## V2 Fases 3–5 — estado atual
+
+A branch `v2-experimental-raw-tin-mst` avançou para:
+
+```text
+AUTO GLOBAL
+  ↓
+TILED + HALO
+  ↓
+RAW TIN por tile/face
+  ↓
+STITCHING
+  ↓
+SUPPORT-AWARE REFINEMENT
+  ↓
+VECTOR DOCUMENT
+```
+
+Produção LAS/LAZ usa tiles e halo; resultados frágeis continuam protegidos pelo
+fallback da baseline 1.1.7.
+
+Cada execução cria também:
+
+`vector_document.json`
+
+que será a base das próximas layers, edição, save/load e exportação profissional.
+
+Documentação: `docs/V2_PHASES_3_5.md`.
+
+
+## V2 Fases 6–9
+
+A branch experimental inclui agora o segundo bloco completo:
+
+```text
+Vector Document
+   ↓
+Layers
+   ↓
+Editor 3D
+   ↓
+Autosave / revisões / recovery
+   ↓
+DXF 3D + SHP 3D + GPKG
+```
+
+Layers base: **CRISTA**, **PE_TALUDE**, **FACES** e **DEBUG**.
+
+O editor permite mover/inserir/apagar vértices por clique na point cloud,
+apagar linhas, criar CRISTA/PÉ manual, bloquear layers e usar undo/redo.
+
+O Windows builder deixou de executar o PyInstaller dentro do path longo do ZIP.
+Agora usa `%LOCALAPPDATA%\LBM\TaludeStudioBuild`, com preflight de imports e
+assets antes de empacotar.
+
+Detalhes: `docs/V2_PHASES_6_9.md`.
+
+
+## V2.1 — Layers, navegação e performance
+
+A branch experimental inclui agora uma entrega focada no trabalho diário:
+
+- árvore de camadas agrupada inspirada no QGIS;
+- NUVEM / BREAKLINES / ANÁLISE;
+- visibilidade, lock e solo;
+- navegação AGISOFT por defeito;
+- orbit com esquerdo, pan com direito/meio/Shift+esquerdo;
+- duplo clique para pivot/foco;
+- ViewCube CAD TOP/BOTTOM/FRONT/BACK/LEFT/RIGHT/ISO;
+- perfis AUTO V2 Rápido / Equilibrado / Preciso;
+- fallback automático da face clicada V2 para a baseline;
+- espaçamento final dos vértices configurável, default 1 m.
+
+O perfil Equilibrado limita o RAW-TIN caro em clouds muito grandes e mantém as
+restantes faces na baseline protegida, em vez de voltar a executar todas as
+faces durante mais de uma hora.
+
+Detalhes: `docs/V2_1_UX_PERFORMANCE.md`.

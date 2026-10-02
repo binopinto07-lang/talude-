@@ -25,7 +25,7 @@ def test_studio_uses_professional_cloud_viewer():
     assert "window.TaludeShell" in app
     assert "createLineObject" in app
 
-    assert "/api/talude/auto" in auto
+    assert "/api/v2/talude/auto" in auto
     assert "0xffd54a" in auto
     assert "0x38d5ff" in auto
 
@@ -38,3 +38,44 @@ def test_primary_entrypoint_is_no_longer_tkinter():
     entry = Path("talude_gui.py").read_text(encoding="utf-8")
     assert "studio.desktop.main" in entry
     assert "tkinter" not in entry
+
+
+def test_v22_qgis_agisoft_cad_navigation_contract():
+    html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
+    css = Path("studio/viewer/styles.css").read_text(encoding="utf-8")
+    app = Path("studio/viewer/app.js").read_text(encoding="utf-8")
+    editor = Path("studio/viewer/vector_editor.js").read_text(encoding="utf-8")
+
+    # QGIS-style dock/layer tree.
+    assert 'id="sidebarResizeHandle"' in html
+    assert 'id="vectorLayers"' in html
+    assert 'id="layersShowAll"' in html
+    assert 'id="layersHideAll"' in html
+    assert 'id="layersSoloActive"' in html
+    assert "--sidebar-width" in css
+    assert ".sidebar-resize-handle" in css
+    assert ".qgis-layer-tree" in css
+    assert "NUVEM DE PONTOS" in editor
+    assert "BREAKLINES" in editor
+    assert "ANÁLISE / SUPORTE" in editor
+
+    # Agisoft-like orbit/pan/pivot.
+    assert "viewer.setControls(viewer.orbitControls)" in app
+    assert "onViewerDoubleClick" in app
+    assert "pointCloudIntersectionFromEvent" in app
+    assert "navigationProfile" in app
+    assert 'id="navProfileButton"' in html
+    assert "Shift+esquerdo" in html
+
+    # CAD/progeCAD-style standard views and WCS.
+    for view in ("top", "front", "back", "left", "right", "iso"):
+        assert f'data-standard-view="{view}"' in html
+    for view in ("top", "bottom", "front", "back", "left", "right"):
+        assert f'data-cube-view="{view}"' in html
+    assert 'id="viewCubeWidget"' in html
+    assert 'id="viewAxisWidget"' in html
+    assert 'id="orthoModeButton"' in html
+    assert "setCameraProjectionMode" in app
+    assert "Potree.CameraMode.ORTHOGRAPHIC" in app
+    assert ".view-cube-widget" in css
+    assert ".view-axis-widget" in css

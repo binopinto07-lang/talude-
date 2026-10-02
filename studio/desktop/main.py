@@ -161,6 +161,32 @@ def self_test() -> int:
         checks.append(("BREAKLINE_ENGINE_V1", False, repr(exc)))
 
     try:
+        from talude_v2 import extract_face_raw_tin, run_auto_global_v2  # noqa: F401
+        from talude_v2.tiled_auto import process_candidates_tiled, stitch_fragments  # noqa: F401
+        from talude_v2.vector_document import create_vector_document  # noqa: F401
+        from studio.backend.vector_documents import save_active_document  # noqa: F401
+        from studio.backend.vector_export import export_vector_document  # noqa: F401
+        checks.append(("BREAKLINE_ENGINE_V2_RAW_TIN_MST", True, "experimental"))
+        checks.append(("AUTO_GLOBAL_V2", True, "second-delivery"))
+        checks.append(("V2_TILED_HALO_STITCH", True, "phase-3"))
+        checks.append(("V2_SUPPORT_AWARE_REFINEMENT", True, "phase-4"))
+        checks.append(("V2_VECTOR_DOCUMENT", True, "phase-5"))
+        checks.append(("V2_LAYERS_EDITOR", True, "phase-6-7"))
+        checks.append(("V2_PROJECT_RECOVERY", True, "phase-8"))
+        checks.append(("V2_EXPORT_DXF_SHP_GPKG", True, "phase-9"))
+        checks.append(("V2_1_UX_PERFORMANCE", True, "qgis-layers/agisoft-nav/viewcube/profiles"))
+    except Exception as exc:
+        checks.append(("BREAKLINE_ENGINE_V2_RAW_TIN_MST", False, repr(exc)))
+        checks.append(("AUTO_GLOBAL_V2", False, repr(exc)))
+        checks.append(("V2_TILED_HALO_STITCH", False, repr(exc)))
+        checks.append(("V2_SUPPORT_AWARE_REFINEMENT", False, repr(exc)))
+        checks.append(("V2_VECTOR_DOCUMENT", False, repr(exc)))
+        checks.append(("V2_LAYERS_EDITOR", False, repr(exc)))
+        checks.append(("V2_PROJECT_RECOVERY", False, repr(exc)))
+        checks.append(("V2_EXPORT_DXF_SHP_GPKG", False, repr(exc)))
+        checks.append(("V2_1_UX_PERFORMANCE", False, repr(exc)))
+
+    try:
         import pyproj  # noqa: F401
         checks.append(("pyproj", True, pyproj.__version__))
     except Exception as exc:
@@ -178,6 +204,7 @@ def self_test() -> int:
         ("PotreeConverter", converter_executable()),
         ("Viewer HTML", viewer_root() / "index.html"),
         ("Viewer JS", viewer_root() / "app.js"),
+        ("Vector Editor JS", viewer_root() / "vector_editor.js"),
     ]
     for name, path in assets:
         checks.append((name, path.exists(), str(path)))

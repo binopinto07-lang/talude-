@@ -50,6 +50,7 @@ class JobRegistry:
                 "updated_at": _now(),
                 "result": None,
                 "error": None,
+                "cancel_requested": False,
             }
         return job_id
 
@@ -64,6 +65,25 @@ class JobRegistry:
             if job_id not in self._jobs:
                 raise KeyError(job_id)
             return dict(self._jobs[job_id])
+
+    def request_cancel(self, job_id: str) -> dict[str, Any]:
+        with self._lock:
+            if job_id not in self._jobs:
+                raise KeyError(job_id)
+            job = self._jobs[job_id]
+            if job.get("status") in {"completed", "failed", "cancelled"}:
+                return dict(job)
+            job["cancel_requested"] = True
+            job["status"] = "cancelling"
+            job["message"] = "A cancelar…"
+            job["updated_at"] = _now()
+            return dict(job)
+
+    def is_cancel_requested(self, job_id: str) -> bool:
+        with self._lock:
+            if job_id not in self._jobs:
+                return False
+            return bool(self._jobs[job_id].get("cancel_requested"))
 
 
 jobs = JobRegistry()

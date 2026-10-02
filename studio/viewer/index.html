@@ -19,7 +19,7 @@
         <div class="brand-mark">TL</div>
         <div>
           <div class="brand-title">TALUDE STUDIO</div>
-          <div class="brand-subtitle">V1.1 · Crista + Pé Automático</div>
+          <div class="brand-subtitle">Projeto · Camadas · Deteção · Edição 3D</div>
         </div>
       </header>
 
@@ -39,9 +39,154 @@
         <div id="jobBox" class="job hidden">
           <div id="jobText">A preparar…</div>
           <div class="progress-track"><div id="jobProgress"></div></div>
+          <button id="cancelJob" class="wide hidden">Cancelar processamento</button>
         </div>
       </section>
 
+      <section class="card vector-editor-card qgis-layer-card">
+        <div class="section-title qgis-title-row">
+          <span>CAMADAS</span>
+          <span class="qgis-title-actions">CAMADAS DO PROJETO</span>
+        </div>
+
+        <div class="qgis-layer-toolbar" title="Controlo de camadas">
+          <button id="layersShowAll" title="Mostrar todas">👁</button>
+          <button id="layersHideAll" title="Ocultar todas">◉</button>
+          <button id="layersSoloActive" title="Só layer ativa">S</button>
+          <button id="vectorRefresh" title="Atualizar árvore">↻</button>
+          <button id="vectorSave" title="Guardar">💾</button>
+          <button id="vectorUndo" title="Undo">↶</button>
+          <button id="vectorRedo" title="Redo">↷</button>
+        </div>
+
+        <div id="vectorStatus" class="hint qgis-status">Sem Vector Document carregado.</div>
+        <div id="vectorLayers" class="vector-layer-list qgis-layer-tree"></div>
+
+        <details class="vector-editor-details">
+          <summary>EDITOR 3D</summary>
+        <label>Features</label>
+        <div class="vector-filter-row">
+          <select id="vectorLayerFilter">
+            <option value="">Todas as layers</option>
+          </select>
+          <input id="vectorSearch" type="text" placeholder="Face / ID…" />
+        </div>
+        <div id="vectorFeatures" class="vector-feature-list"></div>
+
+        <div id="vectorEditBox" class="vector-edit-box hidden">
+          <div class="vector-selected-title" id="vectorSelectedTitle">Feature</div>
+          <label>Vértice</label>
+          <select id="vectorVertexSelect"></select>
+          <div id="vectorVertexXYZ" class="vector-coordinate-readout">X — · Y — · Z —</div>
+
+          <div id="vectorReviewActions" class="vector-review-actions hidden">
+            <button id="vectorApproveFace" class="review-approve">✓ Aprovar face</button>
+            <button id="vectorRejectFace" class="review-reject">✕ Rejeitar face</button>
+          </div>
+          <div class="vector-action-grid">
+            <button id="vectorMoveVertex">Mover por clique</button>
+            <button id="vectorInsertVertex">Inserir depois</button>
+            <button id="vectorDeleteVertex">Apagar vértice</button>
+            <button id="vectorDeleteLine" class="danger-soft">Apagar linha</button>
+          </div>
+        </div>
+
+        <div class="vector-new-line">
+          <select id="vectorNewType">
+            <option value="CREST">Nova CRISTA</option>
+            <option value="TOE">Novo PÉ</option>
+          </select>
+          <button id="vectorNewLine">Iniciar linha</button>
+        </div>
+        <div id="vectorDraftActions" class="vector-toolbar hidden">
+          <button id="vectorFinishLine" class="primary">Concluir</button>
+          <button id="vectorCancelLine">Cancelar</button>
+        </div>
+
+        </details>
+
+        <details class="vector-project-tools">
+          <summary>Projeto / recuperação / exportação</summary>
+          <div class="vector-toolbar">
+            <button id="vectorRecover">Recuperar anterior</button>
+          </div>
+          <div class="vector-export-form">
+            <label><input id="exportDxf" type="checkbox" checked /> DXF 3D</label>
+            <label><input id="exportShp" type="checkbox" checked /> SHP 3D</label>
+            <label><input id="exportGpkg" type="checkbox" checked /> GPKG</label>
+            <label><input id="exportGeojson" type="checkbox" /> GeoJSON</label>
+            <label><input id="exportVisibleOnly" type="checkbox" /> Só visíveis</label>
+            <label><input id="exportFilteredLayer" type="checkbox" /> Só layer filtrada</label>
+            <label><input id="exportSelectedOnly" type="checkbox" /> Só selecionada</label>
+          </div>
+          <button id="vectorExport" class="primary wide">EXPORTAR VETORES 3D</button>
+        </details>
+      </section>
+
+
+
+
+      <section class="card auto-talude-card">
+        <div class="section-title">AUTO TALUDE</div>
+        <div class="talude-feature-head">
+          <div class="talude-symbol">⌁</div>
+          <div>
+            <strong>CRISTA + PÉ</strong>
+            <div class="hint">Deteção automática da face e dos dois limites.</div>
+          </div>
+        </div>
+
+        <button id="detectTalude" class="primary wide" disabled>DETETAR CRISTA + PÉ</button>
+
+        <div class="talude-legend">
+          <span><i class="swatch talude-crest"></i>CRISTA</span>
+          <span><i class="swatch talude-toe"></i>PÉ DE TALUDE</span>
+        </div>
+
+        <details class="talude-advanced">
+          <summary>Parâmetros avançados</summary>
+          <div class="performance-profile">
+            <label>Perfil de processamento V2</label>
+            <select id="v2PerformanceMode">
+              <option value="fast">Rápido — descoberta apenas, envia tudo para revisão</option>
+              <option value="balanced" selected>Equilibrado — PROFILE-EDGE em todas as faces + cache</option>
+              <option value="precise">Preciso — PROFILE-EDGE mais fino em todas as faces</option>
+            </select>
+            <div class="hint">Equilibrado resolve cada face de forma contínua numa única passagem Ground. Só pares CRISTA/PÉ geometricamente válidos entram nas BREAKLINES; faces falhadas contam em REVISÃO sem desenhar a baseline sobre a nuvem.</div>
+          </div>
+          <div class="talude-param-grid">
+            <label>Cell size (m)<input id="cellSize" type="number" min="0" step="0.01" value="0"></label>
+            <label>Slope LOW (°)<input id="slopeLow" type="number" min="0" step="1" value="0"></label>
+            <label>Slope HIGH (°)<input id="slopeHigh" type="number" min="0" step="1" value="0"></label>
+            <label>Área mín. (m²)<input id="minArea" type="number" min="0.1" step="0.5" value="4"></label>
+            <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
+            <label>Espaçamento vértices (m)<input id="lineVertexSpacing" type="number" min="0.25" max="5" step="0.25" value="1.0"></label>
+          </div>
+          <div class="hint">A baseline 1.1.7 serve apenas para descobrir a existência e extensão aproximada das faces. A posição final é determinada pela face inclinada local e pelas transições plano → face → plano; a baseline nunca é publicada como resultado V2.</div>
+        </details>
+      </section>
+
+      <section class="card talude-results-card">
+        <div class="section-title">RESULTADOS AUTOMÁTICOS</div>
+        <div class="talude-stats">
+          <div><strong id="facesCount">0</strong><span>Aprovadas</span></div>
+          <div class="crest-stat"><strong id="crestCount">0</strong><span>Cristas</span></div>
+          <div class="toe-stat"><strong id="toeCount">0</strong><span>Pés</span></div>
+          <div class="review-stat"><strong id="reviewCount">0</strong><span>Revisão</span></div>
+        </div>
+        <div class="row">
+          <button id="clearTaludeLines" disabled>Limpar</button>
+          <button id="openTaludeResults" disabled>Abrir resultados</button>
+        </div>
+        <div id="taludeFeatureList" class="layer-list talude-feature-list"></div>
+      </section>
+
+      <details class="advanced-workflow">
+        <summary>
+          <span>FERRAMENTAS AVANÇADAS</span>
+          <small>Classificações · deteção assistida/manual</small>
+        </summary>
+        <div class="advanced-workflow-body">
       <section class="card">
         <div class="section-title">CLASSIFICAÇÕES</div>
         <div class="class-actions">
@@ -64,6 +209,12 @@
           <button data-mode="multiple">Múltiplo</button>
         </div>
 
+        <label>Motor da face</label>
+        <div class="segmented engine-selector" id="geometryEngine">
+          <button data-engine="baseline">Baseline 1.1.7 · diagnóstico</button>
+          <button data-engine="v2" class="active">V2 · principal</button>
+        </div>
+
         <label>Deteção</label>
         <select id="profile">
           <option value="face">Face de talude — CRISTA + PÉ</option>
@@ -77,69 +228,24 @@
         </div>
 
         <div id="traceHint" class="hint">
-          Clique aproximadamente no centro da face inclinada. É executado o mesmo detector AUTO da 1.1.2, mas apenas nessa face, devolvendo CRISTA + PÉ.
+          Baseline = geometria 1.1.7. V2 = pontos RAW → Delaunay TIN → region growing → boundary → Kruskal MST → interseção local de superfícies a cada ~1 m.
         </div>
 
         <div class="legend">
-          <span><i class="swatch candidate"></i>Candidato</span>
-          <span><i class="swatch accepted"></i>Aceite</span>
-          <span><i class="dot midpoint"></i>Inserir vértice</span>
+          <span><i class="swatch candidate"></i>Baseline</span>
+          <span><i class="swatch v2-crest"></i>V2 crista</span>
+          <span><i class="swatch v2-toe"></i>V2 pé</span>
         </div>
       </section>
-
-
-      <section class="card auto-talude-card">
-        <div class="section-title">AUTO TALUDE</div>
-        <div class="talude-feature-head">
-          <div class="talude-symbol">⌁</div>
-          <div>
-            <strong>CRISTA + PÉ</strong>
-            <div class="hint">Deteção automática da face e dos dois limites.</div>
-          </div>
         </div>
+      </details>
 
-        <button id="detectTalude" class="primary wide" disabled>DETETAR CRISTA + PÉ</button>
+      <div id="cloudList" class="hidden"></div>
+      <div id="featureList" class="hidden"></div>
 
-        <div class="talude-legend">
-          <span><i class="swatch talude-crest"></i>CRISTA</span>
-          <span><i class="swatch talude-toe"></i>PÉ DE TALUDE</span>
-        </div>
-
-        <details class="talude-advanced">
-          <summary>Parâmetros avançados</summary>
-          <div class="talude-param-grid">
-            <label>Cell size (m)<input id="cellSize" type="number" min="0" step="0.01" value="0"></label>
-            <label>Slope LOW (°)<input id="slopeLow" type="number" min="0" step="1" value="0"></label>
-            <label>Slope HIGH (°)<input id="slopeHigh" type="number" min="0" step="1" value="0"></label>
-            <label>Área mín. (m²)<input id="minArea" type="number" min="0.1" step="0.5" value="4"></label>
-            <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
-            <label>Suavização linha<input id="lineSmooth" type="number" min="3" max="51" step="2" value="11"></label>
-          </div>
-          <div class="hint">Detetor = base 1.1.2. Suavização atua só depois da deteção; 11 é o valor recomendado; valores maiores suavizam mais mas podem arredondar demasiado as curvas.</div>
-        </details>
-      </section>
-
-      <section class="card talude-results-card">
-        <div class="section-title">RESULTADOS AUTOMÁTICOS</div>
-        <div class="talude-stats">
-          <div><strong id="facesCount">0</strong><span>Faces</span></div>
-          <div class="crest-stat"><strong id="crestCount">0</strong><span>Cristas</span></div>
-          <div class="toe-stat"><strong id="toeCount">0</strong><span>Pés</span></div>
-        </div>
-        <div class="row">
-          <button id="clearTaludeLines" disabled>Limpar</button>
-          <button id="openTaludeResults" disabled>Abrir resultados</button>
-        </div>
-        <div id="taludeFeatureList" class="layer-list talude-feature-list"></div>
-      </section>
-\n      <section class="card grow">
-        <div class="section-title">CAMADAS</div>
-        <div id="cloudList" class="layer-list"></div>
-        <div id="featureList" class="layer-list"></div>
-      </section>
-
-      <footer id="status">V2 pronta.</footer>
+      <footer id="status">Baseline protegida · V2 com validação de aresta.</footer>
     </aside>
+    <div id="sidebarResizeHandle" class="sidebar-resize-handle" title="Arrastar para redimensionar painel"></div>
 
     <main class="viewport-shell">
       <div class="topbar">
@@ -157,19 +263,46 @@
           <button data-standard-view="left">ESQ</button>
           <button data-standard-view="right">DIR</button>
           <button data-standard-view="iso">ISO</button>
+          <button id="navProfileButton" class="nav-profile-button active" title="Alternar navegação">AGISOFT</button>
           <button id="panModeButton" class="pan-button">PAN</button>
+          <button id="orthoModeButton" title="Alternar Perspetiva / Ortográfica">PERSP</button>
         </div>
         <div class="nav-help" title="Navegação 3D">
-          <span>Rodar: arrastar esquerdo</span>
-          <span>PAN: direito / meio / botão PAN</span>
+          <span>Orbit: arrastar esquerdo</span>
+          <span>PAN: direito / meio / Shift+esquerdo</span>
+          <span>Pivot: duplo clique</span>
           <span>Zoom: roda</span>
-          <span>Picar face: clique curto</span>
         </div>
-        <div id="pointStats">Potree · LOD dinâmico · Talude V1.1.7</div>
+        <div id="pointStats">Potree · baseline 1.1.7 + V2 PROFILE-EDGE</div>
       </div>
 
       <div id="potree_render_area"></div>
       <div id="potree_sidebar_container" class="potree_container"></div>
+
+      <div id="viewAxisWidget" class="view-axis-widget" aria-label="Eixos WCS">
+        <span class="axis-z">Z</span>
+        <span class="axis-y">Y</span>
+        <span class="axis-x">X</span>
+        <i class="axis-line axis-line-x"></i>
+        <i class="axis-line axis-line-y"></i>
+        <i class="axis-line axis-line-z"></i>
+        <b>WCS</b>
+      </div>
+
+      <div id="viewCubeWidget" class="view-cube-widget" aria-label="Cubo de vistas CAD">
+        <div class="view-cube-scene">
+          <div id="viewCube" class="view-cube">
+            <button class="cube-face cube-front" data-cube-view="front">FRONT</button>
+            <button class="cube-face cube-back" data-cube-view="back">BACK</button>
+            <button class="cube-face cube-right" data-cube-view="right">RIGHT</button>
+            <button class="cube-face cube-left" data-cube-view="left">LEFT</button>
+            <button class="cube-face cube-top" data-cube-view="top">TOP</button>
+            <button class="cube-face cube-bottom" data-cube-view="bottom">BOTTOM</button>
+          </div>
+        </div>
+        <button class="cube-home" data-cube-view="iso" title="Vista isométrica">⌂ ISO</button>
+        <div class="cube-wcs">WCS</div>
+      </div>
 
       <div id="emptyState" class="empty-state">
         <div class="empty-icon">⌁</div>
@@ -196,6 +329,8 @@
   <script src="/potree/libs/three.js/extra/lines.js"></script>
   <script src="/potree/libs/plasio/js/laslaz.js"></script>
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-  <script src="./app.js"></script>\n  <script src="./talude_auto.js"></script>
+  <script src="./app.js"></script>
+  <script src="./talude_auto.js"></script>
+  <script src="./vector_editor.js"></script>
 </body>
 </html>

@@ -8,3 +8,8 @@ builds/
 talude_output/
 *.log
 studio/vendor/
+
+# Talude Studio DEV Portatil
+.talude_dev/
+DEV_RELEASES/
+TALUDE_V1_SELF_TEST.txt

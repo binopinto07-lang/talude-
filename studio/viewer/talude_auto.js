@@ -6,6 +6,7 @@
   let autoObjects = [];
   let running = false;
   let lastOutputDir = null;
+  let currentJobId = null;
 
   function shell() {
     return window.TaludeShell || null;
@@ -25,8 +26,16 @@
   }
 
   function numberValue(id, fallback) {
-    const value = Number(byId(id).value);
+    const control = byId(id);
+    if (!control) return fallback;
+    const value = Number(control.value);
     return Number.isFinite(value) ? value : fallback;
+  }
+
+  function v2PerformanceMode() {
+    const control = byId("v2PerformanceMode");
+    const value = control ? String(control.value || "balanced") : "balanced";
+    return ["fast", "balanced", "precise"].includes(value) ? value : "balanced";
   }
 
   function classesForEngine() {
@@ -48,6 +57,12 @@
     const progress = Math.max(0, Math.min(100, Number(job.progress || 0)));
     byId("jobText").textContent = job.message || job.title || "A processar…";
     byId("jobProgress").style.width = progress + "%";
+    const cancel = byId("cancelJob");
+    if (cancel) {
+      const canCancel = !["completed", "failed", "cancelled"].includes(job.status);
+      cancel.classList.toggle("hidden", !canCancel);
+      cancel.disabled = job.status === "cancelling";
+    }
   }
 
   function hideJobSoon() {
@@ -55,6 +70,12 @@
       const box = byId("jobBox");
       if (box) box.classList.add("hidden");
     }, 1200);
+  }
+
+  function setAutoVisibility(visible) {
+    for (const item of autoObjects) {
+      if (item && item.object) item.object.visible = Boolean(visible);
+    }
   }
 
   function clearAutoLines() {
@@ -74,6 +95,7 @@
     byId("facesCount").textContent = "0";
     byId("crestCount").textContent = "0";
     byId("toeCount").textContent = "0";
+    if (byId("reviewCount")) byId("reviewCount").textContent = "0";
     byId("taludeFeatureList").innerHTML = "";
     byId("clearTaludeLines").disabled = true;
     byId("openTaludeResults").disabled = true;
@@ -90,14 +112,20 @@
 
       const kind = data.type === "CREST" ? "crest" : "toe";
       const label = data.type === "CREST" ? "CRISTA" : "PÉ";
-      const confidence = Math.round(Number(data.confidence || 0) * 100);
+      const confidence = Math.round(Number(data.quality_score ?? data.confidence ?? 0) * 100);
       const length = Number(data.length_m || 0);
+      const source = String(data.source || "");
+      const sourceTag = source.includes("PROFILE_EDGE")
+        ? " · PROFILE-EDGE"
+        : source.startsWith("V2_")
+          ? " · V2"
+          : "";
 
       row.innerHTML =
         '<i class="talude-dot ' + kind + '"></i>' +
         '<div><strong>' + label + " " + String(index + 1).padStart(3, "0") +
         "</strong>Face " + String(data.face_id ?? "-") +
-        " · " + length.toFixed(1) + " m</div>" +
+        " · " + length.toFixed(1) + " m" + sourceTag + "</div>" +
         "<span>" + confidence + "%</span>";
 
       row.onclick = () => {
@@ -136,22 +164,55 @@
     s.updateWideLineResolution();
     renderResultList();
 
-    byId("facesCount").textContent = String(report.faces_detected || 0);
+    byId("facesCount").textContent = String(
+      report.approved_faces ?? report.faces_detected ?? 0
+    );
     byId("crestCount").textContent = String(report.crest_lines || 0);
     byId("toeCount").textContent = String(report.toe_lines || 0);
+    if (byId("reviewCount")) {
+      byId("reviewCount").textContent = String(report.review_faces || 0);
+    }
 
     byId("clearTaludeLines").disabled = autoObjects.length === 0;
     byId("openTaludeResults").disabled = !lastOutputDir;
 
     const elapsed = Number(report.elapsed_s || 0);
-    s.setStatus(
-      "AUTO concluído · " +
-      String(report.faces_detected || 0) + " faces · " +
-      String(report.crest_lines || 0) + " cristas · " +
-      String(report.toe_lines || 0) + " pés · " +
-      elapsed.toFixed(1) + " s"
-    );
-    s.toast("CRISTA + PÉ calculados e visíveis sobre a nuvem 3D.", 6500);
+    const isV2 = result.engine === "v2-global" ||
+      report.engine === "BREAKLINE_ENGINE_V2_GLOBAL_HYBRID";
+    if (isV2) {
+      const approved = Number(report.approved_faces ?? report.faces_detected ?? 0);
+      const review = Number(report.review_faces || 0);
+      const attempted = Number(report.v2_attempted_faces || 0);
+      s.setStatus(
+        "AUTO V2 " + String(report.performance_mode || "balanced").toUpperCase() + " · " +
+        "PROFILE-EDGE " + String(attempted) + " faces · " +
+        String(approved) + " aprovadas · " +
+        String(review) + " revisão · " +
+        elapsed.toFixed(1) + " s"
+      );
+      s.toast(
+        "Deteção concluída · " + String(approved) +
+        " faces aprovadas; " + String(review) +
+        " ficaram em REVISÃO e não entram na exportação normal.",
+        10000
+      );
+    } else {
+      s.setStatus(
+        "AUTO concluído · " +
+        String(report.faces_detected || 0) + " faces · " +
+        String(report.crest_lines || 0) + " cristas · " +
+        String(report.toe_lines || 0) + " pés · " +
+        elapsed.toFixed(1) + " s"
+      );
+      s.toast("CRISTA + PÉ calculados e visíveis sobre a nuvem 3D.", 6500);
+    }
+
+    window.dispatchEvent(new CustomEvent("talude:vector-document-updated", {
+      detail: {
+        project_id: s.state.project ? s.state.project.id : null,
+        result: result
+      }
+    }));
   }
 
   async function monitorJob(jobId) {
@@ -159,6 +220,7 @@
     if (!s) throw new Error("TaludeShell indisponível.");
 
     running = true;
+    currentJobId = jobId;
     byId("detectTalude").disabled = true;
 
     try {
@@ -176,10 +238,20 @@
           throw new Error(job.error || job.message || "Extração automática falhou.");
         }
 
+        if (job.status === "cancelled") {
+          s.setStatus("Processamento cancelado.");
+          s.toast("AUTO GLOBAL V2 cancelado.", 5000);
+          hideJobSoon();
+          return;
+        }
+
         await sleep(600);
       }
     } finally {
       running = false;
+      currentJobId = null;
+      const cancel = byId("cancelJob");
+      if (cancel) cancel.classList.add("hidden");
       refreshEnabledState();
     }
   }
@@ -197,21 +269,49 @@
     }
 
     clearAutoLines();
-    s.setStatus("AUTO TALUDE · a iniciar FACE_DETECTOR…");
+    // The primary AUTO button is always the validated V2 profile-edge engine.
+    // Baseline/V2 selection in Advanced Tools applies only to clicked/manual
+    // diagnostics and can never silently downgrade the global AUTO run.
+    const useV2 = true;
+    s.setStatus("AUTO GLOBAL V2 · a preparar PROFILE-EDGE…");
 
-    const response = await s.api("/api/talude/auto", {
+    const payload = {
+      project_id: project.id,
+      cloud_id: cloudId,
+      selected_classes: classesForEngine(),
+      cell_size: numberValue("cellSize", 0),
+      slope_low_deg: numberValue("slopeLow", 0),
+      slope_high_deg: numberValue("slopeHigh", 0),
+      min_face_area_m2: numberValue("minArea", 4),
+      min_line_length_m: numberValue("minLength", 2),
+      // The baseline smoothing parameter stays frozen for regression safety.
+      // Final V2 vertex spacing is controlled independently below.
+      line_smooth_window: 11
+    };
+
+    if (useV2) {
+      const performanceMode = v2PerformanceMode();
+      const vertexSpacing = Math.max(0.25, Math.min(5.0, numberValue("lineVertexSpacing", 1.0)));
+      Object.assign(payload, {
+        performance_mode: performanceMode,
+        tin_spacing_m: performanceMode === "precise" ? 0.25 : 0.35,
+        max_tin_points: performanceMode === "precise" ? 45000 : 32000,
+        max_triangle_edge_m: 2.25,
+        graph_gap_m: 1.50,
+        station_spacing_m: vertexSpacing,
+        patch_along_m: 2.50,
+        patch_cross_m: 1.80
+      });
+      s.setStatus(
+        "AUTO GLOBAL V2 · perfil " + performanceMode.toUpperCase() +
+        " · descoberta → perfis transversais → validação → revisão…"
+      );
+    }
+
+    const endpoint = "/api/v2/talude/auto";
+    const response = await s.api(endpoint, {
       method: "POST",
-      body: JSON.stringify({
-        project_id: project.id,
-        cloud_id: cloudId,
-        selected_classes: classesForEngine(),
-        cell_size: numberValue("cellSize", 0),
-        slope_low_deg: numberValue("slopeLow", 0),
-        slope_high_deg: numberValue("slopeHigh", 0),
-        min_face_area_m2: numberValue("minArea", 4),
-        min_line_length_m: numberValue("minLength", 2),
-        line_smooth_window: numberValue("lineSmooth", 11)
-      })
+      body: JSON.stringify(payload)
     });
 
     await monitorJob(response.job_id);
@@ -236,6 +336,24 @@
 
     byId("clearTaludeLines").onclick = clearAutoLines;
 
+    if (byId("cancelJob")) {
+      byId("cancelJob").onclick = async () => {
+        const s = shell();
+        if (!s || !currentJobId) return;
+        byId("cancelJob").disabled = true;
+        try {
+          await s.api(
+            "/api/jobs/" + encodeURIComponent(currentJobId) + "/cancel",
+            { method: "POST", body: "{}" }
+          );
+          s.setStatus("A cancelar processamento…");
+        } catch (error) {
+          s.toast(error.message || String(error), 8000);
+          byId("cancelJob").disabled = false;
+        }
+      };
+    }
+
     byId("openTaludeResults").onclick = () => {
       const s = shell();
       if (!s || !lastOutputDir) return;
@@ -259,6 +377,12 @@
     refreshEnabledState();
     window.setInterval(refreshEnabledState, 500);
   }
+
+  window.TaludeAuto = {
+    clearAutoLines,
+    setAutoVisibility,
+    getAutoObjects: () => autoObjects.slice()
+  };
 
   window.addEventListener("DOMContentLoaded", waitForShell);
 })();

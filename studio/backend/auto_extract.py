@@ -12,6 +12,11 @@ from talude_v1.engine import extract
 
 from .converter import jobs
 from .project_store import ProjectStore
+from .vector_documents import write_documents_from_geojson
+
+
+class AutoExtractCancelled(RuntimeError):
+    pass
 
 
 def _stamp() -> str:
@@ -119,6 +124,8 @@ def _worker(
         jobs.update(job_id, progress=18, message="A calcular grelha, declive e persistência multiescala…")
 
         def _progress(value: float, message: str) -> None:
+            if jobs.is_cancel_requested(job_id):
+                raise AutoExtractCancelled("Extração automática cancelada pelo utilizador.")
             jobs.update(
                 job_id,
                 status="running",
@@ -131,6 +138,19 @@ def _worker(
         jobs.update(job_id, progress=88, message="A carregar CRISTA + PÉ para o viewer…")
         geojson_path = output / "talude_breaklines.geojson"
         payload = json.loads(geojson_path.read_text(encoding="utf-8"))
+
+        vector_bundle = write_documents_from_geojson(
+            project.path,
+            output,
+            payload,
+            source={
+                "engine": report.get("engine"),
+                "mode": "AUTO_BASELINE_1_1_7",
+                "cloud_id": cloud_id,
+                "job_id": job_id,
+                "output_dir": str(output),
+            },
+        )
 
         lines: list[dict[str, Any]] = []
         for feature in payload.get("features", []):
@@ -164,8 +184,11 @@ def _worker(
                     if k not in {"lines"}
                 },
                 "line_count": len(lines),
+                "vector_document": vector_bundle["run_path"],
             }
         )
+        state["active_vector_document"] = vector_bundle["active_path"]
+        state["active_vector_document_summary"] = vector_bundle["summary"]
         store.save_state(project_id, state)
 
         result = {
@@ -174,6 +197,8 @@ def _worker(
             "output_dir": str(output),
             "report": report,
             "lines": lines,
+            "vector_document": vector_bundle["active_path"],
+            "vector_document_summary": vector_bundle["summary"],
         }
 
         store.debug_event(
@@ -201,6 +226,29 @@ def _worker(
                 f'{report.get("toe_lines", 0)} pés'
             ),
             result=result,
+        )
+
+    except AutoExtractCancelled:
+        try:
+            store.debug_event(
+                project_id,
+                "talude.auto_cancelled",
+                {
+                    "job_id": job_id,
+                    "cloud_id": cloud_id,
+                },
+                source="talude-engine",
+                level="WARNING",
+            )
+        except Exception:
+            pass
+
+        jobs.update(
+            job_id,
+            status="cancelled",
+            progress=100,
+            message="Extração automática cancelada.",
+            error=None,
         )
 
     except Exception as exc:
