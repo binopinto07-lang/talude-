@@ -11,7 +11,8 @@ def test_v2_api_is_isolated_from_baseline_and_has_global_auto():
     assert "start_auto_extract_v2" in server
     assert "extract_terrain_face_from_points" in server
     assert "extract_face_raw_tin" in server
-    assert 'APP_VERSION = "2.8.2-classic-ux-safe-core"' in server
+    assert 'APP_VERSION = "3.0.0-modular-experimental"' in server
+    assert 'app.include_router(make_router(store))' in server
 
 
 def test_v2_viewer_can_switch_global_and_clicked_engines():
@@ -124,7 +125,7 @@ def test_v2_phases_6_to_9_are_wired_end_to_end():
     assert "vectorDeleteLine" in js
     assert "approveSelectedFace" in js
     assert "rejectSelectedFace" in js
-    assert "TaludeStudioBuild" in build
+    assert "TaludeStudioV3Build" in build
 
 
 def test_v2_local_click_has_safe_baseline_fallback():

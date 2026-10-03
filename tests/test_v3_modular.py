@@ -133,3 +133,30 @@ def test_geotiff_raster_adapter_refuses_missing_observation(tmp_path):
         dst.write(np.full((32,32),-9999.,dtype='float32'),1)
     with pytest.raises(ValueError,match='sem área Ground'):
         execute_talude_auto(source,tmp_path/'output')
+
+
+def test_talude_auto_positive_synthetic_mdt_exports_3d(tmp_path):
+    import rasterio
+    import ezdxf
+    from rasterio.transform import from_origin
+    from studio.backend.v3_talude_auto import execute_talude_auto
+    # Flat upper terrace -> steep 6m face -> flat lower terrace.
+    # This is not evidence about Soalheira; it only tests data flow end to end.
+    width, height, cell = 180, 100, .25
+    x = (np.arange(width) + .5) * cell
+    elevations = np.where(x <= 16., 12., np.where(x >= 22., 7., 12. - (x - 16.)))
+    grid = np.repeat(elevations[None,:], height, axis=0).astype('float32')
+    raster = tmp_path / 'mdt_synthetic.tif'
+    with rasterio.open(raster,'w',driver='GTiff',width=width,height=height,
+                      count=1,dtype='float32',crs='EPSG:3763',nodata=-9999.,
+                      transform=from_origin(55650.,162800.,cell,cell)) as dst:
+        dst.write(grid,1)
+    result = execute_talude_auto(raster,tmp_path/'auto')
+    assert result['report']['crest_lines'] == 1
+    assert result['report']['toe_lines'] == 1
+    import json
+    geo = json.loads((tmp_path/'auto'/'resultado.geojson').read_text())
+    assert {f['properties']['type'] for f in geo['features']} == {'CREST','TOE'}
+    assert all(len(pt) == 3 for f in geo['features'] for pt in f['geometry']['coordinates'])
+    dxf = ezdxf.readfile(tmp_path/'auto'/'resultado.dxf')
+    assert sorted(ent.dxf.layer for ent in dxf.modelspace().query('POLYLINE')) == ['TALUDE_BASE','TALUDE_TOPO']

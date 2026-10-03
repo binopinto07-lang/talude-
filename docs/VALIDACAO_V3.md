@@ -4,7 +4,7 @@
 
 - Original TALUDE_AUTO e classificador copiados byte-a-byte para ALGORITM.
 - `python -m compileall`: sintaxe dos módulos novos.
-- `pytest -q tests/test_v3_modular.py`: 12 testes unitários e raster sintético.
+- `pytest -q tests/test_v3_modular.py`: 13 testes unitários, incluindo classificação de áreas Ground simuladas e exportação positiva de 1 CRISTA + 1 PÉ para DXF 3D em MDT sintético.
 - `node --check studio/viewer/v3.js`: sintaxe JavaScript.
 
 ## Por validar no Windows 10/11 com Local Builder

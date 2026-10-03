@@ -40,7 +40,7 @@ def test_short_path_windows_builder_contains_required_desktop_assets():
     assert "--add-data" in text
     assert "studio/viewer" in text
     assert "studio/vendor" in text
-    assert "TaludeStudioBuild" in text
+    assert "TaludeStudioV3Build" in text
     assert "--preflight" in text
     assert "studio.backend.vector_export" in text
-    assert "Talude_V1.exe" in text
+    assert "Talude_V3.exe" in text
