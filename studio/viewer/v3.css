@@ -1,0 +1,33 @@
+/* V3 clean minimal left rail. R20 DOM remains mounted but editing tools hidden. */
+:root { --sidebar-width: 306px; }
+.sidebar { color: #263747; background: #f8fafc; padding: 15px; gap: 10px; min-width: 278px; }
+.sidebar > .card, .sidebar > details { display: none !important; }
+.sidebar > header { border-bottom: 1px solid #dde5ed; padding-bottom: 14px; }
+.sidebar .brand-title { color: #1b2a37; }
+.sidebar .brand-subtitle { color: #73859b; }
+.sidebar > footer { color: #708094; font-size: 11px; margin-top: auto; }
+.v3-workflow { display:flex; flex-direction:column; gap: 12px; }
+.v3-block { padding: 12px; border: 1px solid #e1e8ee; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(23,38,50,.04); }
+.v3-block h3 { font-size: 11px; font-weight: 750; color:#697b8d; letter-spacing:.7px; margin:0 0 9px; }
+.v3-block p { margin:8px 0 2px; font-size:12px; overflow-wrap:anywhere; color:#536475; }
+.v3-block small { display:block; color:#8291a0; font-size:10px; padding: 3px 0 7px; }
+.v3-block button { min-height:35px; font-size:12px; color:#26384a; background:#f5f7f9; border:1px solid #d4dde6; }
+.v3-block button:disabled { opacity:.45; }
+.v3-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.v3-wide { width:100%; margin:5px 0; }
+.v3-action { font-weight:700 !important; text-align:left; padding-left:12px; }
+#v3Studio { border-left:3px solid #ddb019; }
+#v3Auto { border-left:3px solid #d835ae; }
+#v3Classify, #v3MDT { border-left:3px solid #2785b8; }
+.v3-block label { display:flex; align-items:center; gap:7px; padding:5px 0; font-size:12px; color:#273d51; cursor:pointer; }
+.v3-block input { accent-color:#227bb6; }
+.v3-block .v3-parent { margin-top:5px; font-weight:720; border-top:1px solid #ecf0f4; padding-top:10px; }
+.v3-parent span { margin-left:auto; font-weight:400; color:#7d8e9f; font-size:10px; }
+.v3-block .v3-child { padding-left:20px; }
+.v3-dot { width:9px; height:9px; display:inline-block; border-radius:2px; }
+.v3-yellow { background:#d7a400; } .v3-cyan { background:#21b5d5; }
+.v3-magenta { background:#da2ab7; } .v3-green { background:#4fb86c; }
+#v3Progress { width:100%; height:9px; accent-color:#217bab; }
+#v3Status { min-height:28px; line-height:1.45; }
+#v3Status.v3-error { color:#b02c36; }
+@media (max-width:1050px) { :root { --sidebar-width:285px; } }

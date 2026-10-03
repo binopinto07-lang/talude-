@@ -1,0 +1,3 @@
+# ALGORITM — módulos externos V3
+
+Originais preservados. O classificador Standalone V1 suporta substituição via `API_VERSION=1.0`; a geometria original TALUDE_AUTO V0.2.3 via `CORE_VERSION=0.1.3.1`. Não importar o ficheiro TALUDE_AUTO.py no Python normal, pois mantém dependências QGIS; adapter `studio/backend/v3_algorithms.py` extrai apenas núcleo compatível. A classificação original retém XYZ em RAM; o Studio recusa preventivamente nuvens superiores a 25M pontos até ser fornecida versão streaming/tiled. Após atualizar um ficheiro externo, reiniciar o job (não é necessário recompilar EXE para mudanças compatíveis). Respeitar direitos/licenças de qualquer dependência externa adicional.

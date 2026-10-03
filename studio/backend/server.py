@@ -27,9 +27,13 @@ from .vector_export import export_vector_document
 from talude_v2 import V2Config, V2DetectionError, V2Reason, extract_face_raw_tin
 
 
-APP_VERSION = "2.8.2-classic-ux-safe-core"
+APP_VERSION = "3.0.0-modular-experimental"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
+
+# V3 is additive: existing R20 API and geometrics are untouched.
+from .v3_api import make_router
+app.include_router(make_router(store))
 
 
 class CreateProjectRequest(BaseModel):

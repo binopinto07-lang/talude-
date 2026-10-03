@@ -18,7 +18,7 @@ def _repo_root() -> Path:
 
 def _short_root() -> Path:
     local = Path(os.environ.get("LOCALAPPDATA") or Path.home())
-    return local / "LBM" / "TaludeStudioBuild"
+    return local / "LBM" / "TaludeStudioV3Build"
 
 
 def _require(path: Path, label: str) -> None:
@@ -55,6 +55,12 @@ def _module_preflight(repo: Path) -> list[tuple[str, str]]:
         "talude_v2.tiled_auto",
         "talude_v2.vector_document",
         "studio.backend.server",
+        "studio.backend.v3_algorithms",
+        "studio.backend.v3_mdt",
+        "studio.backend.v3_talude_auto",
+        "studio.backend.v3_api",
+        "rasterio",
+        "shapely",
         "studio.backend.vector_documents",
         "studio.backend.vector_export",
         "studio.desktop.main",
@@ -87,6 +93,8 @@ def main() -> int:
     _require(repo / "studio" / "viewer" / "index.html", "Viewer")
     _require(repo / "studio" / "viewer" / "vector_editor.js", "Vector Editor")
     _require(repo / "studio" / "vendor", "Vendor Potree/PotreeConverter")
+    _require(repo / "ALGORITM" / "CLASSIFY" / "classify_las_algorithm.py", "Classificador externo")
+    _require(repo / "ALGORITM" / "TALUDE_AUTO" / "TALUDE_AUTO.py", "TALUDE_AUTO externo")
 
     print("=" * 72)
     print("TALUDE STUDIO BUILD PREFLIGHT")
@@ -110,7 +118,7 @@ def main() -> int:
         "--clean",
         "--windowed",
         "--noupx",
-        "--name", "Talude_V1",
+        "--name", "Talude_V3",
         "--distpath", str(dist),
         "--workpath", str(work),
         "--specpath", str(spec),
@@ -138,6 +146,10 @@ def main() -> int:
         "--hidden-import", "talude_v2.vector_document",
         "--hidden-import", "studio.backend.vector_documents",
         "--hidden-import", "studio.backend.vector_export",
+        "--hidden-import", "studio.backend.v3_api",
+        "--hidden-import", "studio.backend.v3_mdt",
+        "--hidden-import", "studio.backend.v3_talude_auto",
+        "--hidden-import", "studio.backend.v3_algorithms",
         "--collect-all", "uvicorn",
         "--collect-all", "h11",
         "--collect-all", "fastapi",
@@ -145,6 +157,8 @@ def main() -> int:
         "--collect-all", "anyio",
         "--collect-all", "scipy",
         "--collect-all", "pyproj",
+        "--collect-all", "rasterio",
+        "--collect-all", "shapely",
         "--add-data", f"{repo / 'studio' / 'viewer'}{os.pathsep}studio/viewer",
         "--add-data", f"{repo / 'studio' / 'vendor'}{os.pathsep}studio/vendor",
         str(repo / "talude_studio.py"),
@@ -173,7 +187,7 @@ def main() -> int:
         traceback.print_exc()
         return 1
 
-    exe = dist / "Talude_V1" / "Talude_V1.exe"
+    exe = dist / "Talude_V3" / "Talude_V3.exe"
     if not exe.exists():
         print(f"[ERRO] EXE não criado: {exe}")
         return 2
