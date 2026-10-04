@@ -9,13 +9,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .auto_extract import start_auto_extract
+from .classify_las_service import start_classify_las
 from .converter import jobs, start_import
 from .paths import potree_root, viewer_root
 from .project_store import ProjectStore
 from .terrain_face_engine import extract_terrain_face_from_points
 
 
-APP_VERSION = "1.1.9-ground-rebuild"
+APP_VERSION = "1.2.0-classify-las-r20-4"
 app = FastAPI(title="Talude Studio Local API", version=APP_VERSION)
 store = ProjectStore()
 
@@ -60,7 +61,6 @@ class TerrainFaceRequest(BaseModel):
     min_line_length_m: float = Field(default=2.0, gt=0)
     line_smooth_window: int = Field(default=11, ge=3, le=51)
     vertex_spacing_m: float = Field(default=1.0, ge=0.20, le=5.0)
-    ground_gap_fill_m: float = Field(default=1.50, ge=0.0, le=10.0)
 
 
 class AutoExtractRequest(BaseModel):
@@ -160,6 +160,19 @@ def import_cloud(req: ImportCloudRequest) -> dict[str, str]:
 
 
 
+class ClassifyLasRequest(BaseModel):
+    project_id: str
+    cloud_id: str
+
+
+@app.post("/api/classify-las/run")
+def classify_las(req: ClassifyLasRequest) -> dict[str, str]:
+    try:
+        return {"job_id": start_classify_las(store, req.project_id, req.cloud_id)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/feature-lines/terrain-face")
 def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
     try:
@@ -199,7 +212,6 @@ def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
             min_line_length_m=req.min_line_length_m,
             line_smooth_window=req.line_smooth_window,
             vertex_spacing_m=req.vertex_spacing_m,
-            ground_gap_fill_m=req.ground_gap_fill_m,
         )
 
         store.debug_event(
