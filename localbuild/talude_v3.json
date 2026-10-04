@@ -301,7 +301,6 @@
     "LocalBuildManager__TALUDE_STUDIO/START_LOCAL_BUILD_MANAGER.bat",
     "LocalBuildManager__TALUDE_STUDIO/TALUDE_INTEGRATION.txt",
     "localbuild/talude_v3.json",
-    "ALGORITM/CLASSIFY/classify_las_algorithm.py",
     "ALGORITM/TALUDE_AUTO/TALUDE_AUTO.py",
     "studio/backend/v3_api.py",
     "studio/backend/v3_algorithms.py",
@@ -311,9 +310,16 @@
     "studio/viewer/v3.css",
     "requirements-v3.txt",
     "KNOWN_ISSUES.md",
-    "ALGORITM/CLASSIFY/classify_streaming.py",
-    "ALGORITM/CLASSIFY/classify_las_algorithm_ORIGINAL_V1.py",
-    "tests/test_v3_streaming_ground.py"
+    "tests/test_v3_streaming_ground.py",
+    "ALGORITM/CLASSIFY_LAS/portable_api.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/classifiers/universal_ground.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/classifiers/l3_ground_lab.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/dense_spatial_evidence.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/inverted_mantle.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/mantle_veto.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/ground_continuity.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/mdt_export.py",
+    "tests/test_v3_classify_las_r20_4.py"
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
