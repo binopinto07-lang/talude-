@@ -48,7 +48,7 @@
     $('v3Original').checked = $('v3Original').checked && !$('v3Original').disabled;
     $('v3Classified').disabled = !currentStatus.has_classified;
     $('v3MdtLayer').disabled = !currentStatus.has_mdt;
-    $('v3ClassHint').textContent = currentStatus.has_classified ? 'Nuvem classificada disponível' : 'Classificação em falta';
+    $('v3ClassHint').textContent = currentStatus.has_classified ? 'CLASSIFY LAS R20.4 disponível' : 'Classificação Ground em falta';
     $('v3MdtHint').textContent = currentStatus.has_mdt ? 'MDT ' + Number(currentStatus.mdt.resolution).toFixed(2) + ' m' : 'Gerar MDT antes de TALUDE AUTO';
     if (currentStatus.has_classified && !matchingCloud(currentStatus.classified)) {
       $('v3ClassHint').textContent = 'Aguarda conversão da nuvem classificada para Potree';
@@ -179,7 +179,7 @@
     if (busy || !projectId()) return;
     busy = true; refreshButtons();
     $('v3Progress').value = 0;
-    const label = {classify:'CLASSIFICAR NUVEM', mdt:'GERAR MDT', studio:'DETETAR CRISTA + PÉ', auto:'TALUDE AUTO'}[mode];
+    const label = {classify:'CLASSIFY LAS R20.4', mdt:'GERAR MDT R20.4', studio:'DETETAR CRISTA + PÉ', auto:'TALUDE AUTO'}[mode];
     notice(label + ' · a iniciar…');
     try {
       const path = {classify:'classify', mdt:'mdt', studio:'talude-studio', auto:'talude-auto'}[mode];
