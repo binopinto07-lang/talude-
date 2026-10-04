@@ -42,3 +42,12 @@ Substituir ficheiro `.py` na pasta ALGORITM. O Adapter valida `API_VERSION=1.0` 
 Quando `CLASSIFICAR NUVEM` recebe mais de 25 milhões de pontos, o executável utiliza automaticamente `classify_file_streamed` se a função existir no ficheiro externo, sem alterar o motor R20. A V3 R3 inclui essa função como ligação fina ao módulo independente `ALGORITM/CLASSIFY/classify_streaming.py`. O original V1 foi preservado em `classify_las_algorithm_ORIGINAL_V1.py` (SHA-256 no `LEIA_PRIMEIRO` do patch).
 
 Processamento: primeira passagem LAS/LAZ estima suporte por células globalmente; segunda escreve LAS/LAZ classificado em blocos mantendo XYZ/RGB/intensidade/ordem/CRS, preservando class 7. A **qualidade geométrica real** na Soalheira ainda precisa de ser testada; a implementação não replica o manto nem recupera terreno inexistente. A versão compilada R2 pode ser atualizada apenas substituindo os ficheiros externos na distribuição.
+
+
+## CLASSIFY LAS R20.4 — módulo completo
+
+Esta branch remove o antigo classificador simplificado de `ALGORITM/CLASSIFY`
+e usa `ALGORITM/CLASSIFY_LAS`, um snapshot vendorizado do motor completo
+LAS-CAFIISICA R20.4. P1, L3 e outras LAS/LAZ usam o mesmo pipeline Ground.
+O módulo também gera o MDT e o mapa `OBSERVATION_STATE`, separando Ground
+medido de interpolação raster. O motor de CRISTA/PÉ permanece independente.
