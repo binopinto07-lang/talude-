@@ -11,7 +11,7 @@ import os
 import sys
 import uuid
 
-CLASSIFIER_API = '1.0'
+CLASSIFIER_API = '2.0'
 CORE_API = '0.1.3.1'
 
 
@@ -33,7 +33,7 @@ def algorithm_root() -> Path:
 
 
 def classifier_path() -> Path:
-    return algorithm_root() / 'CLASSIFY' / 'classify_las_algorithm.py'
+    return algorithm_root() / 'CLASSIFY_LAS' / 'portable_api.py'
 
 
 def talude_auto_path() -> Path:
@@ -63,6 +63,10 @@ def load_classifier():
     tree = ast.parse(source, filename=str(path))
     if _literal_assignment(tree, 'API_VERSION') != CLASSIFIER_API:
         raise AlgorithmCompatibilityError(f'Classificador incompatível: API_VERSION esperado {CLASSIFIER_API}.')
+    module_root = str(path.parent)
+    if module_root not in sys.path:
+        # Vendored las_classifier package lives beside portable_api.py.
+        sys.path.insert(0, module_root)
     spec = spec_from_file_location(f'talude_external_classify_{uuid.uuid4().hex}', path)
     if spec is None or spec.loader is None:
         raise AlgorithmCompatibilityError(f'Impossível carregar classificador: {path}')
@@ -71,7 +75,10 @@ def load_classifier():
     sys.modules[spec.name] = module
     try:
         spec.loader.exec_module(module)
-        for name in ('Settings', 'classify_file', 'classify_arrays', 'ALGORITHM_ID'):
+        for name in (
+            'Settings', 'classify_file', 'create_mdt_from_classified',
+            'inspect_source', 'ALGORITHM_ID',
+        ):
             if not hasattr(module, name):
                 raise AlgorithmCompatibilityError(f'Falta {name} no classificador {path.name}.')
         return module
