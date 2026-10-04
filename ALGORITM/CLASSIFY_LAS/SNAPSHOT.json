@@ -1,0 +1,13 @@
+{
+  "module": "CLASSIFY_LAS",
+  "api_version": "2.0",
+  "source_repository": "binopinto07-lang/LAS-CAFIISICA",
+  "source_branch": "r20-4-universal-mdt",
+  "source_head_at_sync": "983655f2e3dc8a0249f1192d41d822ccd72c0ce9",
+  "source_revision": "LAS_CAFIISICA_GROUND_V2_2026_10_R20_4",
+  "verified_blob_equal_core_files": 32,
+  "portable_entrypoint": "portable_api.py",
+  "old_simplified_classifier_removed": true,
+  "crs": "EPSG:3763",
+  "note": "Core file blob SHAs were compared source vs vendored snapshot after synchronization."
+}
