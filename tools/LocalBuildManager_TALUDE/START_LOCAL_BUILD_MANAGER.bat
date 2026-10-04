@@ -38,7 +38,11 @@ if errorlevel 1 goto :startup_error
 "%LBM_PY%" -m pip install -q --disable-pip-version-check --no-cache-dir -r "%~dp0requirements.txt" >>"%LBM_LOG%" 2>&1
 if errorlevel 1 goto :startup_error
 
-echo [4/4] A abrir Local Build Manager...
+echo [4/5] A validar fontes do gestor...
+"%LBM_PY%" -m compileall -q "%~dp0app" "%~dp0run.py" >>"%LBM_LOG%" 2>&1
+if errorlevel 1 goto :startup_error
+
+echo [5/5] A abrir Local Build Manager...
 "%LBM_PY%" "%~dp0run.py" >>"%LBM_LOG%" 2>&1
 set "LBM_RC=%ERRORLEVEL%"
 if not "%LBM_RC%"=="0" goto :startup_error
