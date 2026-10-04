@@ -299,3 +299,12 @@ restantes faces na baseline protegida, em vez de voltar a executar todas as
 faces durante mais de uma hora.
 
 Detalhes: `docs/V2_1_UX_PERFORMANCE.md`.
+
+
+## CLASSIFY LAS R20.4 — módulo completo
+
+Esta branch remove o antigo classificador simplificado de `ALGORITM/CLASSIFY`
+e usa `ALGORITM/CLASSIFY_LAS`, um snapshot vendorizado do motor completo
+LAS-CAFIISICA R20.4. P1, L3 e outras LAS/LAZ usam o mesmo pipeline Ground.
+O módulo também gera o MDT e o mapa `OBSERVATION_STATE`, separando Ground
+medido de interpolação raster. O motor de CRISTA/PÉ permanece independente.
