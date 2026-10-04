@@ -255,15 +255,20 @@ def test_v_spike_cleanup_preserves_straight_direction():
     assert abs(out[3, 1]) < 0.25
 
 
-def test_ground_rebuild_ui_and_api_contract():
+def test_classify_las_replaces_legacy_ground_rebuild_contract():
     config = Path("src/talude_v1/config.py").read_text(encoding="utf-8")
     server = Path("studio/backend/server.py").read_text(encoding="utf-8")
     html = Path("studio/viewer/index.html").read_text(encoding="utf-8")
     auto = Path("studio/viewer/talude_auto.js").read_text(encoding="utf-8")
     viewer = Path("studio/viewer/app.js").read_text(encoding="utf-8")
+    api = Path("ALGORITM/CLASSIFY_LAS/api.py").read_text(encoding="utf-8")
 
-    assert "max_ground_gap_m: float = 1.50" in config
-    assert "ground_gap_fill_m: float = Field(default=1.50" in server
-    assert 'id="groundGapFill"' in html
-    assert 'ground_gap_fill_m: numberValue("groundGapFill", 1.5)' in auto
-    assert 'byId("groundGapFill") ? byId("groundGapFill").value : 1.5' in viewer
+    assert "max_ground_gap_m: float = 0.0" in config
+    assert "ground_gap_fill_m: float = Field(default=1.50" not in server
+    assert 'id="groundGapFill"' not in html
+    assert 'ground_gap_fill_m: numberValue("groundGapFill", 1.5)' not in auto
+    assert 'byId("groundGapFill")' not in viewer
+    assert 'id="classifyGround"' in html
+    assert '"/api/classify-las/run"' in server
+    assert "classify_and_create_mdt" in api
+    assert "run_universal_ground" in api
