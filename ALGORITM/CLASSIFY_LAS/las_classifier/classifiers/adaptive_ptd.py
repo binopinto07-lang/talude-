@@ -480,24 +480,28 @@ def run_adaptive_ptd(
     )
     candidate_xyz = sample_xyz[candidate_ids]
     candidate_normals = None
-    sample_source_indices = np.arange(
-        0,
-        cloud.point_count,
-        analysis.sample_stride,
-        dtype=np.int64,
-    )[: sample_xyz.shape[0]]
-    if sample_source_indices.size == sample_xyz.shape[0]:
-        try:
-            candidate_points = cloud.las.points[
-                sample_source_indices[candidate_ids]
-            ]
-            candidate_normals = point_normals(candidate_points)
-        except Exception:
-            LOGGER.exception(
-                "PTD candidate normal extraction failed; "
-                "continuing without normal gate"
-            )
-            candidate_normals = None
+    # Legacy point-stride samples could map candidates back to source indices.
+    # R20.4 spatial-low sampling is intentionally order-independent and has no
+    # one-dimensional source-index mapping; normals therefore remain optional.
+    if analysis.sample_stride > 0:
+        sample_source_indices = np.arange(
+            0,
+            cloud.point_count,
+            analysis.sample_stride,
+            dtype=np.int64,
+        )[: sample_xyz.shape[0]]
+        if sample_source_indices.size == sample_xyz.shape[0]:
+            try:
+                candidate_points = cloud.las.points[
+                    sample_source_indices[candidate_ids]
+                ]
+                candidate_normals = point_normals(candidate_points)
+            except Exception:
+                LOGGER.exception(
+                    "PTD candidate normal extraction failed; "
+                    "continuing without normal gate"
+                )
+                candidate_normals = None
 
     known_candidate_normals = (
         int(
