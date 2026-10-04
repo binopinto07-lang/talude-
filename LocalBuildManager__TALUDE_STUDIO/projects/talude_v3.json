@@ -319,7 +319,8 @@
     "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/mantle_veto.py",
     "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/ground_continuity.py",
     "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/mdt_export.py",
-    "tests/test_v3_classify_las_r20_4.py"
+    "tests/test_v3_classify_las_r20_4.py",
+    "ALGORITM/CLASSIFY_LAS/SNAPSHOT.json"
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
