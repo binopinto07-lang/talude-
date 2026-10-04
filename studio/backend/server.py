@@ -228,8 +228,6 @@ def terrain_face(req: TerrainFaceRequest) -> dict[str, Any]:
                 "estimated_spacing_m": result.get("estimated_spacing_m"),
                 "auto_cell_capped": result.get("auto_cell_capped"),
                 "sample_density_pts_m2": result.get("sample_density_pts_m2"),
-                "ground_gap_fill_m": result.get("ground_gap_fill_m"),
-                "ground_reconstructed_cells": result.get("ground_reconstructed_cells"),
                 "crest_geometry_source": (result.get("crest") or {}).get("geometry_source"),
                 "toe_geometry_source": (result.get("toe") or {}).get("geometry_source"),
                 "crest_tin_max_snap_m": (result.get("crest") or {}).get("tin_max_snap_m"),
