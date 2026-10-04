@@ -213,7 +213,7 @@ def rasterize_mean(
     z = z.reshape(ny, nx)
     valid = np.isfinite(z)
 
-    max_gap_m = float(cfg.max_ground_gap_m) if cfg is not None else 1.50
+    max_gap_m = float(cfg.max_ground_gap_m) if cfg is not None else 0.0
     z, analysis_valid, support_distance_m = _reconstruct_sparse_ground(
         z,
         valid,
