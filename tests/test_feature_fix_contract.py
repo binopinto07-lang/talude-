@@ -114,12 +114,18 @@ def test_orbit_pan_click_vs_drag_and_cad_views_are_wired():
         assert f'data-standard-view="{view}"' in html
 
 
-def test_auto_unchecked_filter_falls_back_to_ground():
+def test_auto_engine_uses_classify_las_ground_as_terrain_authority():
     auto = Path("studio/viewer/talude_auto.js").read_text(encoding="utf-8")
     backend = Path("studio/backend/auto_extract.py").read_text(encoding="utf-8")
 
+    # The viewer may still expose visibility/class filters, but the automatic
+    # Talude detector must consume the CLASSIFY LAS result and force class 2.
     assert "if (!control || !control.checked) return null;" in auto
-    assert "classes = normalized if normalized else None" in backend
+    assert 'classify_info = cloud.get("classify_las") or {}' in backend
+    assert 'classified_path = classify_info.get("classified_cloud")' in backend
+    assert "CLASSIFICAR GROUND + CRIAR MDT" in backend
+    assert "classes = (2,)" in backend
+    assert "max_ground_gap_m=0.0" in backend
 
 
 def test_clicked_face_waits_for_density_and_caps_sparse_lod_cell():
