@@ -735,7 +735,7 @@ def run_l3_ground_lab(
     _emit(
         progress,
         39,
-        "L3 Ground Lab: coarse detrending",
+        f"{revision_label} Ground: coarse detrending",
     )
     coarse = CoarseDetrendModel.build(
         ptd_result.model.tin.vertices,
@@ -1058,7 +1058,7 @@ def run_l3_ground_lab(
                 / max(1, total)
             ),
             (
-                "L3 GroundScore "
+                f"{revision_label} GroundScore "
                 f"{stop:,}/{total:,}"
             ),
         )
@@ -1236,7 +1236,7 @@ def run_l3_ground_lab(
     _emit(
         progress,
         100,
-        f"{revision_label} L3 Ground Evidence complete",
+        f"{revision_label} Ground Evidence complete",
     )
     return L3GroundLabResult(
         model=model,
