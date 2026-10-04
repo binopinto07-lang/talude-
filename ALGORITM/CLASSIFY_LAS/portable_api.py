@@ -241,7 +241,7 @@ def create_mdt_from_classified(
     output.parent.mkdir(parents=True, exist_ok=True)
     state_path = output.with_name(output.stem + "_OBSERVATION_STATE.tif")
     nodata = -9999.0
-    transform = from_origin(xmin, ymax + res / 2.0, res, res)
+    transform = from_origin(xmin, ymax, res, res)
     profile = dict(
         driver="GTiff", width=width, height=height, count=1, dtype="float32",
         crs="EPSG:3763", transform=transform, nodata=nodata,
