@@ -146,6 +146,7 @@ class LocalBuildManager(tk.Tk):
         self.active_pipeline: str | None = None
         self.active_steps: list[Step] = []
         self.failed_index: int | None = None
+        self.failed_step: Step | None = None
 
         self._build_ui()
         self._refresh_header()
@@ -399,6 +400,7 @@ class LocalBuildManager(tk.Tk):
         self.active_pipeline = key
         self.active_steps = selected_steps
         self.failed_index = None
+        self.failed_step = None
         self.retry_btn.configure(state="disabled")
         self._populate_steps(selected_steps)
         self._set_running(True)
@@ -453,16 +455,19 @@ class LocalBuildManager(tk.Tk):
 
                 if not ok and step.required:
                     self.failed_index = idx
+                    self.failed_step = step
                     all_ok = False
                     break
             except Exception as exc:
                 self.failed_index = idx
+                self.failed_step = step
                 self.events.put(("step_finished", (idx, False, 0.0)))
                 self._log(f"[ERRO] {type(exc).__name__}: {exc}")
                 all_ok = False
                 break
 
-        self.events.put(("progress", 100 if all_ok else int(self.progress["value"])))
+        final_progress = 100 if all_ok else int(100 * max(0, min(len(steps), (self.failed_index or 0))) / max(1, len(steps)))
+        self.events.put(("progress", final_progress))
         self.events.put(("finished", (all_ok, "BUILD CONCLUÍDO COM SUCESSO" if all_ok else "PIPELINE TERMINADO COM ERROS")))
 
     def _ensure_venv(self, profile: str) -> Path:
@@ -512,15 +517,13 @@ class LocalBuildManager(tk.Tk):
         return result
 
     def retry_failed(self) -> None:
-        if self.failed_index is None or self.active_pipeline is None:
-            return
-        original = self.profile.pipeline(self.active_pipeline)
-        if self.failed_index >= len(original):
+        if self.failed_step is None:
             return
 
-        step = original[self.failed_index]
+        step = self.failed_step
         self.active_steps = [step]
         self.failed_index = None
+        self.failed_step = None
         self.retry_btn.configure(state="disabled")
         self._populate_steps(self.active_steps)
         self._set_running(True)
