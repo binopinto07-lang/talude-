@@ -84,17 +84,22 @@ def _worker(
         if not cloud:
             raise KeyError(f"Nuvem não encontrada: {cloud_id}")
 
-        source = Path(cloud["source_path"]).expanduser().resolve()
+        classify_info = cloud.get("classify_las") or {}
+        classified_path = classify_info.get("classified_cloud")
+        if not classified_path:
+            raise RuntimeError(
+                "Execute primeiro CLASSIFICAR GROUND + CRIAR MDT (CLASSIFY LAS R20.4)."
+            )
+        source = Path(classified_path).expanduser().resolve()
         if not source.exists():
             raise FileNotFoundError(source)
 
         output = project.path / "exports" / f"talude_auto_{_stamp()}"
         output.mkdir(parents=True, exist_ok=True)
 
-        classes = None
-        if selected_classes is not None:
-            normalized = tuple(sorted({int(v) for v in selected_classes}))
-            classes = normalized if normalized else None
+        # The Talude detector consumes the Ground produced by CLASSIFY LAS.
+        # UI visibility filters do not redefine terrain authority.
+        classes = (2,)
 
         cfg = ExtractConfig(
             cell_size=float(cell_size),
@@ -104,7 +109,7 @@ def _worker(
             min_line_length_m=float(min_line_length_m),
             line_smooth_window=max(3, int(line_smooth_window)),
             vertex_spacing_m=max(0.20, float(vertex_spacing_m)),
-            max_ground_gap_m=max(0.0, float(ground_gap_fill_m)),
+            max_ground_gap_m=0.0,
             use_ground_class=classes is None,
             classification_filter=classes,
         )
