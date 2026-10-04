@@ -24,9 +24,17 @@
   "pipelines": {
     "test": [
       {
+        "id": "disk-test",
+        "name": "Verificar espaço livre antes de instalar dependências",
+        "command": "& '%PYTHON%' 'scripts/check_disk_space_v3.py' --minimum-gb 8; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+        "timeout_minutes": 2,
+        "category": "test",
+        "venv": "test"
+      },
+      {
         "id": "deps-test",
         "name": "Instalar dependências Talude Studio",
-        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
+        "command": "& '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
         "timeout_minutes": 35,
         "category": "test",
         "venv": "test"
@@ -50,9 +58,17 @@
     ],
     "build": [
       {
+        "id": "disk-build",
+        "name": "Verificar espaço livre antes de BUILD + TESTES",
+        "command": "& '%PYTHON%' 'scripts/check_disk_space_v3.py' --minimum-gb 12; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+        "timeout_minutes": 2,
+        "category": "test",
+        "venv": "test"
+      },
+      {
         "id": "deps-build",
         "name": "Instalar dependências de build",
-        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
+        "command": "& '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
         "timeout_minutes": 40,
         "category": "build",
         "venv": "v1"
@@ -140,9 +156,17 @@
     ],
     "full": [
       {
+        "id": "disk-full",
+        "name": "Verificar espaço livre antes de BUILD + TESTES",
+        "command": "& '%PYTHON%' 'scripts/check_disk_space_v3.py' --minimum-gb 12; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+        "timeout_minutes": 2,
+        "category": "test",
+        "venv": "test"
+      },
+      {
         "id": "deps-test",
         "name": "Instalar dependências Talude Studio",
-        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
+        "command": "& '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
         "timeout_minutes": 35,
         "category": "test",
         "venv": "test"
@@ -164,9 +188,17 @@
         "venv": "test"
       },
       {
+        "id": "disk-before-build",
+        "name": "Verificar espaço livre novamente antes de compilar",
+        "command": "& '%PYTHON%' 'scripts/check_disk_space_v3.py' --minimum-gb 12; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+        "timeout_minutes": 2,
+        "category": "test",
+        "venv": "test"
+      },
+      {
         "id": "deps-build",
         "name": "Instalar dependências de build",
-        "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
+        "command": "& '%PYTHON%' -m pip install -r requirements-dev.txt -r requirements-v3.txt",
         "timeout_minutes": 40,
         "category": "build",
         "venv": "v1"
@@ -254,7 +286,7 @@
     ]
   },
   "release": {},
-  "config_revision": 30,
+  "config_revision": 31,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
@@ -282,7 +314,7 @@
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V3_MODULAR_2026_10_03_R1"
+    "value": "TALUDE_V3_MODULAR_2026_10_04_R2"
   },
   "auto_bootstrap_python": true
 }

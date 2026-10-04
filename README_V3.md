@@ -2,6 +2,8 @@
 
 **Branch exclusiva** `v3-modular` criada a partir de `b3cda493...` (Talude Studio R20). V2 e baseline 1.1.7 ficam preservadas. V3 não é uma renomeação destrutiva da V2.
 
+**R2 (04/10/2026):** o Local Builder verifica espaço livre antes do pip (8 GiB TESTAR; 12 GiB BUILD + TESTES); `pip` deixou de ser atualizado automaticamente em todas as execuções. Consulte `KNOWN_ISSUES.md` K-08 se o log indicar `[Errno 28]`.
+
 ## Utilização
 
 1. Descarregar o ZIP da branch `v3-modular` do GitHub e extrair numa pasta curta, por exemplo `C:\TALUDE_V3\`.

@@ -7,6 +7,13 @@
 - `pytest -q tests/test_v3_modular.py`: 13 testes unitários, incluindo classificação de áreas Ground simuladas e exportação positiva de 1 CRISTA + 1 PÉ para DXF 3D em MDT sintético.
 - `node --check studio/viewer/v3.js`: sintaxe JavaScript.
 
+## Erro real recebido em 04/10/2026
+
+- O Local Builder carregou o perfil V3 e aprovou `SOURCE GUARD: TALUDE_V3_MODULAR_2026_10_03_R1`.
+- A primeira etapa falhou em 7,8 s: `[Errno 28] No space left on device`, quando o `pip` preparava `PySide6_Addons-6.9.2` de 160,2 MB.
+- R2 adicionou uma verificação preventiva de espaço livre sem tentar eliminar ficheiros do utilizador. Antes de executar TESTAR/BUILD no Windows, é necessário libertar espaço no volume indicado.
+- Testes isolados de regressão sobre falta de espaço passaram no ambiente de desenvolvimento; novo preflight Windows pendente.
+
 ## Por validar no Windows 10/11 com Local Builder
 
 1. Primeiro arranque com Python 3.12/PySide6 QtWebEngine e PotreeConverter.
