@@ -84,7 +84,7 @@
       {
         "id": "pyinstaller",
         "name": "Criar Talude Studio Windows (paths absolutos)",
-        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%' --paths '%REPO%/src' --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --hidden-import PySide6.QtWebChannel --hidden-import uvicorn.loops.asyncio --hidden-import uvicorn.protocols.http.h11_impl --hidden-import h11 --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all uvicorn --collect-all h11 --collect-all fastapi --collect-all starlette --collect-all anyio --collect-all scipy --hidden-import ezdxf --hidden-import pyproj --add-data '%REPO%/studio/viewer;studio/viewer' --add-data '%REPO%/studio/vendor;studio/vendor' '%REPO%/talude_studio.py'",
+        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%' --paths '%REPO%/src' --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --hidden-import PySide6.QtWebChannel --hidden-import uvicorn.loops.asyncio --hidden-import uvicorn.protocols.http.h11_impl --hidden-import h11 --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all uvicorn --collect-all h11 --collect-all fastapi --collect-all starlette --collect-all anyio --collect-all scipy --collect-all rasterio --hidden-import ezdxf --hidden-import pyproj --add-data '%REPO%/studio/viewer;studio/viewer' --add-data '%REPO%/studio/vendor;studio/vendor' '%REPO%/talude_studio.py'",
         "timeout_minutes": 70,
         "category": "build",
         "venv": "v1"
@@ -134,7 +134,7 @@
       {
         "id": "compile",
         "name": "Compilar motor + Studio",
-        "command": "& '%PYTHON%' -m compileall -q src studio core tests talude_gui.py talude_studio.py",
+        "command": "& '%PYTHON%' -m compileall -q ALGORITM src studio core tests talude_gui.py talude_studio.py",
         "timeout_minutes": 10,
         "category": "test",
         "venv": "test"
@@ -182,7 +182,7 @@
       {
         "id": "pyinstaller",
         "name": "Criar Talude Studio Windows (paths absolutos)",
-        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%' --paths '%REPO%/src' --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --hidden-import PySide6.QtWebChannel --hidden-import uvicorn.loops.asyncio --hidden-import uvicorn.protocols.http.h11_impl --hidden-import h11 --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all uvicorn --collect-all h11 --collect-all fastapi --collect-all starlette --collect-all anyio --collect-all scipy --hidden-import ezdxf --hidden-import pyproj --add-data '%REPO%/studio/viewer;studio/viewer' --add-data '%REPO%/studio/vendor;studio/vendor' '%REPO%/talude_studio.py'",
+        "command": "& '%PYTHON%' -m PyInstaller --noconfirm --clean --windowed --noupx --name Talude_V1 --distpath '%WORK%/dist' --workpath '%WORK%/pyinstaller' --specpath '%WORK%' --paths '%REPO%' --paths '%REPO%/src' --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --hidden-import PySide6.QtWebChannel --hidden-import uvicorn.loops.asyncio --hidden-import uvicorn.protocols.http.h11_impl --hidden-import h11 --hidden-import laspy --hidden-import laspy.lasreader --hidden-import laspy.laswriter --hidden-import lazrs --collect-all uvicorn --collect-all h11 --collect-all fastapi --collect-all starlette --collect-all anyio --collect-all scipy --collect-all rasterio --hidden-import ezdxf --hidden-import pyproj --add-data '%REPO%/studio/viewer;studio/viewer' --add-data '%REPO%/studio/vendor;studio/vendor' '%REPO%/talude_studio.py'",
         "timeout_minutes": 70,
         "category": "build",
         "venv": "v1"
