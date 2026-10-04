@@ -4,6 +4,8 @@
 
 **R2 (04/10/2026):** o Local Builder verifica espaço livre antes do pip (8 GiB TESTAR; 12 GiB BUILD + TESTES); `pip` deixou de ser atualizado automaticamente em todas as execuções. Consulte `KNOWN_ISSUES.md` K-08 se o log indicar `[Errno 28]`.
 
+**Correção UTF-8 para Windows (04/10/2026):** após o primeiro TESTAR reportar 113/114 testes aprovados, todas as leituras do ficheiro de testes V3 passaram a declarar `encoding='utf-8'` para não depender da codificação local do Windows. A instalação de dependências já tinha terminado com sucesso. Esta correção não altera o source guard R2 nem o comportamento dos algoritmos.
+
 ## Utilização
 
 1. Descarregar o ZIP da branch `v3-modular` do GitHub e extrair numa pasta curta, por exemplo `C:\TALUDE_V3\`.

@@ -43,7 +43,7 @@ def test_geometry_ring_does_not_allow_open_contour():
 def test_external_originals_present_and_compatible():
     assert (algorithm_root()/'TALUDE_AUTO'/'TALUDE_AUTO.py').exists()
     assert available_algorithms()['TALUDE_AUTO']['available']
-    script = (algorithm_root()/'CLASSIFY'/'classify_las_algorithm.py').read_text()
+    script = (algorithm_root()/'CLASSIFY'/'classify_las_algorithm.py').read_text(encoding='utf-8')
     tree = ast.parse(script)
     assert any(isinstance(x, ast.Assign) and any(isinstance(t,ast.Name) and t.id=='API_VERSION' for t in x.targets) for x in tree.body)
     assert 'LAS-CAFIISICA' in script
@@ -69,7 +69,7 @@ def test_mdt_rejects_missing_source(tmp_path):
 
 
 def test_frontend_buttons_and_real_visibility():
-    js = (ROOT/'studio/viewer/v3.js').read_text()
+    js = (ROOT/'studio/viewer/v3.js').read_text(encoding='utf-8')
     for key in ('v3Classify','v3MDT','v3Studio','v3Auto', 'v3StudioCrest', 'v3StudioToe', 'v3AutoCrest', 'v3AutoToe'):
         assert key in js
     assert 'object.visible' in js
@@ -79,13 +79,13 @@ def test_frontend_buttons_and_real_visibility():
 
 def test_no_qgis_imports_in_studio_adapters():
     for name in ('v3_algorithms.py','v3_mdt.py','v3_talude_auto.py','v3_api.py'):
-        source = (ROOT/'studio/backend'/name).read_text()
+        source = (ROOT/'studio/backend'/name).read_text(encoding='utf-8')
         t = ast.parse(source)
         assert not any(isinstance(x, ast.ImportFrom) and x.module and x.module.split('.')[0]=='qgis' for x in ast.walk(t))
 
 
 def test_classify_guard_prevents_large_original_in_memory():
-    source = (ROOT/'studio/backend/v3_api.py').read_text()
+    source = (ROOT/'studio/backend/v3_api.py').read_text(encoding='utf-8')
     assert '25_000_000' in source
     assert 'a nuvem original não foi alterada' in source.lower()
 
@@ -155,7 +155,7 @@ def test_talude_auto_positive_synthetic_mdt_exports_3d(tmp_path):
     assert result['report']['crest_lines'] == 1
     assert result['report']['toe_lines'] == 1
     import json
-    geo = json.loads((tmp_path/'auto'/'resultado.geojson').read_text())
+    geo = json.loads((tmp_path/'auto'/'resultado.geojson').read_text(encoding='utf-8'))
     assert {f['properties']['type'] for f in geo['features']} == {'CREST','TOE'}
     assert all(len(pt) == 3 for f in geo['features'] for pt in f['geometry']['coordinates'])
     dxf = ezdxf.readfile(tmp_path/'auto'/'resultado.dxf')

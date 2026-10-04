@@ -14,6 +14,8 @@
 
 | K-08 | 04/10/2026, primeira etapa V3: `[Errno 28] No space left on device`, ao obter `PySide6_Addons-6.9.2` (160,2 MB) | Espaço livre insuficiente no volume que suporta pip/TEMP/venv; não é conflito de versões. R2 adiciona preflight de todos os volumes relevantes (8 GiB para TESTAR, 12 GiB para BUILD), antes de `pip`. Elimina a atualização automática desnecessária de pip em cada pipeline. **Não apaga ficheiros automaticamente.** | `tests/test_v3_disk_preflight.py` e log real de 04/10; verificar no Windows se deteta a falta de espaço. |
 
+| K-09 | 04/10/2026: TESTAR passou 113/114 testes mas `test_classify_guard_prevents_large_original_in_memory` falhou em Windows | O teste lia UTF-8 com `Path.read_text()` sem `encoding`. A codificação local do Windows alterava `não` para texto ilegível. **Motor de classificação íntegro**, falha exclusiva na leitura textual do teste. Corrigidas as cinco leituras do ficheiro de testes para `read_text(encoding='utf-8')`, sem alterar algoritmos nem `SOURCE GUARD`. | Contrato original reproduzido em CP1252; mesma API em UTF-8 corresponde ao texto esperado; repetir `TESTAR` em Windows. |
+
 ## Recuperação K-08
 
 1. No PowerShell: `Get-PSDrive C` (ou consultar Armazenamento nas Definições).

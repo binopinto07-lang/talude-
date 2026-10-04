@@ -14,6 +14,12 @@
 - R2 adicionou uma verificação preventiva de espaço livre sem tentar eliminar ficheiros do utilizador. Antes de executar TESTAR/BUILD no Windows, é necessário libertar espaço no volume indicado.
 - Testes isolados de regressão sobre falta de espaço passaram no ambiente de desenvolvimento; novo preflight Windows pendente.
 
+## Correção de teste UTF-8 (04/10/2026)
+
+- No novo log R1, as dependências instalaram em 44,9 s, `compileall` terminou OK e o pytest reportou **113 passed, 1 failed**.
+- A falha do `test_classify_guard_prevents_large_original_in_memory` foi reproduzida lendo `v3_api.py` (UTF-8) como CP1252; a frase com `não` deixou de corresponder. Com `encoding='utf-8'`, a proteção de 25M e a mensagem foram encontradas.
+- O teste V3 foi corrigido em todas as cinco chamadas `read_text()`; não se alteraram os motores, ALGORITM, Builder ou source guard. Resultado dos 114 testes no Windows ainda por recolher.
+
 ## Por validar no Windows 10/11 com Local Builder
 
 1. Primeiro arranque com Python 3.12/PySide6 QtWebEngine e PotreeConverter.
