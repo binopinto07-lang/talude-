@@ -53,5 +53,5 @@ def test_v3_profile_checks_disk_before_pip_and_preserves_v2():
         assert 'check_disk_space_v3.py' in steps[0]['command']
         assert '--upgrade pip' not in '\n'.join(step['command'] for step in steps)
         assert steps[1]['id'] in {'deps-test','deps-build'}
-    assert v3['branch'] == 'v3-modular'
+    assert v3['branch'] == 'v3-classify-las-r20-4'
     assert (ROOT / 'localbuild/talude_v2.json').exists()
