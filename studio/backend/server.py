@@ -74,7 +74,6 @@ class AutoExtractRequest(BaseModel):
     min_line_length_m: float = Field(default=2.0, gt=0)
     line_smooth_window: int = Field(default=11, ge=3, le=51)
     vertex_spacing_m: float = Field(default=1.0, ge=0.20, le=5.0)
-    ground_gap_fill_m: float = Field(default=1.50, ge=0.0, le=10.0)
 
 
 @app.get("/api/health")
@@ -277,7 +276,6 @@ def talude_auto(req: AutoExtractRequest) -> dict[str, str]:
             min_line_length_m=req.min_line_length_m,
             line_smooth_window=req.line_smooth_window,
             vertex_spacing_m=req.vertex_spacing_m,
-            ground_gap_fill_m=req.ground_gap_fill_m,
         )
         return {"job_id": job_id}
     except Exception as exc:
