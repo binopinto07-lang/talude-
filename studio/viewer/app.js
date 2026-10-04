@@ -2107,7 +2107,6 @@
       Number(toe.length_m || 0).toFixed(1) + " m · " +
       "cell " + Number(result.grid_resolution || 0).toFixed(3) + " m · " +
       "vértices ~" + Number(result.vertex_spacing_m || 0).toFixed(2) + " m · " +
-      "Ground gap " + Number(result.ground_gap_fill_m || 0).toFixed(2) + " m · " +
       "confiança " + confidence + "% · " +
       result.trace_elapsed_ms.toFixed(0) + " ms. Aceite ou rejeite.";
 
@@ -2135,8 +2134,6 @@
       crest_length_m: crest.length_m,
       toe_length_m: toe.length_m,
       vertex_spacing_m: result.vertex_spacing_m,
-      ground_gap_fill_m: result.ground_gap_fill_m,
-      ground_reconstructed_cells: result.ground_reconstructed_cells,
       crest_vertices_before: crest.raw_vertex_count,
       crest_vertices_after: crest.final_vertex_count,
       toe_vertices_before: toe.raw_vertex_count,
