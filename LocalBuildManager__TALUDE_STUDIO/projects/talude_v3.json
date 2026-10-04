@@ -1,8 +1,8 @@
 {
   "id": "talude_v3",
-  "name": "Talude Studio V3 — Modular Classificação + MDT + Duplo Motor",
+  "name": "Talude Studio V3 — CLASSIFY LAS R20.4 + MDT + Taludes",
   "repo_url": "https://github.com/binopinto07-lang/talude-.git",
-  "branch": "v3-modular",
+  "branch": "v3-classify-las-r20-4",
   "python_version": "3.12",
   "dist_dir_name": "Talude_V3",
   "checks": [
@@ -286,7 +286,7 @@
     ]
   },
   "release": {},
-  "config_revision": 32,
+  "config_revision": 4,
   "required_paths": [
     "scripts/build_windows.py",
     "src/talude_v2/profiling.py",
@@ -317,7 +317,7 @@
   ],
   "required_source_revision": {
     "path": "localbuild/SOURCE_REVISION.txt",
-    "value": "TALUDE_V3_MODULAR_2026_10_04_R3"
+    "value": "TALUDE_V3_CLASSIFY_LAS_R20_4_2026_10_04_R4"
   },
   "auto_bootstrap_python": true
 }
