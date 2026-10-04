@@ -1,3 +1,29 @@
 # ALGORITM — módulos externos V3
 
-Originais preservados. O classificador Standalone V1 suporta substituição via `API_VERSION=1.0`; a geometria original TALUDE_AUTO V0.2.3 via `CORE_VERSION=0.1.3.1`. Não importar o ficheiro TALUDE_AUTO.py no Python normal, pois mantém dependências QGIS; adapter `studio/backend/v3_algorithms.py` extrai apenas núcleo compatível. A classificação original retém XYZ em RAM; o Studio recusa preventivamente nuvens superiores a 25M pontos até ser fornecida versão streaming/tiled. Após atualizar um ficheiro externo, reiniciar o job (não é necessário recompilar EXE para mudanças compatíveis). Respeitar direitos/licenças de qualquer dependência externa adicional.
+## CLASSIFY_LAS
+
+O classificador simplificado V1/streaming anterior foi removido desta branch.
+
+`CLASSIFY_LAS/` contém agora um snapshot vendorizado do motor completo
+**LAS-CAFIISICA R20.4 Universal Ground + MDT**, com contrato externo
+`API_VERSION = "2.0"`.
+
+P1, L3/LiDAR e outras nuvens LAS/LAZ percorrem o mesmo pipeline geométrico.
+Não existe escolha de sensor para selecionar outro algoritmo.
+
+Entrada pública:
+- `portable_api.py::inspect_source`
+- `portable_api.py::classify_file`
+- `portable_api.py::create_mdt_from_classified`
+
+Para atualizar futuramente o CLASSIFY LAS, substituir a pasta
+`ALGORITM/CLASSIFY_LAS` por uma versão compatível do módulo, sem alterar o
+motor de CRISTA/PÉ do Talude Studio.
+
+## TALUDE_AUTO
+
+`TALUDE_AUTO/TALUDE_AUTO.py` permanece separado. O adapter extrai apenas o
+núcleo geométrico QGIS-free já definido pelo projeto.
+
+A aplicação não deve copiar lógica do CLASSIFY LAS para `studio/backend`:
+`studio` apenas orquestra o módulo externo.
