@@ -31,7 +31,7 @@ def start_auto_extract(
     min_line_length_m: float = 2.0,
     line_smooth_window: int = 11,
     vertex_spacing_m: float = 1.0,
-    ground_gap_fill_m: float = 1.50,
+    ground_gap_fill_m: float = 0.0,
 ) -> str:
     job_id = jobs.create("Extrair CRISTA + PÉ automaticamente")
     thread = threading.Thread(
