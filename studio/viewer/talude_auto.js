@@ -211,8 +211,7 @@
         min_face_area_m2: numberValue("minArea", 4),
         min_line_length_m: numberValue("minLength", 2),
         line_smooth_window: numberValue("lineSmooth", 11),
-        vertex_spacing_m: numberValue("vertexSpacing", 1.0),
-        ground_gap_fill_m: numberValue("groundGapFill", 1.5)
+        vertex_spacing_m: numberValue("vertexSpacing", 1.0)
       })
     });
 
