@@ -246,7 +246,7 @@
     ]
   },
   "release": {},
-  "config_revision": 12,
+  "config_revision": 13,
   "required_paths": [
     "ALGORITM/CLASSIFY_LAS/api.py",
     "ALGORITM/CLASSIFY_LAS/VERSION",
@@ -263,6 +263,11 @@
     "requirements.txt",
     "requirements-dev.txt",
     "localbuild/SOURCE_REVISION.txt",
-    "localbuild/talude_v1.json"
+    "localbuild/talude_v1.json",
+    "START_BUILD_MANAGER.bat",
+    "tools/LocalBuildManager_TALUDE/START_LOCAL_BUILD_MANAGER.bat",
+    "tools/LocalBuildManager_TALUDE/run.py",
+    "tools/LocalBuildManager_TALUDE/VERSION",
+    "tools/LocalBuildManager_TALUDE/README.md"
   ]
 }
