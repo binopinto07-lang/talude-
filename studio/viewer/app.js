@@ -585,6 +585,7 @@
 
     byId("projectName").textContent = project.name + " · " + project.path;
     byId("addCloud").disabled = false;
+    if (byId("classifyGround")) byId("classifyGround").disabled = !(project.clouds || []).length;
     byId("addMdt").disabled = false;
     byId("addSlope").disabled = false;
     renderCloudList();
@@ -683,6 +684,24 @@
     });
 
     monitorJob(result.job_id).catch((e) => toast(e.message, 10000));
+  }
+
+  async function classifyGroundAndMdt() {
+    if (!state.project) return;
+    const clouds = state.project.clouds || [];
+    if (!clouds.length) throw new Error("Adicione primeiro uma nuvem LAS/LAZ.");
+    const loadedIds = Array.from(state.pointclouds.keys());
+    const cloudId = loadedIds.length ? loadedIds[0] : clouds[0].id;
+
+    setStatus("CLASSIFY LAS R20.4 · Ground + MDT…");
+    const response = await api("/api/classify-las/run", {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: state.project.id,
+        cloud_id: cloudId
+      })
+    });
+    await monitorJob(response.job_id);
   }
 
   function terrainRasterReady() {
@@ -927,14 +946,17 @@
         );
 
         renderCloudList();
+        renderTerrainStatus();
 
-        const cloud = state.project.clouds.find(
-          (c) => c.id === job.result.cloud_id
-        );
-
-        if (cloud) await loadCloud(state.project.id, cloud);
-
-        toast("Conversão Potree concluída.");
+        if (job.result && job.result.kind === "classify_las") {
+          toast("CLASSIFY LAS R20.4 concluído · Ground + MDT prontos.");
+        } else {
+          const cloud = state.project.clouds.find(
+            (c) => c.id === job.result.cloud_id
+          );
+          if (cloud) await loadCloud(state.project.id, cloud);
+          toast("Conversão Potree concluída.");
+        }
         window.setTimeout(() => byId("jobBox").classList.add("hidden"), 1200);
         return;
       }
@@ -2055,9 +2077,6 @@
         ),
         vertex_spacing_m: Number(
           byId("vertexSpacing") ? byId("vertexSpacing").value : 1.0
-        ),
-        ground_gap_fill_m: Number(
-          byId("groundGapFill") ? byId("groundGapFill").value : 1.5
         )
       })
     });
@@ -3652,6 +3671,12 @@
     byId("addCloud").onclick = () => {
       addCloud().catch((e) => toast(e.message, 8000));
     };
+
+    if (byId("classifyGround")) {
+      byId("classifyGround").onclick = () => {
+        classifyGroundAndMdt().catch((e) => toast(e.message, 12000));
+      };
+    }
 
     byId("addMdt").onclick = () => {
       addTerrainRaster("mdt").catch((e) => toast(e.message, 10000));
