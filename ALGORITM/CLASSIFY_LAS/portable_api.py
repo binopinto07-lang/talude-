@@ -15,13 +15,13 @@ from typing import Callable
 import laspy
 import numpy as np
 
-from .las_classifier.cloud.model import CloudModel
-from .las_classifier.classifiers.universal_ground import (
+from las_classifier.cloud.model import CloudModel
+from las_classifier.classifiers.universal_ground import (
     ENGINE_NAME,
     REVISION,
     run_universal_ground,
 )
-from .las_classifier.ground.types import GroundEngineParams
+from las_classifier.ground.types import GroundEngineParams
 
 API_VERSION = "2.0"
 ALGORITHM_ID = "LAS_CAFIISICA_UNIVERSAL_GROUND_R20_4"
