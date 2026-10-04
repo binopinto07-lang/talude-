@@ -93,7 +93,7 @@ def main() -> int:
     _require(repo / "studio" / "viewer" / "index.html", "Viewer")
     _require(repo / "studio" / "viewer" / "vector_editor.js", "Vector Editor")
     _require(repo / "studio" / "vendor", "Vendor Potree/PotreeConverter")
-    _require(repo / "ALGORITM" / "CLASSIFY" / "classify_las_algorithm.py", "Classificador externo")
+    _require(repo / "ALGORITM" / "CLASSIFY_LAS" / "portable_api.py", "CLASSIFY LAS R20.4 externo")
     _require(repo / "ALGORITM" / "TALUDE_AUTO" / "TALUDE_AUTO.py", "TALUDE_AUTO externo")
 
     print("=" * 72)
