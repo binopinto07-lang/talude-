@@ -24,6 +24,14 @@
   "pipelines": {
     "test": [
       {
+        "id": "verify-source",
+        "name": "Verificar fonte TALUDE + CLASSIFY LAS R20.4",
+        "command": "$expected='TALUDE_STUDIO_CLASSIFY_LAS_R20_4_2026_10'; $p=Join-Path '%REPO%' 'localbuild/SOURCE_REVISION.txt'; if (!(Test-Path $p)) { throw ('SOURCE_REVISION em falta: ' + $p) }; $actual=(Get-Content $p -Raw).Trim(); if ($actual -ne $expected) { throw ('Fonte errada. Esperado ' + $expected + ', encontrado ' + $actual) }; Write-Output ('OK SOURCE: ' + $actual)",
+        "timeout_minutes": 2,
+        "category": "test",
+        "venv": "test"
+      },
+      {
         "id": "deps-test",
         "name": "Instalar dependências Talude Studio",
         "command": "& '%PYTHON%' -m pip install --upgrade pip; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; & '%PYTHON%' -m pip install -r requirements-dev.txt",
@@ -49,6 +57,14 @@
       }
     ],
     "build": [
+      {
+        "id": "verify-source",
+        "name": "Verificar fonte TALUDE + CLASSIFY LAS R20.4",
+        "command": "$expected='TALUDE_STUDIO_CLASSIFY_LAS_R20_4_2026_10'; $p=Join-Path '%REPO%' 'localbuild/SOURCE_REVISION.txt'; if (!(Test-Path $p)) { throw ('SOURCE_REVISION em falta: ' + $p) }; $actual=(Get-Content $p -Raw).Trim(); if ($actual -ne $expected) { throw ('Fonte errada. Esperado ' + $expected + ', encontrado ' + $actual) }; Write-Output ('OK SOURCE: ' + $actual)",
+        "timeout_minutes": 2,
+        "category": "test",
+        "venv": "v1"
+      },
       {
         "id": "deps-build",
         "name": "Instalar dependências de build",
@@ -123,6 +139,14 @@
       }
     ],
     "full": [
+      {
+        "id": "verify-source",
+        "name": "Verificar fonte TALUDE + CLASSIFY LAS R20.4",
+        "command": "$expected='TALUDE_STUDIO_CLASSIFY_LAS_R20_4_2026_10'; $p=Join-Path '%REPO%' 'localbuild/SOURCE_REVISION.txt'; if (!(Test-Path $p)) { throw ('SOURCE_REVISION em falta: ' + $p) }; $actual=(Get-Content $p -Raw).Trim(); if ($actual -ne $expected) { throw ('Fonte errada. Esperado ' + $expected + ', encontrado ' + $actual) }; Write-Output ('OK SOURCE: ' + $actual)",
+        "timeout_minutes": 2,
+        "category": "test",
+        "venv": "test"
+      },
       {
         "id": "deps-test",
         "name": "Instalar dependências Talude Studio",
@@ -222,5 +246,23 @@
     ]
   },
   "release": {},
-  "config_revision": 4
+  "config_revision": 12,
+  "required_paths": [
+    "ALGORITM/CLASSIFY_LAS/api.py",
+    "ALGORITM/CLASSIFY_LAS/VERSION",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/classifiers/universal_ground.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/mdt_export.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/inverted_mantle.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/mantle_veto.py",
+    "ALGORITM/CLASSIFY_LAS/las_classifier/terrain/ground_continuity.py",
+    "studio/backend/classify_las_service.py",
+    "studio/backend/server.py",
+    "studio/viewer/index.html",
+    "studio/viewer/app.js",
+    "src/talude_v1/engine.py",
+    "requirements.txt",
+    "requirements-dev.txt",
+    "localbuild/SOURCE_REVISION.txt",
+    "localbuild/talude_v1.json"
+  ]
 }
