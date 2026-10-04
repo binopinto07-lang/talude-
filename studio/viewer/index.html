@@ -31,6 +31,7 @@
         </div>
         <div id="projectName" class="project-name">Nenhum projeto aberto</div>
         <button id="addCloud" class="wide" disabled>+ Adicionar LAS / LAZ / COPC</button>
+        <button id="classifyGround" class="primary wide" disabled>CLASSIFICAR GROUND + CRIAR MDT</button>
         <div class="row">
           <button id="addMdt" disabled>+ MDT</button>
           <button id="addSlope" disabled>+ Declive</button>
@@ -115,9 +116,8 @@
             <label>Comp. mín. (m)<input id="minLength" type="number" min="0.1" step="0.5" value="2"></label>
             <label>Suavização linha<input id="lineSmooth" type="number" min="3" max="51" step="2" value="11"></label>
             <label>Espaçamento vértices (m)<input id="vertexSpacing" type="number" min="0.20" max="5" step="0.25" value="1.00"></label>
-            <label>Reconstrução Ground (m)<input id="groundGapFill" type="number" min="0" max="10" step="0.25" value="1.50"></label>
           </div>
-          <div class="hint">Detetor = base 1.1.2. A geometria final segue o boundary da face + TIN. Reconstrução Ground preenche apenas pequenas falhas com suporte dos dois lados; 1,50 m é o valor inicial. Espaçamento 1,00 m ≈ um vértice por metro.</div>
+          <div class="hint">Detetor = base 1.1.2. A geometria final segue o boundary da face + TIN. Ground/MDT são fornecidos pelo módulo CLASSIFY LAS R20.4. Espaçamento 1,00 m ≈ um vértice por metro.</div>
         </details>
       </section>
 
