@@ -947,6 +947,9 @@
 
         renderCloudList();
         renderTerrainStatus();
+        if (byId("classifyGround")) {
+          byId("classifyGround").disabled = !(state.project.clouds || []).length;
+        }
 
         if (job.result && job.result.kind === "classify_las") {
           toast("CLASSIFY LAS R20.4 concluído · Ground + MDT prontos.");
