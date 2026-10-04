@@ -43,10 +43,16 @@ def test_geometry_ring_does_not_allow_open_contour():
 def test_external_originals_present_and_compatible():
     assert (algorithm_root()/'TALUDE_AUTO'/'TALUDE_AUTO.py').exists()
     assert available_algorithms()['TALUDE_AUTO']['available']
-    script = (algorithm_root()/'CLASSIFY'/'classify_las_algorithm.py').read_text(encoding='utf-8')
+    script_path = algorithm_root()/'CLASSIFY_LAS'/'portable_api.py'
+    script = script_path.read_text(encoding='utf-8')
     tree = ast.parse(script)
-    assert any(isinstance(x, ast.Assign) and any(isinstance(t,ast.Name) and t.id=='API_VERSION' for t in x.targets) for x in tree.body)
-    assert 'LAS-CAFIISICA' in script
+    assert any(
+        isinstance(x, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == 'API_VERSION' for t in x.targets)
+        for x in tree.body
+    )
+    assert 'LAS_CAFIISICA_UNIVERSAL_GROUND_R20_4' in script
+    assert not (algorithm_root()/'CLASSIFY').exists()
 
 
 def test_fail_early_if_algorithm_missing(tmp_path, monkeypatch):
@@ -84,10 +90,12 @@ def test_no_qgis_imports_in_studio_adapters():
         assert not any(isinstance(x, ast.ImportFrom) and x.module and x.module.split('.')[0]=='qgis' for x in ast.walk(t))
 
 
-def test_classify_guard_prevents_large_original_in_memory():
+def test_classify_api_uses_complete_r20_4_module_not_old_25m_guard():
     source = (ROOT/'studio/backend/v3_api.py').read_text(encoding='utf-8')
-    assert '25_000_000' in source
-    assert 'a nuvem original não foi alterada' in source.lower()
+    assert 'CLASSIFY LAS R20.4' in source
+    assert '25_000_000' not in source
+    assert 'classify_file_streamed' not in source
+    assert 'create_mdt_from_classified' in source
 
 
 def test_mdt_ground_only_and_nodata(tmp_path, monkeypatch):
