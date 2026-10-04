@@ -151,7 +151,7 @@ def export_ground_mdt(
     state_path = output.with_name(output.stem + "_OBSERVATION_STATE.tif")
     report_path = output.with_suffix(".json")
     nodata = np.float32(-9999.0)
-    transform = from_origin(xmin, ymax + resolution_m / 2.0, resolution_m, resolution_m)
+    transform = from_origin(xmin, ymax, resolution_m, resolution_m)
     profile = {
         "driver": "GTiff", "width": width, "height": height, "count": 1,
         "dtype": "float32", "crs": "EPSG:3763", "transform": transform,
