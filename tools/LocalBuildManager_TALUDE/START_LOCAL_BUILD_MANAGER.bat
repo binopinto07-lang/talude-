@@ -21,18 +21,18 @@ set "TMP=%LBM_TEMP%"
 >>"%LBM_LOG%" echo Builder: %~dp0
 >>"%LBM_LOG%" echo ============================================================
 
-echo [1/4] A verificar Python 3.12...
+echo [1/5] A verificar Python 3.12...
 call "%~dp0ENSURE_PYTHON_312.bat" >>"%LBM_LOG%" 2>&1
 if errorlevel 1 goto :startup_error
 
 if not exist "%LBM_PY%" (
-  echo [2/4] A criar ambiente do Local Build Manager...
+  echo [2/5] A criar ambiente do Local Build Manager...
   >>"%LBM_LOG%" echo A criar venv: %LBM_VENV%
   "%LBM_BASE_PY%" -m venv "%LBM_VENV%" >>"%LBM_LOG%" 2>&1
   if errorlevel 1 goto :startup_error
 )
 
-echo [3/4] A preparar interface...
+echo [3/5] A preparar interface...
 "%LBM_PY%" -m pip install -q --disable-pip-version-check --no-cache-dir --upgrade pip setuptools wheel >>"%LBM_LOG%" 2>&1
 if errorlevel 1 goto :startup_error
 "%LBM_PY%" -m pip install -q --disable-pip-version-check --no-cache-dir -r "%~dp0requirements.txt" >>"%LBM_LOG%" 2>&1
