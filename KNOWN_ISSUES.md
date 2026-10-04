@@ -31,3 +31,12 @@
 - A implementação MDT via Rasterio lê e escreve tiles internamente, mas mantém dois grids NumPy densos; bloqueia automaticamente mais de 9 milhões de células.
 - TALUDE_AUTO original usa processos QGIS apenas na parte DEM->contornos; o port independente reimplementa essas operações. A equivalência geométrica completa V0.2.3 necessita de ensaios sobre MDT real.
 - O MDT da V3 é uma média Ground por célula observada, não uma reconstrução dos vazios por manto invertido.
+
+## K-10 — Ground Standalone V1 bloqueia nuvens com mais de 25M pontos (04/10/2026)
+
+- **Sintoma comprovado:** captura da V3 ao classificar a Soalheira: `RuntimeError: Classificador Standalone V1 usa XYZ em RAM; nuvem com mais de 25 milhões de pontos ... classify_file_streamed`. Esta proteção estava correta e a nuvem original não foi alterada.
+- **Causa:** `classify_file()` retém XYZ de todos os pontos, apesar de ler LAS/LAZ em chunks; o motor existente não conseguia processar os ~318M pontos em memória limitada.
+- **Correção R3:** o algoritmo externo `ALGORITM/CLASSIFY/classify_las_algorithm.py` mantém **integralmente** o conteúdo V1 original e acrescenta apenas a função `classify_file_streamed`. A implementação encontra-se no ficheiro independente `classify_streaming.py` e a cópia original exata em `classify_las_algorithm_ORIGINAL_V1.py`. O EXE V3/R2 existente já deteta a função, logo **pode receber os dois ficheiros .py na pasta externa sem recompilar**.
+- **Método:** duas passagens pelo LAS/LAZ: extremos/contagem por célula num grid global; segunda passagem aplica a fórmula V1 medida e grava imediatamente os chunks, conservando os atributos e classe 7. Nunca sintetiza Ground não observado. Ponto original e EPSG:3763 protegidos.
+- **Testes isolados locais:** 9 passaram, 1 LAS real ficou sem execução por indisponibilidade de laspy neste ambiente. Os testes originais Windows antes de R3: 117/117 passaram. **Não existe ainda validação da classificação completa da Soalheira**, nem garantia de qualidade topográfica equivalente ao R20.3.
+- **Portabilidade:** falha autónoma do self-test do ZIP extraído permanece pendente. Não confundir com a classificação nem desativar o teste. A próxima verificação deverá imprimir o conteúdo de `TALUDE_V1_SELF_TEST.txt` antes de falhar.

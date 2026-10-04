@@ -1,6 +1,7 @@
 """Independent V3 processing HTTP router, preserving all V2 routes."""
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import threading
@@ -90,7 +91,24 @@ def make_router(store):
         jobs.update(job_id, progress=8, message='CLASSIFY V1 · a classificar nuvem original (sem LAS-CAFIISICA)')
         try:
             if count > 25_000_000:
-                statistics = module.classify_file_streamed(source, partial, overwrite=False)
+                streamed = module.classify_file_streamed
+                # Optional callback interface: compatible future algorithms may expose
+                # source/destination/overwrite only; never assume extra parameters.
+                params = inspect.signature(streamed).parameters
+                extras = {}
+                if 'progress_callback' in params:
+                    def streamed_progress(label, fraction):
+                        jobs.update(job_id, progress=max(8, min(84, 8 + int(76 * float(fraction)))),
+                                    message=f'CLASSIFY STREAM · {label} · {float(fraction):.0%}')
+                    extras['progress_callback'] = streamed_progress
+                if 'cancel_callback' in params:
+                    extras['cancel_callback'] = lambda: jobs.is_cancel_requested(job_id)
+                try:
+                    statistics = streamed(source, partial, overwrite=False, **extras)
+                except InterruptedError:
+                    if jobs.is_cancel_requested(job_id):
+                        return {'cancelled': True}
+                    raise
             else:
                 statistics = module.classify_file(source, partial, overwrite=False)
             if jobs.is_cancel_requested(job_id):

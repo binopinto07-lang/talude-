@@ -33,3 +33,10 @@
 9. Soalheira 318.154.588 pontos não pode classificar integralmente com classificador V1 em RAM. Exige versão compatível `classify_file_streamed` ou nova versão do algoritmo independente.
 
 NENHUMA das verificações Windows acima deve ser marcada como aprovada sem log e captura reais.
+
+## R3 — Extensão streaming (04/10/2026)
+
+- Protótipo real da lógica com numpy/scipy e leitor/escritor LAS simulado: **9 passaram e 1 teste LAS real ignorado**, porque `laspy` não está instalado neste ambiente.
+- Testes: classes iguais ao V1 em nuvem sintética, dimensões originais, classe 7, leitura em duas passagens, grid limitado, cancelamento com remoção parcial, incompatibilidade de CRS, discrepância da contagem LAS, wrapper detetável pelo carregador do EXE e original binariamente idêntico.
+- Teste adicional com LAS real EPSG:3763 preparado para correr no teu Windows (laspy instalado); depois medir separadamente qualidade do recorte e Soalheira completa.
+- A falha anterior no self-test depois de extrair o ZIP ainda não foi diagnosticada: exigir relatório de cada componente e não declarar portabilidade concluída.

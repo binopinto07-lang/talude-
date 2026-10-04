@@ -162,36 +162,3 @@ def main(argv=None):
 
 if __name__=="__main__":
     main()
-
-# ---------------------------------------------------------------------------
-# TALUDE STUDIO V3: EXTERNAL, REPLACEABLE STREAMING EXTENSION (API 1.0)
-# The V1 algorithm above is byte-for-byte unchanged. The complete original
-# is also stored as classify_las_algorithm_ORIGINAL_V1.py for recovery.
-# The V3 executable already detects and calls this function for >25M points.
-# ---------------------------------------------------------------------------
-def classify_file_streamed(source, destination, settings=Settings(),
-                          overwrite=False, progress_callback=None,
-                          cancel_callback=None):
-    """Load the independent two-pass extension from the external ALGORITM dir.
-
-    Kept out of the app/EXE: replace the two compatible .py files independently.
-    """
-    from importlib.util import module_from_spec, spec_from_file_location
-    from types import SimpleNamespace
-
-    extra = Path(__file__).resolve().with_name('classify_streaming.py')
-    if not extra.is_file():
-        raise FileNotFoundError(f'Streaming Ground API 1.0 em falta: {extra}')
-    spec = spec_from_file_location('talude_v3_streaming_extension', extra)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f'Não é possível importar streaming extension: {extra}')
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    if getattr(module, 'STREAMING_API_VERSION', None) != API_VERSION:
-        raise RuntimeError(f'Streaming extension incompatível: esperado API {API_VERSION}.')
-    original = SimpleNamespace(API_VERSION=API_VERSION, Settings=Settings,
-                               _index=_index, CRS_EPSG=CRS_EPSG,
-                               ALGORITHM_ID=ALGORITHM_ID)
-    return module.classify_file_streamed(source, destination, original=original,
-        settings=settings, overwrite=overwrite,
-        progress_callback=progress_callback, cancel_callback=cancel_callback)
