@@ -1,7 +1,6 @@
 """Independent V3 processing HTTP router, preserving all V2 routes."""
 from __future__ import annotations
 
-import inspect
 import json
 import os
 import threading
@@ -15,7 +14,6 @@ from pydantic import BaseModel
 
 from .converter import jobs, start_import
 from .v3_algorithms import algorithm_root, available_algorithms, load_classifier
-from .v3_mdt import generate_mdt
 from .v3_talude_auto import execute_talude_auto
 
 
@@ -70,70 +68,92 @@ def make_router(store):
         import laspy
         manifest = store.manifest(project_id)
         clouds = manifest.get('clouds', [])
-        # Never select an already-classified file as the new original input.
-        original = next((cloud for cloud in clouds if Path(cloud.get('source_path', '')).is_file() and not cloud.get('v3_classified')), None)
+        original = next(
+            (
+                cloud for cloud in clouds
+                if Path(cloud.get('source_path', '')).is_file()
+                and not cloud.get('v3_classified')
+            ),
+            None,
+        )
         if original is None:
             raise ValueError('Importar primeiro uma nuvem LAS/LAZ original.')
         source = Path(original['source_path']).resolve()
-        with laspy.open(source) as reader:
-            crs = reader.header.parse_crs()
-            if crs is None or crs.to_epsg() != 3763:
-                raise ValueError('A nuvem de entrada tem de declarar EPSG:3763.')
-            count = reader.header.point_count
         module = load_classifier()
-        if count > 25_000_000 and not callable(getattr(module, 'classify_file_streamed', None)):
-            raise RuntimeError('Classificador Standalone V1 usa XYZ em RAM; nuvem com mais de 25 milhões de pontos. É necessária uma atualização compatível com classify_file_streamed antes de executar a Soalheira inteira. A nuvem original não foi alterada.')
+        profile = module.inspect_source(source)
+        count = int(profile['point_count'])
+
         project = store.get(project_id)
-        filename = f'{_time_stamp()}_classified.las'
+        suffix = source.suffix.lower() if source.suffix.lower() in {'.las', '.laz'} else '.las'
+        filename = f'{_time_stamp()}_CLASSIFY_LAS_R20_4{suffix}'
         dst = project.path / 'classified' / filename
         dst.parent.mkdir(parents=True, exist_ok=True)
-        partial = dst.with_name(dst.stem + '.partial.las')
-        jobs.update(job_id, progress=8, message='CLASSIFY V1 · a classificar nuvem original (sem LAS-CAFIISICA)')
+        partial = dst.with_name(dst.stem + '.partial' + dst.suffix)
+        jobs.update(
+            job_id,
+            progress=5,
+            message='CLASSIFY LAS R20.4 · Ground universal P1/L3/outros',
+        )
+
+        def classify_progress(label, fraction):
+            jobs.update(
+                job_id,
+                progress=max(5, min(94, 5 + int(89 * float(fraction)))),
+                message=f'CLASSIFY LAS R20.4 · {label}',
+            )
+
         try:
-            if count > 25_000_000:
-                streamed = module.classify_file_streamed
-                # Optional callback interface: compatible future algorithms may expose
-                # source/destination/overwrite only; never assume extra parameters.
-                params = inspect.signature(streamed).parameters
-                extras = {}
-                if 'progress_callback' in params:
-                    def streamed_progress(label, fraction):
-                        jobs.update(job_id, progress=max(8, min(84, 8 + int(76 * float(fraction)))),
-                                    message=f'CLASSIFY STREAM · {label} · {float(fraction):.0%}')
-                    extras['progress_callback'] = streamed_progress
-                if 'cancel_callback' in params:
-                    extras['cancel_callback'] = lambda: jobs.is_cancel_requested(job_id)
-                try:
-                    statistics = streamed(source, partial, overwrite=False, **extras)
-                except InterruptedError:
-                    if jobs.is_cancel_requested(job_id):
-                        return {'cancelled': True}
-                    raise
-            else:
-                statistics = module.classify_file(source, partial, overwrite=False)
+            statistics = module.classify_file(
+                source,
+                partial,
+                overwrite=False,
+                progress_callback=classify_progress,
+                cancel_callback=lambda: jobs.is_cancel_requested(job_id),
+            )
             if jobs.is_cancel_requested(job_id):
                 return {'cancelled': True}
             with laspy.open(partial) as reader:
-                if reader.header.point_count != count or reader.header.parse_crs().to_epsg() != 3763:
-                    raise ValueError('Classificação não preservou a quantidade de pontos ou o CRS.')
+                crs = reader.header.parse_crs()
+                if reader.header.point_count != count:
+                    raise ValueError('CLASSIFY LAS não preservou a quantidade de pontos.')
+                if crs is None or crs.to_epsg() != 3763:
+                    raise ValueError('CLASSIFY LAS não preservou EPSG:3763.')
             if statistics.get('ground_points', 0) < 1:
-                raise ValueError('Classificador não obteve Ground; ficheiro não será publicado.')
+                raise ValueError('CLASSIFY LAS não obteve Ground; resultado não publicado.')
             os.replace(partial, dst)
         finally:
             partial.unlink(missing_ok=True)
-        # Provenance is committed only after successful validation of the whole LAS.
+
         manifest = store.manifest(project_id)
-        manifest['v3_classified'] = {'path': str(dst), 'algorithm': module.ALGORITHM_ID,
-                                      'api_version': module.API_VERSION, 'source': str(source),
-                                      'points': count, 'statistics': statistics, 'original_cloud_id': original['id']}
-        manifest.setdefault('v3_runs', []).append({'operation': 'CLASSIFY', 'job_id': job_id, 'path': str(dst)})
-        # Old MDT does not apply to a new classification.
+        manifest['v3_classified'] = {
+            'path': str(dst),
+            'algorithm': module.ALGORITHM_ID,
+            'api_version': module.API_VERSION,
+            'source': str(source),
+            'points': count,
+            'statistics': statistics,
+            'original_cloud_id': original['id'],
+            'module': 'ALGORITM/CLASSIFY_LAS',
+        }
+        manifest.setdefault('v3_runs', []).append({
+            'operation': 'CLASSIFY_LAS_R20_4',
+            'job_id': job_id,
+            'path': str(dst),
+        })
         manifest.setdefault('terrain', {}).pop('mdt', None)
         store.save_manifest(project_id, manifest)
-        jobs.update(job_id, progress=91, message='Classificação validada; a preparar visualização Potree…')
+        jobs.update(
+            job_id,
+            progress=96,
+            message='CLASSIFY LAS validado; preparar visualização Potree…',
+        )
         import_id = start_import(store, project_id, str(dst))
-        return {'classified': manifest['v3_classified'], 'import_job_id': import_id,
-                'output': str(dst), 'next': 'Aguardar importação Potree antes da deteção TALUDE STUDIO.'}
+        return {
+            'classified': manifest['v3_classified'],
+            'import_job_id': import_id,
+            'output': str(dst),
+            'next': 'Aguardar Potree; depois gerar MDT ou detetar CRISTA/PÉ.',
+        }
 
     @router.post('/classify')
     def classify(req: ProjectAction):
@@ -149,15 +169,31 @@ def make_router(store):
 
     def do_mdt(project_id, job_id, log):
         _, classified, source = _get_classification(project_id)
-        output = store.get(project_id).path / 'terrain' / f'{_time_stamp()}_MDT.tif'
-        jobs.update(job_id, progress=8, message='GERAR MDT · apenas classe 2 Ground; NoData nas lacunas')
-        info = generate_mdt(source, output)
+        output = store.get(project_id).path / 'terrain' / f'{_time_stamp()}_MDT_R20_4.tif'
+        jobs.update(
+            job_id,
+            progress=8,
+            message='CLASSIFY LAS R20.4 · gerar MDT Ground + estado Observado/Interpolado',
+        )
+        module = load_classifier()
+        info = module.create_mdt_from_classified(source, output)
         if jobs.is_cancel_requested(job_id):
-            output.unlink(missing_ok=True)
+            Path(info.get('path', output)).unlink(missing_ok=True)
+            Path(info.get('observation_state', '')).unlink(missing_ok=True)
             return {'cancelled': True}
-        store.register_terrain_raster(project_id, 'mdt', output, {'crs': 'EPSG:3763',
-            'resolution': info['resolution_m'], 'width': info['width'], 'height': info['height'],
-            'algorithm': info['algorithm'], 'classified_source': str(source), 'statistics': info})
+        store.register_terrain_raster(
+            project_id,
+            'mdt',
+            output,
+            {
+                'crs': 'EPSG:3763',
+                'resolution': info['resolution_m'],
+                'algorithm': info['algorithm'],
+                'classified_source': str(source),
+                'statistics': info,
+                'observation_state': info['observation_state'],
+            },
+        )
         return info
 
     @router.post('/mdt')
